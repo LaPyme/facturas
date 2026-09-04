@@ -43,3 +43,30 @@ an income-tax deduction regardless of amount, and general application from
 identification. This is a technical input review, not tax advice.
 
 This note is a focused extraction, not a replacement for the complete manual.
+
+## Credit and debit notes
+
+Re-downloaded 2026-09-04; the v4.7 checksum above is unchanged.
+
+| Rule | Physical PDF pages | Contract |
+| --- | --- | --- |
+| 10197 | 67-68 | Notes require associated vouchers or an associated period. |
+| 10040 | 46-47 | Credit notes 3, 8 and 13 may associate invoices 1, 6 and 11 respectively. |
+| 10031-10033, 10035-10036 | 45-46 | Service dates and due date accompany each other; start cannot exceed end; due date cannot precede issuance. |
+| 10210-10212 | 68-69 | Association dates must be valid; a later electronic original must be in the same month/year. |
+| 10242-10243, 10246 | 71 | Receiver VAT condition is required and must suit the voucher class. |
+| 10122 | 57-58 | Receiver matching applies to the listed remittance types, not ordinary invoices. |
+| 10183 | 66 | Issuer and receiver matching is explicit for MiPyMEs notes. |
+| 10151 | 61 | An optional associated issuer CUIT must have eleven digits; MiPyMEs notes require it. |
+
+For ordinary full credit notes, preserving the original receiver document and
+VAT condition is the facade contract; the narrower matching validations above
+must not be presented as a universal ordinary-note rule. The original is
+consulted under the issuing taxpayer's authenticated CUIT (FECompConsultar,
+pages 190-191). Service dates are preserved for concepts 2 and 3; the due date
+is raised to the note date when needed by 10036.
+
+FECompConsultar returns FECAEDetRequest fields (page 193). Its abbreviated
+XML example omits newer fields; the official homologation WSDL confirms
+FECompConsResponse inherits FECAEDetRequest/FEDetRequest, including receiver
+VAT condition, associations and extensions.

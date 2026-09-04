@@ -28,6 +28,7 @@ export class ArcaConfigurationError extends ArcaError {
 
 /** Stable routing codes for caller-provided input failures. */
 export type ArcaInputErrorCode =
+  | "ARCA_INPUT_IDEMPOTENCY_MISMATCH"
   | "ARCA_INPUT_INVALID_DATE"
   | "ARCA_INPUT_INVALID_AMOUNT"
   | "ARCA_INPUT_AMOUNT_PRECISION"

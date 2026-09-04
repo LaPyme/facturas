@@ -1,6 +1,7 @@
 import { ArcaConfigurationError } from "./errors";
 import type {
   ArcaClientConfig,
+  ArcaClientOptions,
   ArcaEnvironment,
   ArcaLogLevel,
   ArcaServiceName,
@@ -97,21 +98,7 @@ export function assertArcaClientConfig(config: ArcaClientConfig): void {
     );
   }
 
-  if (!/^\d{11}$/.test(normalized.taxId)) {
-    invalidFields.push("taxId");
-  }
-
-  if (!normalized.certificatePem.startsWith("-----BEGIN CERTIFICATE-----")) {
-    invalidFields.push("certificatePem");
-  }
-
-  if (
-    !PRIVATE_KEY_PEM_PREFIXES.some((prefix) =>
-      normalized.privateKeyPem.startsWith(prefix)
-    )
-  ) {
-    invalidFields.push("privateKeyPem");
-  }
+  invalidFields.push(...invalidCredentialFields(normalized));
 
   if (!ARCA_ENVIRONMENTS.includes(normalized.environment)) {
     invalidFields.push("environment");
@@ -256,16 +243,17 @@ export function getArcaServiceConfig(
 
 export function normalizeArcaClientConfig(
   config: ArcaClientConfig
-): ArcaClientConfig {
+): ResolvedArcaClientConfig {
   const normalizedEnvironment =
     normalizeEnvironmentValue(String(config.environment)) ?? config.environment;
   const normalizedLoggerLevel = normalizeLogLevelValue(config.logger?.level);
 
   return {
-    taxId: config.taxId.trim(),
-    certificatePem: config.certificatePem.trim(),
-    privateKeyPem: config.privateKeyPem.trim(),
-    environment: normalizedEnvironment,
+    taxId: config.taxId?.trim() ?? "",
+    certificatePem: config.certificatePem?.trim() ?? "",
+    privateKeyPem: config.privateKeyPem?.trim() ?? "",
+    environment: normalizedEnvironment ?? "test",
+    ...(config.store === undefined ? {} : { store: config.store }),
     timeout: config.timeout ?? DEFAULT_ARCA_TIMEOUT_MS,
     retries: config.retries ?? DEFAULT_ARCA_RETRIES,
     retryDelay: config.retryDelay ?? DEFAULT_ARCA_RETRY_DELAY_MS,
@@ -316,4 +304,65 @@ function normalizeLogLevelValue(value: string | undefined) {
   }
 
   return value as ArcaLogLevel;
+}
+
+export type ResolvedArcaClientConfig = ArcaClientConfig & {
+  taxId: string;
+  certificatePem: string;
+  privateKeyPem: string;
+  environment: ArcaEnvironment;
+};
+
+export function discoverArcaClientConfig(
+  config: ArcaClientOptions
+): ArcaClientConfig {
+  return {
+    ...config,
+    taxId: config.taxId ?? readEnv(process.env, ARCA_ENV_VARIABLES.taxId) ?? "",
+    certificatePem:
+      config.certificatePem ??
+      readEnv(process.env, ARCA_ENV_VARIABLES.certificatePem) ??
+      "",
+    privateKeyPem:
+      config.privateKeyPem ??
+      readEnv(process.env, ARCA_ENV_VARIABLES.privateKeyPem) ??
+      "",
+    environment:
+      config.environment ??
+      (readEnv(process.env, ARCA_ENV_VARIABLES.environment) as
+        | ArcaEnvironment
+        | undefined) ??
+      "test",
+  };
+}
+
+function invalidCredentialFields(
+  normalized: ResolvedArcaClientConfig
+): string[] {
+  const invalidFields: string[] = [];
+  if (!/^\d{11}$/.test(normalized.taxId)) {
+    invalidFields.push(normalized.taxId ? "taxId" : "taxId (ARCA_TAX_ID)");
+  }
+
+  if (!normalized.certificatePem.startsWith("-----BEGIN CERTIFICATE-----")) {
+    invalidFields.push(
+      normalized.certificatePem
+        ? "certificatePem"
+        : "certificatePem (ARCA_CERTIFICATE_PEM)"
+    );
+  }
+
+  if (
+    !PRIVATE_KEY_PEM_PREFIXES.some((prefix) =>
+      normalized.privateKeyPem.startsWith(prefix)
+    )
+  ) {
+    invalidFields.push(
+      normalized.privateKeyPem
+        ? "privateKeyPem"
+        : "privateKeyPem (ARCA_PRIVATE_KEY_PEM)"
+    );
+  }
+
+  return invalidFields;
 }

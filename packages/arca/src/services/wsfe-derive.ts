@@ -284,7 +284,7 @@ function deriveService(service: IssueCommon["service"], date: WsfeDateInput) {
   return { concept: 2, serviceStartDate, serviceEndDate, paymentDueDate };
 }
 
-function buenosAiresDate(now: Date): WsfeDateInput {
+export function buenosAiresDate(now: Date): WsfeDateInput {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Argentina/Buenos_Aires",
     year: "numeric",

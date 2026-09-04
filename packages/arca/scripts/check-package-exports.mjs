@@ -19,6 +19,10 @@ const entrypoints = [
     "facturas",
     [
       "createArcaClient",
+      "createPostgresStore",
+      "createRedisStore",
+      "createFileStore",
+      "createMemoryStore",
       "buildFacturaB",
       "buildFacturaC",
       "matchWsfeVoucherIdentity",

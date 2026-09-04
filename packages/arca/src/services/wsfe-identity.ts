@@ -44,8 +44,8 @@ export type WsfeIdentityMatch =
 
 /**
  * Compares the invoice subset supported by vouchers.issue(). This proves
- * consistency, not authorship; callers must serialize writers per taxpayer,
- * sales point and voucher type. Unsupported exact-API extensions are incomplete.
+ * consistency, not authorship. Configure a store and pass idempotencyKey for retries.
+ * Unsupported exact-API extensions are incomplete.
  */
 export function matchWsfeVoucherIdentity(
   sent: WsfeVoucherInput,
@@ -124,7 +124,7 @@ export function matchWsfeVoucherIdentity(
       (value) => normalizeArcaAmountToMinorUnits(value, field),
     ]);
   }
-  if (sent.concept === 2) {
+  if (sent.concept === 2 || sent.concept === 3) {
     for (const field of [
       "serviceStartDate",
       "serviceEndDate",
@@ -151,6 +151,20 @@ export function matchWsfeVoucherIdentity(
     }
     missing ??= rates.reason;
   }
+  if (sent.associatedVouchers?.length) {
+    if (!found.associatedVouchers) {
+      missing ??= "associatedVouchers";
+    } else if (
+      associationIdentity(sent.associatedVouchers) !==
+      associationIdentity(found.associatedVouchers)
+    ) {
+      return {
+        matches: false,
+        evidence: "conflict",
+        reason: "associatedVouchers differ from the sent input",
+      };
+    }
+  }
   missing ??= incompleteAuthorization(sent, found);
   return missing
     ? {
@@ -167,12 +181,11 @@ function incompleteAuthorization(
 ): string | undefined {
   let missing: string | undefined;
   // These fields have no complete consultation identity contract in this facade.
-  if (sent.concept !== 1 && sent.concept !== 2) {
+  if (sent.concept !== 1 && sent.concept !== 2 && sent.concept !== 3) {
     missing ??= "unsupported concept";
   }
   for (const field of [
     "taxes",
-    "associatedVouchers",
     "associatedPeriod",
     "optionalFields",
     "buyers",
@@ -304,4 +317,14 @@ export function toVoucherSummary(found: WsfeVoucherInfo): VoucherSummary {
     }));
   }
   return summary;
+}
+
+function associationIdentity(
+  vouchers: NonNullable<WsfeVoucherInput["associatedVouchers"]>
+): string {
+  return JSON.stringify(
+    vouchers
+      .map(({ type, salesPoint, number }) => `${type}:${salesPoint}:${number}`)
+      .sort()
+  );
 }

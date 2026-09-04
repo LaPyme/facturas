@@ -1,7 +1,7 @@
 export type {
   ArcaAuthCredentials,
   ArcaAuthOptions,
-  ArcaClientConfig,
+  ArcaClientOptions as ArcaClientConfig,
   ArcaEnvironment,
   ArcaLoggerConfig,
   ArcaLogLevel,

@@ -4,7 +4,7 @@
 [![CI](https://github.com/LaPyme/facturas/actions/workflows/ci.yml/badge.svg)](https://github.com/LaPyme/facturas/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/LaPyme/facturas/blob/main/LICENSE)
 
-Serious Node.js SDK for ARCA / AFIP web services, with a strong WSFE and Padrón experience today and WSMTXCA support preserved. It talks to ARCA endpoints directly, keeps the public API strict and predictable, and avoids pushing SOAP naming into your application code.
+Node.js SDK for ARCA / AFIP invoicing, credit notes and Padrón, with direct WSFE and WSMTXCA integration. [Inicio rápido en español](./docs/inicio-rapido.md).
 
 - **ESM-only**, Node.js **>= 20**
 - **Direct ARCA integration** with no proxy or hosted dependency
@@ -23,58 +23,166 @@ pnpm add facturas
 npm install facturas
 ```
 
-## Quick start
+## Issue an invoice
 
-This example mirrors [examples/issue-invoice.ts](./examples/issue-invoice.ts).
-Replace the credentials and confirm the issuer and receiver assertions before running it.
+Set the [environment variables](#configuration), provision the store table below,
+and use the sale's stable ID as the key. The example assumes `venta` is your sale.
 
 ```ts
-import { createArcaClient } from "facturas";
+import { createArcaClient, createPostgresStore } from "facturas";
+import { sql } from "@vercel/postgres";
 
-const client = createArcaClient({
-  taxId: "20123456789",
-  certificatePem:
-    "-----BEGIN CERTIFICATE-----\nREPLACE_WITH_YOUR_CERTIFICATE\n-----END CERTIFICATE-----",
-  privateKeyPem:
-    "-----BEGIN PRIVATE KEY-----\nREPLACE_WITH_YOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----",
-  environment: "test",
+const arca = createArcaClient({
+  store: createPostgresStore({ query: (text, params) => sql.query(text, params) }),
 });
 
-const outcome = await client.vouchers.issue({
-  issuer: "responsable_inscripto",
-  salesPoint: 1,
+const factura = await arca.vouchers.issue(
+  {
+    issuer: "monotributo",
+    salesPoint: 3,
+    to: { condition: "consumidor_final" },
+    items: [{ amount: 150_000 }], // ARS 1.500,00 en centavos
+  },
+  { idempotencyKey: venta.id },
+);
+```
+
+Without `idempotencyKey`, a retry after a crash
+can issue the invoice twice. Configure a `store` and pass the key so retries
+are safe.
+
+A key is 1–255 characters. Use the sale or order ID, never a new UUID for each
+attempt. Do not put CUIT, DNI or other personal data in keys. Reuse the same
+key and input on retries; changed input throws `ARCA_INPUT_IDEMPOTENCY_MISMATCH`.
+Keys are scoped to the client's CUIT and environment. `representedTaxId` is
+also checked as part of the input identity. A key without a store throws before
+provider I/O. Different keys identify different business operations; a key does
+not reserve the entire point-of-sale sequence against other writers.
+
+## Production smoke test and cancellation
+
+After enabling ARCA access and selecting a production point of sale, this emits
+an ARS 1 invoice and a full associated credit note. **Both documents are real
+and remain in ARCA's records.** The note is a separate operation; a failure
+leaves the invoice outstanding. Match `issuer` to your actual tax condition.
+
+```ts
+const arca = createArcaClient({ environment: "production" });
+const factura = await arca.vouchers.issue({
+  issuer: "monotributo",
+  salesPoint: 3,
   to: { condition: "consumidor_final" },
-  items: [
-    { gross: 12_100, vat: 21 }, // ARS 121.00, VAT included.
-    { net: 10_000, vat: 10.5 }, // ARS 100.00 before VAT.
-  ],
+  items: [{ amount: 100 }], // ARS 1.00
 });
-
-switch (outcome.kind) {
-  case "authorized":
-    console.log(outcome.voucher.cae, outcome.voucher.number);
-    break;
-  case "rejected":
-    console.error(outcome.attempted, outcome.issues);
-    break;
-  case "indeterminate":
-    // Preserve this number and evidence. Reconcile before another attempt.
-    console.error(outcome.attempted, outcome.attempt, outcome.lookup);
-    break;
-  case "conflict":
-    // Another voucher occupies the attempted number. Stop and investigate.
-    console.error(outcome.attempted, outcome.found, outcome.reason);
-    break;
-  default:
-    outcome satisfies never;
+if (factura.kind === "authorized") {
+  const nota = await arca.vouchers.cancel(factura.voucher);
+  console.log(nota); // Handle every outcome, including a failed credit note.
 }
 ```
 
-> **Single-writer contract:** serialize calls per `(representedTaxId, salesPoint,
-> voucherType)`, including concurrent promises within one process. The SDK does
-> not coordinate writers. Uncoordinated calls collide on ARCA 10016. Servers and
-> queues should persist their attempted number and exact request, and use
-> `client.wsfe.authorizeVoucherOutcome()` directly.
+`cancel({ salesPoint, voucherType, number }, options)` looks up the original,
+then mirrors its full amount into credit note A, B or C (types 3, 8, 13).
+It preserves the receiver, currency, exchange rate, VAT rates and service dates.
+The note date defaults to today in Buenos Aires; use `options.date` to override.
+The payment due date cannot precede the note date. `idempotencyKey` and `include`
+work exactly as for `issue()`; give cancellation its own stable key, such as
+`cancel:${venta.id}`. Replaying that key consults only the reserved note.
+
+Only authorized invoice types 1, 6 and 11 in ARS or USD are supported.
+Originals with tributes, optional fields, buyers, activities or associated
+periods require the exact API. Partial notes, debit notes and FCE also require
+exact control. Missing original evidence is an error, never guessed.
+
+## Stores
+
+One `store` persists WSAA tickets and immutable invoice/credit-note reservations.
+The SDK adds no database or Redis driver dependency. Store failures throw
+`ArcaConfigurationError` with their cause attached and a content-free message.
+
+### Postgres
+
+Use your application's existing client. Neon, Supabase Postgres, Vercel Postgres,
+`pg` and `postgres` can provide the parameterized query function. Results can
+be an array of rows or `{ rows }`. With `postgres`, adapt `sql.unsafe(text, params)`.
+Provision the default table once:
+
+```sql
+CREATE TABLE arca_store (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+```
+
+```ts
+const store = createPostgresStore({
+  query: (text, params) => sql.query(text, params),
+  table: "arca_store", // Optional simple SQL identifier.
+});
+```
+
+Atomic creation uses `INSERT ... ON CONFLICT DO NOTHING RETURNING key`.
+The adapter does not create the table or hold a database lock.
+
+### Redis
+
+```ts
+import { createRedisStore } from "facturas";
+const store = createRedisStore(redis);
+// Optional override: createRedisStore(redis, { flavor: "upstash" });
+```
+
+A client with `call` uses ioredis `SET key value NX`; otherwise the adapter
+uses Upstash `set(key, value, { nx: true })`. Use a durable Redis deployment
+without eviction of reservation keys. Neither flavor applies a TTL or lock.
+
+### Files
+
+```ts
+import { createFileStore } from "facturas";
+const store = createFileStore("/private/durable/arca");
+```
+
+Use a private durable volume on a single server. Keys are hashed to filenames;
+creation is exclusive, replacement uses a temporary file and rename. Files
+have mode `0600`, new directories `0700`. No process lock is provided.
+
+### Memory
+
+```ts
+import { createMemoryStore } from "facturas";
+const store = createMemoryStore();
+```
+
+For tests and examples. It serializes ticket refreshes within the shared object,
+but **does not survive a restart**. It does not make serverless retries durable.
+
+### Custom store and record lifetime
+
+```ts
+type ArcaStore = {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
+  add(key: string, value: string): Promise<boolean>;
+  delete?(key: string): Promise<void>;
+  withLock?<T>(key: string, fn: () => Promise<T>): Promise<T>;
+};
+```
+
+`add` must atomically return false without changing an existing value. Optional
+`withLock` coordinates WSAA ticket refreshes. Explicit `wsaaSessionStore` wins
+for tickets when both options are provided.
+
+Keys use `arca:v1:wsaa:{environment}:{service}:{fingerprint}` and
+`arca:v1:attempt:{environment}:{taxId}:{idempotencyKey}`. Reservation records
+contain the input hash, operation, reserved coordinates and exact sent input.
+They contain fiscal/customer data: restrict access and protect backups.
+
+**Do not prune, expire or rewrite reservation records.** The SDK only creates
+them, never saves outcomes over them, and always consults ARCA on replay.
+Deleting a reservation can let a later retry issue another invoice.
+
+## Invoice inputs
 
 The issuer is your legal assertion on each call; the SDK never infers it from
 items or Padrón. An RI issuer produces A for RI or Monotributo receivers and B
@@ -108,36 +216,32 @@ of amount. Document shape checks do not verify provider registration.
 
 ### Facade fiscal contract
 
-Each valid call invokes one `FECompUltimoAutorizado` read and one
-`FECAESolicitar` authorization attempt, with zero transport retries on the write.
-An indeterminate authorization adds one `lookupVoucher()` call
-(`FECompConsultar`). There is never a resubmission, even after `not_found`.
-The existing exact read methods retain their transport/authentication recovery
-policy. Invalid input throws `ArcaInputError` before provider I/O; a failed
-next-number read also throws before any write.
+Without a key, a call reads one next number and authorizes once, with at most
+one identity lookup after an indeterminate response. This is the v0.8 behavior.
+A first keyed call reserves that number before writing. A keyed replay looks
+up the reservation: only `not_found` allows one authorization of the stored
+number. A found voucher is never resubmitted. Indeterminate writes and keyed
+10016 rejections can add one lookup; a 10016 without a complete match remains
+rejected. Cancel adds the original lookup only when creating a new reservation.
 
 | Outcome | Meaning and caller action |
 | --- | --- |
-| `authorized` | CAE and expiry are present. Save the voucher. `recoveredByMatch: true` means a complete lookup matched the sent identity; it proves consistency, not authorship. |
-| `rejected` | ARCA explicitly rejected the request. Review `issues` and correct the cause before a deliberate new attempt. |
-| `indeterminate` | The write's outcome remains uncertain: lookup was absent, incomplete or failed. Preserve `attempted` and the evidence; reconcile that number before issuing again. |
-| `conflict` | The lookup differs from the sent identity. Stop this sequence and investigate the competing writer or incorrect request. Do not resubmit automatically. |
+| `authorized` | Save the voucher and CAE. `recoveredByMatch: true` means the stored input matched the consulted identity; it proves consistency, not authorship. |
+| `rejected` | Review ARCA's `issues`. A key remains bound to its input even after rejection. |
+| `indeterminate` | Preserve the number and evidence. Reconcile or retry the identical input with its existing key. |
+| `conflict` | A different voucher occupies the reserved number. Stop and investigate. |
 
-Every fiscal outcome is returned. Provider evidence is normalized and raw-free
-by default. The second argument accepts `representedTaxId`, `forceRefresh`, and
-`include: { raw: true, exactInput: true }`. Raw evidence appears only when requested;
-`sent` appears only on authorized outcomes with `exactInput` enabled. This opt-in
-is useful for retaining a successful exact input; durable attempts must use the
-exact API so they can be persisted **before** sending.
+The second argument accepts `idempotencyKey`, `representedTaxId`, `forceRefresh`
+and `include: { raw: true, exactInput: true }`. Outcomes are raw-free by default;
+`sent` is included only on authorized outcomes when requested. Replay without
+an observed write outcome uses an indeterminate attempt with
+`reason: "incomplete_response"`; the lookup provides the authorization evidence.
 
-`matchWsfeVoucherIdentity(sent, number, found)` is a pure exported helper for
-this invoice subset. It compares coordinates, date, concept, receiver, currency,
-all header amounts, each VAT rate and service dates. Missing fields or missing
-authorization evidence remain incomplete; differences are conflicts. Unsupported
-exact extensions (such as associated vouchers or tributes) are incomplete.
-
-Notes, tributes, FCE, concept 3, same-currency foreign cancellation, WSMTXCA and
-other receiver conditions remain available through the exact APIs.
+The identity matcher compares coordinates, date, concept, receiver, currency,
+all header amounts, VAT rates, service dates, and note associations. Missing
+fields stay incomplete; differences are conflicts. Unsupported exact extensions
+remain incomplete. Use exact APIs for tributes, FCE, other receiver conditions,
+same-currency foreign cancellation and WSMTXCA.
 
 ## Exact control
 
@@ -173,7 +277,7 @@ const data = buildFacturaB({
   // currency is omitted, so the builder defaults to ISO ARS.
 });
 
-// Single-writer convenience: coordinate this sales-point/voucher-type lane.
+// Exact convenience: the caller coordinates numbering and recovery.
 const issued = await client.wsfe.createNextVoucher({
   data,
 });
@@ -211,7 +315,7 @@ const usdData = buildFacturaB({
 
 ### WSFE
 
-- Build A/B/C invoices from explicit assertions with the single-writer facade above
+- Build A/B/C invoices from explicit assertions with the facade above
 - Issue invoices and credit notes with the existing exact WSFE methods
 - Query voucher numbers and voucher details
 - Read ARCA catalogs with methods like `getVoucherTypes()` and `getVatRates()`
@@ -347,6 +451,9 @@ remain decimal major-unit values and its `currencyId` remains an ARCA ID.
 
 ## Examples
 
+- [Keyed invoice](./examples/issue-invoice.ts)
+- [Full credit note](./examples/anular-factura.ts)
+
 Examples live in [examples/](./examples) and are intentionally complete, hardcoded, and readable so they can be adapted quickly by a developer or a coding agent.
 Issuance examples use deterministic dates for compilation; replace them with an
 ARCA-allowed current date before a homologation request.
@@ -426,6 +533,20 @@ identifiers, not ISO codes.
 
 ## Configuration
 
+### Environment variables
+
+`createArcaClient()` discovers missing fields using the same rules as
+`createArcaClientConfigFromEnv()`. Explicit fields win; `process.env` is not changed:
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `ARCA_TAX_ID` | Yes | 11-digit CUIT |
+| `ARCA_CERTIFICATE_PEM` | Yes | PEM certificate |
+| `ARCA_PRIVATE_KEY_PEM` | Yes | PEM private key |
+| `ARCA_ENVIRONMENT` | No | `test` or `production`; defaults to `test` |
+
+For logging without code changes, set `ARCA_LOG_LEVEL` to `debug`, `info`, `warn`, or `error`.
+
 Pass a config object to `createArcaClient`:
 
 ```ts
@@ -447,14 +568,15 @@ const client = createArcaClient({
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `taxId` | — | 11-digit CUIT |
-| `certificatePem` | — | PEM certificate |
-| `privateKeyPem` | — | PEM private key |
-| `environment` | — | `test` or `production` |
+| `taxId` | `ARCA_TAX_ID` | 11-digit CUIT |
+| `certificatePem` | `ARCA_CERTIFICATE_PEM` | PEM certificate |
+| `privateKeyPem` | `ARCA_PRIVATE_KEY_PEM` | PEM private key |
+| `environment` | `test` | `test` or `production` |
 | `timeout` | `30000` | HTTP request timeout in milliseconds |
 | `retries` | `0` | Extra attempts after transport failures only |
 | `retryDelay` | `500` | Delay between transport retries in milliseconds |
 | `logger` | — | Optional structured logger config |
+| `store` | — | Unified durable tickets and reservations |
 | `wsaaSessionStore` | — | Optional WSAA ticket store for multi-worker deployments |
 
 ### WSAA session stores
@@ -470,7 +592,8 @@ const client = createArcaClient({
 });
 ```
 
-Serverless functions, queue workers, and multi-process deployments should provide a durable `wsaaSessionStore` so a valid TA can be reused by every worker instead of each cold process calling WSAA independently.
+A configured `store` supplies durable WSAA tickets automatically. An explicit
+`wsaaSessionStore` remains supported and takes precedence for tickets only.
 
 ```ts
 import {
@@ -511,19 +634,6 @@ const client = createArcaClient({
 The store key is scoped by environment, WSAA service, and certificate fingerprint. Store reads are still checked with the SDK's expiration safety margin. A production store should share data across all workers, encrypt or rely on encrypted storage, enforce expiration on read, and implement locking with advisory locks, Redis locks, or equivalent.
 
 For tests and local coordination through one shared object, the package also exports `createMemoryWsaaSessionStore()`.
-
-### Environment variables
-
-If you prefer env-based wiring, `createArcaClientConfigFromEnv()` reads:
-
-| Variable | Required | Notes |
-| --- | --- | --- |
-| `ARCA_TAX_ID` | Yes | 11-digit CUIT |
-| `ARCA_CERTIFICATE_PEM` | Yes | PEM certificate |
-| `ARCA_PRIVATE_KEY_PEM` | Yes | PEM private key |
-| `ARCA_ENVIRONMENT` | No | `test` or `production`; defaults to `test` |
-
-For logging without code changes, set `ARCA_LOG_LEVEL` to `debug`, `info`, `warn`, or `error`.
 
 ## Logging
 
@@ -689,7 +799,7 @@ import { ArcaServiceError } from "facturas/errors";
 
 - Treat certificates and private keys as secrets.
 - By default, WSAA tickets are cached in memory only.
-- This package does not write credentials to disk unless your application provides a custom `wsaaSessionStore` that does so.
+- The SDK persists WSAA tickets when you provide `store` or `wsaaSessionStore`. Keep their storage private; certificate and private-key configuration is never stored by the bundled adapters.
 - Production `wsaaSessionStore` implementations should encrypt credentials at rest or use a backend that provides encryption at rest.
 
 ## Development
@@ -708,11 +818,3 @@ Optional for local DX: install Turbo globally with `pnpm add --global turbo`. Th
 ## License
 
 Apache-2.0
-
-## v0.8 compatibility
-
-No existing export changes name, signature or runtime behavior. The shared money
-core preserves the v0.7.1 builders, including Half Even ties and frozen outputs.
-The one declared type widening is the required `ArcaClient.vouchers` member:
-hand-built `ArcaClient` mocks must add it. Clients returned by `createArcaClient()`
-receive it automatically. v0.8.0 is a minor release.

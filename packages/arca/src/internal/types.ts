@@ -1,3 +1,4 @@
+import type { ArcaStore } from "../store/types";
 /** Target environment for ARCA services. */
 export type ArcaEnvironment = "production" | "test";
 
@@ -54,6 +55,7 @@ export type ArcaClientConfig = {
   certificatePem: string;
   privateKeyPem: string;
   environment: ArcaEnvironment;
+  store?: ArcaStore;
   timeout?: number;
   retries?: number;
   retryDelay?: number;
@@ -97,3 +99,14 @@ export type ArcaSoapExecutionOptions<TBody> = {
   bodyElementNamespaceMode?: "default" | "prefix";
   body: TBody;
 };
+
+export type ArcaClientOptions = Omit<
+  ArcaClientConfig,
+  "taxId" | "certificatePem" | "privateKeyPem" | "environment"
+> &
+  Partial<
+    Pick<
+      ArcaClientConfig,
+      "taxId" | "certificatePem" | "privateKeyPem" | "environment"
+    >
+  >;

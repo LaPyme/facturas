@@ -26,7 +26,7 @@ async function main() {
     vatRate: 21,
   });
 
-  // Single-writer convenience: coordinate this sales-point/voucher-type lane.
+  // Exact convenience: the caller coordinates numbering and recovery.
   const issued = await client.wsfe.createNextVoucher({
     data,
   });

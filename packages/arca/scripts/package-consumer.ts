@@ -5,6 +5,7 @@ import {
   buildFacturaC,
   createArcaClient,
   isArcaAuthenticationError,
+  type VouchersService,
   type WsfeAuthorizationOutcome,
   type WsfeAuthorizeVoucherInput,
   type WsfeVoucherInput,
@@ -121,6 +122,7 @@ export async function facadeConsumerContract(
   result.sent;
   switch (result.kind) {
     case "authorized":
+      await client.vouchers.cancel(result.voucher);
       result.voucher.cae satisfies string;
       result.voucher.amounts.vatAdjustment satisfies number;
       if (result.recoveredByMatch) {
@@ -164,4 +166,51 @@ export async function facadeConsumerContract(
     }
   }
   return result;
+}
+
+export async function cancelConsumerContract(
+  client: ReturnType<typeof createArcaClient>
+) {
+  // @ts-expect-error The declared VouchersService widening requires cancel on hand-built mocks.
+  const oldMock: VouchersService = { issue: client.vouchers.issue };
+  oldMock.issue satisfies VouchersService["issue"];
+  const result = await client.vouchers.cancel({
+    salesPoint: 1,
+    voucherType: 6,
+    number: 1,
+  });
+  switch (result.kind) {
+    case "authorized":
+      result.voucher.cae satisfies string;
+      if (result.recoveredByMatch) {
+        result.lookup.number satisfies number;
+      } else {
+        result.authorization.cae satisfies string;
+      }
+      // @ts-expect-error Exact input remains opt-in.
+      result.sent;
+      break;
+    case "rejected":
+      result.issues satisfies { message: string }[];
+      break;
+    case "conflict":
+      result.found.number satisfies number;
+      break;
+    case "indeterminate":
+      result.lookup.kind satisfies string;
+      break;
+    default:
+      result satisfies never;
+  }
+  const included = await client.vouchers.cancel(
+    { salesPoint: 1, voucherType: 6, number: 1 },
+    {
+      idempotencyKey: "cancel-sale",
+      date: "20260905",
+      include: { exactInput: true, raw: true },
+    }
+  );
+  if (included.kind === "authorized") {
+    included.sent satisfies WsfeVoucherInput;
+  }
 }

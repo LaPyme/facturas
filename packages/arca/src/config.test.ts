@@ -99,7 +99,7 @@ describe("config", () => {
       })
     ).toThrowError(
       new ArcaConfigurationError(
-        "Missing or invalid ARCA client config fields: taxId, certificatePem, privateKeyPem, environment"
+        "Missing or invalid ARCA client config fields: taxId (ARCA_TAX_ID), certificatePem (ARCA_CERTIFICATE_PEM), privateKeyPem (ARCA_PRIVATE_KEY_PEM), environment"
       )
     );
   });

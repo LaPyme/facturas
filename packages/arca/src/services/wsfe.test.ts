@@ -2113,3 +2113,30 @@ describe("WSFE consultation details for identity matching", () => {
     expect(found.voucher).not.toHaveProperty("vatRates");
   });
 });
+
+it("maps associated voucher identities from real consultation fields", async () => {
+  const options = createBaseOptions();
+  options.soap.execute.mockResolvedValueOnce(
+    createWsfeOperationResult("FECompConsultar", {
+      ResultGet: {
+        CbteDesde: 9,
+        CbteHasta: 9,
+        PtoVta: 1,
+        CbteTipo: 13,
+        Resultado: "A",
+        CodAutorizacion: "123",
+        FchVto: "20260915",
+        CbtesAsoc: { CbteAsoc: { Tipo: "11", PtoVta: "1", Nro: "7" } },
+      },
+    })
+  );
+  const result = await createWsfeService(options).lookupVoucher({
+    salesPoint: 1,
+    voucherType: 13,
+    number: 9,
+  });
+  expect(result).toMatchObject({
+    kind: "found",
+    voucher: { associatedVouchers: [{ type: 11, salesPoint: 1, number: 7 }] },
+  });
+});

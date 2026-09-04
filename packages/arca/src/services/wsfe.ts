@@ -167,6 +167,7 @@ export type WsfeVoucherInfo = {
   serviceEndDate?: string;
   paymentDueDate?: string;
   taxes?: WsfeTax[];
+  associatedVouchers?: WsfeAssociatedVoucher[];
   raw: Record<string, unknown>;
 };
 
@@ -1521,6 +1522,30 @@ function mapWsfeVoucherInfo(raw: Record<string, unknown>): WsfeVoucherInfo {
     mapWsfeLookupDetails(raw.Tributos, "Tributo", mapWsfeLookupTax)
   );
 
+  assignWsfeValue(
+    voucher,
+    "associatedVouchers",
+    mapWsfeLookupDetails(raw.CbtesAsoc, "CbteAsoc", (item) => {
+      const type = normalizeWsfeNumber(item.Tipo);
+      const salesPoint = normalizeWsfeNumber(item.PtoVta);
+      const number = normalizeWsfeNumber(item.Nro);
+      if (
+        type === undefined ||
+        salesPoint === undefined ||
+        number === undefined
+      ) {
+        return undefined;
+      }
+      return {
+        type,
+        salesPoint,
+        number,
+        ...(normalizeWsfeString(item.CbteFch)
+          ? { voucherDate: normalizeWsfeString(item.CbteFch) as WsfeDateInput }
+          : {}),
+      };
+    })
+  );
   return voucher;
 }
 
