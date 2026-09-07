@@ -5,6 +5,7 @@ import {
   createArcaCsrMaterial,
   privateKeyMatchesCertificate,
   readCertificateFacts,
+  readCsrTaxId,
 } from "./csr";
 
 const SUBJECT = {
@@ -155,5 +156,30 @@ describe("readCertificateFacts taxId", () => {
     ]);
 
     expect(readCertificateFacts(pem).taxId).toBeUndefined();
+  });
+});
+
+describe("readCsrTaxId", () => {
+  it("reads the CUIT out of the request init wrote", () => {
+    expect(readCsrTaxId(material.csrPem)).toBe(SUBJECT.taxId);
+  });
+
+  it("is undefined when the subject carries no CUIT", () => {
+    const keyPair = forge.pki.rsa.generateKeyPair({
+      bits: 2048,
+      e: 0x01_00_01,
+    });
+    const request = forge.pki.createCertificationRequest();
+    request.publicKey = keyPair.publicKey;
+    request.setSubject([{ name: "commonName", value: "facturas" }]);
+    request.sign(keyPair.privateKey, forge.md.sha256.create());
+
+    expect(
+      readCsrTaxId(forge.pki.certificationRequestToPem(request))
+    ).toBeUndefined();
+  });
+
+  it("throws on something that is not a request", () => {
+    expect(() => readCsrTaxId("no soy un CSR")).toThrow();
   });
 });

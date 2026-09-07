@@ -861,6 +861,7 @@ function createContext(options: {
     cwd: options.cwd ?? tmpdir(),
     cacheDir: options.cacheDir ?? createTemporaryDirectory(),
     now: () => NOW,
+    copyToClipboard: () => Promise.resolve(false),
     createClient: (clientOptions) => {
       context.clientOptions = clientOptions as never;
       return {

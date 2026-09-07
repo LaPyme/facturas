@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import packageJson from "../../package.json" with { type: "json" };
 import { type CliHelpTopic, renderHelp } from "./help";
 
-const TOPICS: CliHelpTopic[] = ["root", "init", "check", "issue"];
+const TOPICS: CliHelpTopic[] = ["root", "init", "cert", "check", "issue"];
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI is what it matches
 const ANSI = /\u001B\[\d+m/g;
@@ -26,6 +26,7 @@ describe("renderHelp without color", () => {
       Comandos:
 
         init    clave privada y CSR, más los pasos exactos en ARCA
+        cert    pega el certificado que te dio ARCA y lo guarda
         check   prueba cada capa en orden y nombra la que falla
         issue   una factura de ARS 1 en homologación, solo a pedido
 
@@ -61,6 +62,8 @@ describe("renderHelp without color", () => {
         --org <razón social>      organización del CSR (por defecto: el CUIT)
         --dir <directorio>        dónde escribir los archivos (por defecto: el actual)
         --force                   sobrescribe los archivos existentes
+        --no-clipboard            no copia el CSR al portapapeles
+        --no-paste                no pregunta por el certificado al final
         --no-color                sin colores
         -h, --help                esta ayuda
 
@@ -72,10 +75,45 @@ describe("renderHelp without color", () => {
       Notas:
 
         Escribe arca-<entorno>.key con permisos 0600 y arca-<entorno>.csr, y
-        nunca escribe en ARCA. Guardá el certificado que te dé ARCA en el mismo
-        directorio, como arca-<entorno>.crt, y check lo encuentra solo. En una
+        nunca escribe en ARCA. En homologación copia el CSR al portapapeles, y
+        si no puede lo imprime para copiarlo de la terminal. Al final pide el
+        certificado y lo guarda como arca-<entorno>.crt; con Ctrl-C, --no-paste
+        o sin terminal, lo guardás vos o lo pegás después con cert. En una
         terminal pregunta el CUIT y el entorno; sin terminal, --cuit y --env
         son obligatorios.
+      "
+    `);
+  });
+
+  it("renders cert", () => {
+    expect(page("cert")).toMatchInlineSnapshot(`
+      "facturas <versión>
+
+        pega el certificado que te dio ARCA y lo guarda
+
+        npx facturas cert [opciones]
+
+      Opciones:
+
+        --env <test|production>   cuál par usar si están los dos
+        --dir <directorio>        dónde están los archivos (por defecto: el actual)
+        --force                   sobrescribe el certificado existente
+        --no-color                sin colores
+        -h, --help                esta ayuda
+
+      Ejemplos:
+
+        $ npx facturas cert
+        $ npx facturas cert --env production
+        $ npx facturas cert --dir credenciales --force
+
+      Notas:
+
+        Pegás el certificado que te dio ARCA, de -----BEGIN CERTIFICATE----- a
+        -----END CERTIFICATE-----, y lo guarda como arca-<entorno>.crt junto a
+        la clave que generó init. Antes verifica que sea el certificado de esa
+        clave y de ese CUIT, y si no, no escribe nada. Es lo mismo que init
+        pregunta al final: cert está para cuando lo dejaste para después.
       "
     `);
   });
@@ -189,6 +227,10 @@ describe("renderHelp with color", () => {
 });
 
 describe("every page", () => {
+  it("keeps the root page short enough to read at a glance", () => {
+    expect(page("root").split("\n").length).toBeLessThanOrEqual(30);
+  });
+
   it("names the version, the usage and at least two examples", () => {
     for (const topic of TOPICS) {
       const text = page(topic);

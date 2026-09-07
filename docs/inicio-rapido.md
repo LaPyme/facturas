@@ -11,9 +11,11 @@ propios. El SDK no hace estas habilitaciones por vos, pero el CLI te acompaña:
 npx facturas init --cuit 20123456786 --env test
 ```
 
-Genera la clave privada y el CSR que se sube en ARCA, y después imprime los
-pasos exactos: qué página, qué botón y qué servicio autorizar. Cuando ARCA te
-dé el certificado, guardalo en ese mismo directorio como `arca-test.crt`. El
+Genera la clave privada y el CSR que se sube en ARCA —en homologación te lo
+deja en el portapapeles— y después imprime los pasos exactos: qué página, qué
+botón y qué servicio autorizar. Cuando ARCA te dé el certificado, lo pegás en
+el prompt del final y lo guarda en ese mismo directorio como `arca-test.crt`;
+si saliste antes, `npx facturas cert` lo toma después. El
 paso a paso completo y las referencias oficiales están en
 [Habilitación en ARCA](./habilitacion-arca.md); los comandos, en
 [CLI](./cli.md).

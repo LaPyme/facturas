@@ -40,7 +40,7 @@ describe("run --help and --version", () => {
   });
 
   it("keeps a command's --help away from ARCA and the prompt", async () => {
-    for (const command of ["init", "check", "issue"]) {
+    for (const command of ["init", "cert", "check", "issue"]) {
       const context = createContext();
       const createClient = vi.fn();
       const createAuth = vi.fn();
@@ -202,6 +202,13 @@ describe("run dispatch", () => {
 
     expect(await run(["init"], context.io)).toBe(2);
     expect(context.stderr()).toContain("Falta el CUIT.");
+  });
+
+  it("routes cert and looks for the key init wrote", async () => {
+    const context = createContext();
+
+    expect(await run(["cert"], context.io)).toBe(1);
+    expect(context.stderr()).toContain("No encontré arca-test.key");
   });
 });
 
@@ -367,6 +374,7 @@ function createContext(
     cwd: tmpdir(),
     cacheDir: tmpdir(),
     now: () => new Date("2026-09-06T00:00:00Z"),
+    copyToClipboard: () => Promise.resolve(false),
     createClient: () => {
       throw new Error("no client in these tests");
     },

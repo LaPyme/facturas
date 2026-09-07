@@ -4,12 +4,14 @@ import { type ParseArgsConfig, parseArgs } from "node:util";
 import { createArcaClient } from "../client";
 import type { ArcaClientConfig } from "../internal/types";
 import { createWsaaAuthModule } from "../wsaa";
+import { type CertFlags, runCert } from "./cert";
 import {
   type CheckFlags,
   describeSalesPointProblem,
   parseSalesPoint,
   runCheck,
 } from "./check";
+import { copyToClipboard } from "./clipboard";
 import { describeUnknownError } from "./diagnose";
 import { type CliHelpTopic, renderHelp } from "./help";
 import { type InitFlags, runInit } from "./init";
@@ -23,7 +25,7 @@ import {
 } from "./output";
 import { readCliVersion } from "./version";
 
-const COMMANDS = ["init", "check", "issue"] as const;
+const COMMANDS = ["init", "cert", "check", "issue"] as const;
 type Command = (typeof COMMANDS)[number];
 
 type OptionConfig = NonNullable<ParseArgsConfig["options"]>;
@@ -42,6 +44,14 @@ const COMMAND_OPTIONS: Record<Command, OptionConfig> = {
     env: { type: "string" },
     name: { type: "string" },
     org: { type: "string" },
+    dir: { type: "string" },
+    force: { type: "boolean" },
+    "no-clipboard": { type: "boolean" },
+    "no-paste": { type: "boolean" },
+  },
+  cert: {
+    ...GLOBAL_OPTIONS,
+    env: { type: "string" },
     dir: { type: "string" },
     force: { type: "boolean" },
   },
@@ -123,6 +133,9 @@ export async function run(argv: readonly string[], io: CliIo): Promise<number> {
   if (command === "init") {
     return await runInit(io, toInitFlags(values), writer);
   }
+  if (command === "cert") {
+    return await runCert(io, toCertFlags(values), writer);
+  }
 
   const given = values["sales-point"];
   const salesPoint =
@@ -166,6 +179,11 @@ export function createDefaultIo(): CliIo {
     cwd: process.cwd(),
     cacheDir: join(tmpdir(), "facturas-cli"),
     now: () => new Date(),
+    copyToClipboard: (text) =>
+      copyToClipboard(text, {
+        env: process.env,
+        platform: process.platform,
+      }),
     createClient: (options) => createArcaClient(options),
     createAuth: (config: ArcaClientConfig) => createWsaaAuthModule({ config }),
   };
@@ -197,6 +215,18 @@ function toInitFlags(
     ...text(values, "env", "env"),
     ...text(values, "name", "name"),
     ...text(values, "org", "org"),
+    ...text(values, "dir", "dir"),
+    ...(values.force === true ? { force: true } : {}),
+    ...(values["no-clipboard"] === true ? { noClipboard: true } : {}),
+    ...(values["no-paste"] === true ? { noPaste: true } : {}),
+  };
+}
+
+function toCertFlags(
+  values: Record<string, string | boolean | undefined>
+): CertFlags {
+  return {
+    ...text(values, "env", "env"),
     ...text(values, "dir", "dir"),
     ...(values.force === true ? { force: true } : {}),
   };

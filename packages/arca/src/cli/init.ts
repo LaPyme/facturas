@@ -6,11 +6,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { ARCA_ENVIRONMENTS } from "../config";
 import type { ArcaEnvironment } from "../internal/types";
-import { buildArcaPlan } from "./arca-steps";
+import { type ArcaPlanContext, buildArcaPlan } from "./arca-steps";
+import { pasteCertificate, writeManualHint } from "./cert";
 import { createArcaCsrMaterial } from "./csr";
 import { describeTaxIdProblem, normalizeTaxId } from "./cuit";
+import { toEnvironment } from "./discover";
 import { CLI_EXIT, type CliIo, type CliWriter } from "./output";
 import { ask, isInteractive } from "./prompt";
 
@@ -30,6 +31,10 @@ export type InitFlags = {
   dir?: string;
   force?: boolean;
   org?: string;
+  /** Leaves the clipboard alone: the CSR gets printed instead. */
+  noClipboard?: boolean;
+  /** Skips the certificate prompt at the end. */
+  noPaste?: boolean;
 };
 
 /** Generates the key and the CSR, then prints the exact ARCA steps. */
@@ -73,21 +78,95 @@ export async function runInit(
   chmodSync(keyPath, KEY_FILE_MODE);
   writeFileSync(csrPath, material.csrPem);
 
+  // Only homologación pastes the CSR into a form: production uploads the file
+  // itself, so there is nothing to put in the clipboard.
+  const clipboard =
+    environment === "test" &&
+    flags.noClipboard !== true &&
+    (await io.copyToClipboard(material.csrPem));
+
   writer.ok(keyName, "clave privada RSA 2048, permisos 0600");
   writer.ok(csrName, `CSR para ARCA, CN=${commonName}`);
+  if (clipboard) {
+    writer.ok("portapapeles", `${csrName} copiado, pegalo en el paso 3`);
+  }
 
   const ignored = appendToGitignore(directory);
   if (ignored.length > 0) {
     writer.ok(".gitignore", `agregué ${ignored.join(" y ")}`);
   }
 
+  const paste = flags.noPaste !== true && isInteractive(io);
   writePlan(writer, {
     alias,
     certificateName,
+    clipboard,
     csrName,
+    csrPem: material.csrPem,
     environment,
+    paste,
     taxId,
   });
+
+  const code = paste
+    ? await askForCertificate(io, writer, {
+        certificatePath: resolve(directory, certificateName),
+        certificateName,
+        keyName,
+        privateKeyPem: material.privateKeyPem,
+        taxId,
+      })
+    : manualCertificate(writer, certificateName);
+
+  writer.blank();
+  writer.dim("Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,");
+  writer.dim(
+    "ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md."
+  );
+  return code;
+}
+
+/**
+ * The certificate, right here, while the browser tab with it is still open.
+ * A saved file the CLI never sees is the step where onboarding used to end.
+ */
+async function askForCertificate(
+  io: CliIo,
+  writer: CliWriter,
+  request: {
+    certificatePath: string;
+    certificateName: string;
+    keyName: string;
+    privateKeyPem: string;
+    taxId: string;
+  }
+): Promise<number> {
+  const outcome = await pasteCertificate(io, writer, {
+    intro: [
+      "Cuando tengas el certificado (paso 4), pegalo acá. Termina solo al ver",
+      "-----END CERTIFICATE-----. Ctrl-C para hacerlo después con",
+      "npx facturas cert.",
+    ],
+    ...request,
+  });
+
+  if (outcome === "saved") {
+    writer.blank();
+    writer.line("Falta el paso 5 (la autorización a wsfe). Cuando esté:");
+    writer.blank();
+    writer.command("npx facturas check");
+    return CLI_EXIT.ok;
+  }
+  if (outcome === "refused") {
+    return CLI_EXIT.failed;
+  }
+  writeManualHint(writer, request.certificateName);
+  return outcome === "cancelled" ? CLI_EXIT.ok : CLI_EXIT.failed;
+}
+
+/** Without a terminal, or with --no-paste, the old hand-off is still true. */
+function manualCertificate(writer: CliWriter, certificateName: string): number {
+  writeManualHint(writer, certificateName);
   return CLI_EXIT.ok;
 }
 
@@ -167,12 +246,6 @@ async function resolveEnvironment(
   return toEnvironment(answer.trim().toLowerCase());
 }
 
-function toEnvironment(value: string): ArcaEnvironment | undefined {
-  return ARCA_ENVIRONMENTS.includes(value as ArcaEnvironment)
-    ? (value as ArcaEnvironment)
-    : undefined;
-}
-
 /** Appends the credential patterns to an existing `.gitignore`. Idempotent. */
 function appendToGitignore(directory: string): string[] {
   const path = resolve(directory, ".gitignore");
@@ -194,32 +267,13 @@ function appendToGitignore(directory: string): string[] {
 
 function writePlan(
   writer: CliWriter,
-  context: {
-    environment: ArcaEnvironment;
-    alias: string;
-    taxId: string;
-    csrName: string;
-    certificateName: string;
-  }
+  context: ArcaPlanContext & { environment: ArcaEnvironment }
 ): void {
   const plan = buildArcaPlan(context.environment, context, writer.painter);
   writer.blank();
   writer.line(plan.heading);
   writer.blank();
   for (const line of plan.lines) {
-    if (line.dim === true) {
-      writer.dim(line.text);
-    } else {
-      writer.line(line.text);
-    }
+    writer.line(line.text);
   }
-  writer.blank();
-  writer.dim("Después:");
-  writer.blank();
-  writer.command("npx facturas check");
-  writer.blank();
-  writer.dim("Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,");
-  writer.dim(
-    "ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md."
-  );
 }

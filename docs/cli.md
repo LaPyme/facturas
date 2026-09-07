@@ -6,6 +6,7 @@ capa en orden y nombra la que falla, con la página y la acción exactas.
 
 ```sh
 npx facturas init      # clave privada y CSR, más los pasos exactos en ARCA
+npx facturas cert      # pega el certificado que te dio ARCA y lo guarda
 npx facturas check     # prueba cada capa en orden y nombra la que falla
 npx facturas issue     # una factura de ARS 1 en homologación, solo a pedido
 npx facturas --help
@@ -16,12 +17,13 @@ Necesitás Node.js 20 o superior. No instala nada aparte del paquete.
 
 ## Ayuda
 
-`npx facturas --help` lista los tres comandos y las opciones globales, nada
+`npx facturas --help` lista los cuatro comandos y las opciones globales, nada
 más. Las opciones de cada comando están en su propia ayuda, con dos o tres
 ejemplos y una nota corta de qué escribe y qué guarda:
 
 ```sh
 npx facturas init --help
+npx facturas cert --help
 npx facturas check --help
 npx facturas issue --help
 ```
@@ -31,7 +33,11 @@ nunca toca la red ni pregunta nada, aunque el resto de la línea esté mal.
 
 ## Qué guarda y qué nunca hace
 
-- `init` y `check` **nunca escriben en ARCA**. Solo leen.
+- `init`, `cert` y `check` **nunca escriben en ARCA**. Solo leen. `cert` no
+  descarga nada: el certificado se lo pegás vos.
+- `init` copia el CSR al **portapapeles del sistema** en homologación, con la
+  herramienta que ya tiene tu sistema (`pbcopy`, `wl-copy`, `xclip`, `xsel` o
+  `clip`), sin shell y sin instalar nada. Si no hay ninguna, lo imprime.
 - Lo único que el CLI guarda, aparte de los archivos de `init`, es el **ticket
   WSAA**: en `<temporal del sistema>/facturas-cli`, con el directorio en `0700`
   y los archivos en `0600`. ARCA rechaza un segundo login mientras hay un
@@ -81,6 +87,8 @@ misma validación corre en `--tax-id` y en `ARCA_TAX_ID` para `check` e
 | `--org <razón social>` | el CUIT | Organización del CSR |
 | `--dir <directorio>` | el actual | Dónde escribir los archivos |
 | `--force` | — | Sobrescribe los archivos existentes |
+| `--no-clipboard` | — | No copia el CSR al portapapeles: lo imprime |
+| `--no-paste` | — | No pregunta por el certificado al final |
 
 Escribe `arca-<entorno>.key` con permisos `0600` y `arca-<entorno>.csr`. Si ya
 existe alguno, se niega y sale con código 1; `--force` los pisa. Si hay un
@@ -91,6 +99,10 @@ fuera del repositorio.
 Sin terminal (CI, scripts), `--cuit` y `--env` son obligatorios; si faltan, sale
 con código 2.
 
+En homologación, además, copia el CSR al portapapeles antes de imprimir nada,
+para que el paso 3 sea una sola pegada. En producción no lo copia: ahí ARCA
+pide el archivo, no el texto.
+
 Después imprime los pasos exactos en ARCA, en una sola lista para el entorno
 que elegiste: `init` ya sabe si es homologación o producción, así que no
 imprime los dos caminos. Los nombres de página, campo y botón están
@@ -100,6 +112,10 @@ verificados contra las referencias oficiales que lista
 Para `--env test`:
 
 ```
+✓ arca-test.key          clave privada RSA 2048, permisos 0600
+✓ arca-test.csr          CSR para ARCA, CN=facturas
+✓ portapapeles           arca-test.csr copiado, pegalo en el paso 3
+
 Listo. Ahora en ARCA, para homologación:
 
   1. Entrá con clave fiscal en
@@ -110,26 +126,78 @@ Listo. Ahora en ARCA, para homologación:
      clave fiscal de persona física, nivel 2 o superior: no es delegable.
   3. En el menú, "Nuevo Certificado":
        Nombre simbólico del DN:    facturas-test
-       Solicitud de certificado:   pegá arca-test.csr entero
+       Solicitud de certificado:   pegá (ya está en tu portapapeles)
      Apretá "Crear DN y Obtener Certificado".
-     (cat arca-test.csr lo muestra; copiá también las líneas BEGIN y END)
   4. El certificado sale en el cuadro de resultado, de
      -----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.
-     Copialo entero y guardalo acá como arca-test.crt.
+     Copialo entero y pegalo acá abajo.
   5. En el menú, "Crear autorización a servicio":
        Nombre simbólico del DN a autorizar:   facturas-test
        CUIT representado:                     20123456786
        Servicio al que desea acceder:         wsfe - Facturación Electrónica
      Apretá "Crear Autorización de Acceso".
 
-Después:
+Cuando tengas el certificado (paso 4), pegalo acá. Termina solo al ver
+-----END CERTIFICATE-----. Ctrl-C para hacerlo después con
+npx facturas cert.
+
+>
+```
+
+Si no hay portapapeles —una sesión SSH, un servidor sin entorno gráfico, un
+Linux sin `xclip` ni `xsel`— la línea del paso 3 cambia y el CSR sale impreso
+ahí mismo, para copiarlo de la terminal:
+
+```
+  3. En el menú, "Nuevo Certificado":
+       Nombre simbólico del DN:    facturas-test
+       Solicitud de certificado:   copiá esto entero:
+       -----BEGIN CERTIFICATE REQUEST-----
+       MIICkzCCAXsCAQAwTjELMAkGA1UEBhMCQVIxFDASBgNVBAoMCzIwMTIzNDU2Nzg2
+       ...
+       -----END CERTIFICATE REQUEST-----
+     Apretá "Crear DN y Obtener Certificado".
+```
+
+Lo mismo con `--no-clipboard`. El CSR no es secreto: es la clave **pública**
+más el subject, y se sube a una página de ARCA.
+
+En homologación **no hay descarga**: el certificado aparece en el cuadro de
+resultado del propio WSASS, en PEM. Por eso `init` lo pide ahí mismo, mientras
+la pestaña sigue abierta. Pegás el bloque entero y termina solo al ver la línea
+`-----END CERTIFICATE-----`:
+
+```
+> -----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+✓ arca-test.crt          certificado guardado, vence 2027-09-07
+
+Falta el paso 5 (la autorización a wsfe). Cuando esté:
 
   $ npx facturas check
 ```
 
-En homologación **no hay descarga**: el certificado aparece en el cuadro de
-resultado del propio WSASS, en PEM, y se copia y se pega en un archivo de
-texto. El campo del CSR es el que el manual llama
+Antes de escribir nada verifica dos cosas, y si alguna falla no guarda el
+archivo y sale con código 1:
+
+```
+El certificado es de otro CUIT: 20111111112.
+El certificado no corresponde a arca-test.key. ¿Subiste otro CSR?
+```
+
+Si lo que pegaste no es un certificado PEM te lo dice y vuelve a preguntar,
+hasta tres veces. Con `Ctrl-C`, con `--no-paste` o sin terminal (CI, scripts)
+no pregunta nada y te deja la instrucción de siempre, con código 0:
+
+```
+Cuando tengas el certificado, guardalo acá como arca-test.crt,
+o pegalo con npx facturas cert, y corré:
+
+  $ npx facturas check
+```
+
+El campo del CSR es el que el manual llama
 `Solicitud de certificado en formato PKCS10`.
 
 Para `--env production`:
@@ -149,16 +217,21 @@ Listo. Ahora en ARCA, para producción:
      Apretá "Agregar alias" para subirlo.
   4. En la lista, entrá con "Ver" y usá el icono "Descargar"
      para bajar el certificado (archivo CRT).
-     Guardalo acá como arca-production.crt.
+     Guardalo acá como arca-production.crt, o abrilo y pegalo abajo.
   5. Volvé a Administrador de Relaciones, "Nueva Relación":
        Servicio:        BUSCAR → Webservices → Facturación Electrónica
        Representante:   BUSCAR → el computador fiscal facturas-production
      Apretá "Confirmar", revisá y volvé a apretar "Confirmar".
 
-Después:
+Cuando tengas el certificado (paso 4), pegalo acá. Termina solo al ver
+-----END CERTIFICATE-----. Ctrl-C para hacerlo después con
+npx facturas cert.
 
-  $ npx facturas check
+>
 ```
+
+En producción sí hay descarga, así que guardar el archivo con ese nombre
+alcanza; el prompt está igual por si preferís pegar el contenido.
 
 En producción el alias es el **computador fiscal**: el mismo nombre aparece
 después en `Representante` al crear la relación con el servicio.
@@ -169,7 +242,7 @@ Las páginas, en una tabla, para tenerlas juntas:
 | --- | --- | --- |
 | Ingreso | [Clave fiscal](https://auth.afip.gob.ar/contribuyente_/login.xhtml) | igual |
 | Subir el CSR | `WSASS - Autogestión Certificados Homologación` → `Nuevo Certificado` → `Crear DN y Obtener Certificado` | `Administración de Certificados Digitales` → `Agregar alias` |
-| Obtener el certificado | el cuadro de resultado del WSASS, en PEM: se copia y se pega | `Ver` → icono `Descargar` (archivo CRT) |
+| Obtener el certificado | el cuadro de resultado del WSASS, en PEM: se copia y se pega en el prompt de `init` o de `cert` | `Ver` → icono `Descargar` (archivo CRT) |
 | Autorizar `wsfe` | el mismo WSASS → `Crear autorización a servicio` → `Crear Autorización de Acceso` | `Administrador de Relaciones` → `Nueva Relación` → `Webservices` → `Facturación Electrónica` → el computador fiscal → `Confirmar` |
 | Punto de venta | `Administración de Puntos de Venta y Domicilios` | igual |
 
@@ -183,6 +256,59 @@ aplicativo y Web Services` para responsable inscripto, y las opciones
 No hay ningún `export` que copiar: `check` encuentra el par de archivos en el
 directorio. Las variables de entorno son para tu aplicación, no para el CLI, y
 están en [Inicio rápido](./inicio-rapido.md#3-configurá-el-cliente).
+
+## `cert`
+
+Toma el certificado que te dio ARCA, pegado, y lo guarda al lado de la clave.
+Es lo mismo que `init` pregunta al final: `cert` está para cuando lo dejaste
+para después, saliste con `Ctrl-C` o corriste `init --no-paste`.
+
+```sh
+npx facturas cert
+```
+
+```
+Pegá el certificado que te dio ARCA. Termina solo al ver
+-----END CERTIFICATE-----. Ctrl-C para salir.
+
+> -----BEGIN CERTIFICATE-----
+...
+-----END CERTIFICATE-----
+✓ arca-test.crt          certificado guardado, vence 2027-09-07
+
+Después:
+
+  $ npx facturas check
+```
+
+Busca `arca-<entorno>.key` con las mismas reglas que `check`: un solo par en el
+directorio (o en `--dir`) gana y el entorno sale del nombre del archivo; si
+están los dos, no adivina y te pide `--env`. El CUIT sale del
+`arca-<entorno>.csr` que escribió `init`, si sigue ahí; si no está, no hay con
+qué comparar y esa verificación se saltea.
+
+| Flag | Qué hace |
+| --- | --- |
+| `--env <test\|production>` | Cuál par usar cuando están los dos |
+| `--dir <directorio>` | Dónde están los archivos (por defecto, el actual) |
+| `--force` | Sobrescribe el `arca-<entorno>.crt` que ya esté |
+
+Verifica, antes de escribir, que el certificado sea de esa clave —el mismo
+módulo RSA— y de ese CUIT. Si no, no guarda nada:
+
+```
+El certificado es de otro CUIT: 20111111112.
+El certificado no corresponde a arca-test.key. ¿Subiste otro CSR?
+```
+
+Los códigos de salida son los de siempre: `0` si lo guardó, y también si
+saliste con `Ctrl-C` sin pegar nada; `1` si no encontró la clave, si están los
+dos entornos, si ya existe el `.crt` y no pasaste `--force`, si el certificado
+no corresponde o si tres pegadas seguidas no fueron un PEM; `2` si el `--env`
+no es uno de los dos.
+
+Sin terminal también funciona, para scripts: `npx facturas cert < cert.pem`
+lee de la entrada estándar, sin prompt.
 
 ## `check`
 

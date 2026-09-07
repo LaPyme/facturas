@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { ARCA_ENVIRONMENTS } from "../config";
 import type { ArcaEnvironment } from "../internal/types";
 
 /**
@@ -9,7 +10,17 @@ import type { ArcaEnvironment } from "../internal/types";
  */
 
 /** Homologación first: it is where everyone starts. */
-const DISCOVERY_ORDER: readonly ArcaEnvironment[] = ["test", "production"];
+export const DISCOVERY_ORDER: readonly ArcaEnvironment[] = [
+  "test",
+  "production",
+];
+
+/** The environment a written answer names, or `undefined` when it names none. */
+export function toEnvironment(value: string): ArcaEnvironment | undefined {
+  return ARCA_ENVIRONMENTS.includes(value as ArcaEnvironment)
+    ? (value as ArcaEnvironment)
+    : undefined;
+}
 
 /** The certificate `init` tells the user to save for that environment. */
 export function certificateFileName(environment: ArcaEnvironment): string {

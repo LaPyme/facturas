@@ -33,8 +33,8 @@ export const ARCA_PAGES = {
     "Factura Electrónica – Monotributo – Web Services",
 } as const;
 
-/** One printed line of the plan. `dim` ones are asides, never instructions. */
-export type ArcaPlanLine = { text: string; dim?: boolean };
+/** One printed line of the plan. Every one of them is an instruction. */
+export type ArcaPlanLine = { text: string };
 
 /** The whole block `init` prints after the files: a heading and its steps. */
 export type ArcaPlan = { heading: string; lines: ArcaPlanLine[] };
@@ -45,6 +45,12 @@ export type ArcaPlanContext = {
   taxId: string;
   csrName: string;
   certificateName: string;
+  /** True when the CSR is already in the clipboard and step 3 is one paste. */
+  clipboard: boolean;
+  /** The CSR itself, printed in step 3 when there is no clipboard. */
+  csrPem: string;
+  /** True when the CLI is about to ask for the certificate right below. */
+  paste: boolean;
 };
 
 const STEP_INDENT = "  ";
@@ -54,7 +60,8 @@ const FIELD_INDENT = "       ";
 /** Spaces between the widest label of a step and its value column. */
 const COLUMN_GAP = 3;
 
-type Field = { label: string; value: string };
+/** One `label   value` row, plus the block that hangs under it, if any. */
+type Field = { label: string; value: string; lines?: string[] };
 
 /**
  * The ARCA steps for one environment, as a single linear list. `init` already
@@ -90,18 +97,16 @@ function buildTestPlan(
         [`En el menú, ${name(ARCA_PAGES.wsassNewCertificate)}:`],
         [
           { label: ARCA_PAGES.wsassDnField, value: context.alias },
-          {
-            label: ARCA_PAGES.wsassCsrField,
-            value: `pegá ${context.csrName} entero`,
-          },
+          csrField(context),
         ],
-        [`Apretá ${name(ARCA_PAGES.wsassNewCertificateButton)}.`],
-        `(cat ${context.csrName} lo muestra; copiá también las líneas BEGIN y END)`
+        [`Apretá ${name(ARCA_PAGES.wsassNewCertificateButton)}.`]
       ),
       ...step(4, [
         "El certificado sale en el cuadro de resultado, de",
         "-----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.",
-        `Copialo entero y guardalo acá como ${context.certificateName}.`,
+        context.paste
+          ? "Copialo entero y pegalo acá abajo."
+          : `Copialo entero y guardalo acá como ${context.certificateName}.`,
       ]),
       ...step(
         5,
@@ -147,7 +152,9 @@ function buildProductionPlan(
       ...step(4, [
         `En la lista, entrá con ${name("Ver")} y usá el icono ${name("Descargar")}`,
         "para bajar el certificado (archivo CRT).",
-        `Guardalo acá como ${context.certificateName}.`,
+        context.paste
+          ? `Guardalo acá como ${context.certificateName}, o abrilo y pegalo abajo.`
+          : `Guardalo acá como ${context.certificateName}.`,
       ]),
       ...step(
         5,
@@ -173,15 +180,14 @@ function buildProductionPlan(
 }
 
 /**
- * One numbered step: its text, an optional aligned `label   value` block, the
- * lines that come after it, and one dim aside at the end.
+ * One numbered step: its text, an optional aligned `label   value` block and
+ * the lines that come after it.
  */
 function step(
   number: number,
   text: string[],
   fields: Field[] = [],
-  after: string[] = [],
-  hint?: string
+  after: string[] = []
 ): ArcaPlanLine[] {
   const [first, ...rest] = text;
   const lines: ArcaPlanLine[] = [{ text: `${STEP_INDENT}${number}. ${first}` }];
@@ -194,14 +200,36 @@ function step(
     lines.push({
       text: `${FIELD_INDENT}${field.label}:${padding}${field.value}`,
     });
+    for (const line of field.lines ?? []) {
+      lines.push({ text: `${FIELD_INDENT}${line}` });
+    }
   }
   for (const line of after) {
     lines.push({ text: `${WRAP_INDENT}${line}` });
   }
-  if (hint !== undefined) {
-    lines.push({ text: `${WRAP_INDENT}${hint}`, dim: true });
-  }
   return lines;
+}
+
+/**
+ * The CSR row of step 3. With the clipboard it is one word; without it the
+ * whole request goes under the field, because a terminal is the only place
+ * the user can copy it from without opening an editor.
+ */
+function csrField(context: ArcaPlanContext): Field {
+  if (context.clipboard) {
+    return {
+      label: ARCA_PAGES.wsassCsrField,
+      value: "pegá (ya está en tu portapapeles)",
+    };
+  }
+  return {
+    label: ARCA_PAGES.wsassCsrField,
+    value: "copiá esto entero:",
+    lines: context.csrPem
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line !== ""),
+  };
 }
 
 /** Where the values start, counting the colon the labels get when printed. */

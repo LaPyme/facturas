@@ -19,12 +19,14 @@ propios.
 ## Con el CLI
 
 `npx facturas init` genera la clave y el CSR con el subject que pide el
-instructivo oficial, y después imprime una sola lista de pasos, la del entorno
-que elegiste. Guardá el certificado que te dé ARCA en ese directorio, con el
-nombre que `init` te indica (`arca-test.crt` o `arca-production.crt`), y
-`npx facturas check` lo encuentra solo: prueba cada capa y nombra la que falta
-habilitar, sin que tengas que exportar nada. Ninguno de los dos escribe en
-ARCA. Están en [CLI](./cli.md).
+instructivo oficial, en homologación te lo deja en el portapapeles, y después
+imprime una sola lista de pasos, la del entorno que elegiste. Al final te pide
+el certificado: lo pegás ahí y lo guarda como `arca-test.crt` o
+`arca-production.crt`, después de verificar que sea el de esa clave y ese CUIT.
+Si lo dejaste para más tarde, `npx facturas cert` hace lo mismo suelto.
+`npx facturas check` encuentra el par solo: prueba cada capa y nombra la que
+falta habilitar, sin que tengas que exportar nada. Ninguno de los tres escribe
+en ARCA. Están en [CLI](./cli.md).
 
 ### Homologación, paso a paso
 
@@ -45,8 +47,10 @@ superior.
    líneas `BEGIN` y `END`). Botón `Crear DN y Obtener Certificado`.
 4. **No hay descarga.** El certificado x509 en PEM aparece en el cuadro de
    resultado de esa misma página, de `-----BEGIN CERTIFICATE-----` a
-   `-----END CERTIFICATE-----`. Copialo entero y guardalo en un archivo de
-   texto, como `arca-test.crt`.
+   `-----END CERTIFICATE-----`. Copialo entero y pegalo en el prompt de
+   `npx facturas init` o `npx facturas cert`, que lo guardan como
+   `arca-test.crt`; si preferís, guardalo vos en un archivo de texto con ese
+   mismo nombre.
 5. En el menú, `Crear autorización a servicio`:
    `Nombre simbólico del DN a autorizar` (el alias del paso 3),
    `CUIT representado` (el mismo CUIT, salvo que operes para un tercero) y
@@ -69,7 +73,8 @@ los completa el sistema y no se editan.
    computador fiscal) y el archivo CSR, con `Seleccionar archivo`. Confirmá con
    `Agregar alias`.
 4. En la lista, entrá con `Ver` y usá el icono `Descargar` para bajar el
-   certificado emitido (archivo CRT). Guardalo como `arca-production.crt`.
+   certificado emitido (archivo CRT). Guardalo como `arca-production.crt`, o
+   abrilo y pegá el texto en `npx facturas cert`.
 5. Volvé a `Administrador de Relaciones` → `Nueva Relación`. En `Servicio`,
    `BUSCAR` y dentro de la agrupación `Webservices` elegí
    `Facturación Electrónica`. En `Representante`, `BUSCAR` y elegí el

@@ -21,6 +21,11 @@ export type CliIo = {
   /** Where the WSAA ticket is cached between runs. Never holds anything else. */
   cacheDir: string;
   now(): Date;
+  /**
+   * Puts text in the system clipboard, answering whether it got there. Nothing
+   * else in the CLI touches the clipboard, and a `false` is never an error.
+   */
+  copyToClipboard(text: string): Promise<boolean>;
   createClient(options: ArcaClientOptions): ArcaClient;
   createAuth(config: ArcaClientConfig): WsaaAuthModule;
 };

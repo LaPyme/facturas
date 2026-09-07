@@ -84,10 +84,20 @@ export function readCertificateFacts(certificatePem: string): CertificateFacts {
   };
 }
 
-function readSubjectTaxId(
-  certificate: forge.pki.Certificate
-): string | undefined {
-  const field = certificate.subject.getField({ name: "serialNumber" }) as {
+/**
+ * The CUIT in the subject of a certificate signing request. `init` writes it
+ * there, so `cert` can read back which CUIT a directory belongs to without
+ * asking. Throws on anything that is not a PKCS#10 request.
+ */
+export function readCsrTaxId(csrPem: string): string | undefined {
+  return readSubjectTaxId(forge.pki.certificationRequestFromPem(csrPem));
+}
+
+/** Both a certificate and a request keep the CUIT in the same subject field. */
+function readSubjectTaxId(source: {
+  subject: { getField(options: { name: string }): unknown };
+}): string | undefined {
+  const field = source.subject.getField({ name: "serialNumber" }) as {
     value?: unknown;
   } | null;
   if (typeof field?.value !== "string") {

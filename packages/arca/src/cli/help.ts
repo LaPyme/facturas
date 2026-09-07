@@ -2,7 +2,7 @@ import { createPainter } from "./output";
 import { readCliVersion } from "./version";
 
 /** One help page: the root one, or one per command. */
-export type CliHelpTopic = "root" | "init" | "check" | "issue";
+export type CliHelpTopic = "root" | "init" | "cert" | "check" | "issue";
 
 type HelpRow = { name: string; description?: string };
 
@@ -30,6 +30,7 @@ const COLUMN_GAP = 3;
 /** What each command does, in the words the root page and the docs use. */
 export const CLI_COMMAND_SUMMARIES = {
   init: "clave privada y CSR, más los pasos exactos en ARCA",
+  cert: "pega el certificado que te dio ARCA y lo guarda",
   check: "prueba cada capa en orden y nombra la que falla",
   issue: "una factura de ARS 1 en homologación, solo a pedido",
 } as const;
@@ -43,6 +44,7 @@ const HELP_PAGES: Record<CliHelpTopic, HelpPage> = {
         bold: true,
         rows: [
           { name: "init", description: CLI_COMMAND_SUMMARIES.init },
+          { name: "cert", description: CLI_COMMAND_SUMMARIES.cert },
           { name: "check", description: CLI_COMMAND_SUMMARIES.check },
           { name: "issue", description: CLI_COMMAND_SUMMARIES.issue },
         ],
@@ -97,6 +99,14 @@ const HELP_PAGES: Record<CliHelpTopic, HelpPage> = {
             name: "--force",
             description: "sobrescribe los archivos existentes",
           },
+          {
+            name: "--no-clipboard",
+            description: "no copia el CSR al portapapeles",
+          },
+          {
+            name: "--no-paste",
+            description: "no pregunta por el certificado al final",
+          },
           { name: "--no-color", description: "sin colores" },
           { name: "-h, --help", description: "esta ayuda" },
         ],
@@ -108,10 +118,49 @@ const HELP_PAGES: Record<CliHelpTopic, HelpPage> = {
     ],
     notes: [
       "Escribe arca-<entorno>.key con permisos 0600 y arca-<entorno>.csr, y",
-      "nunca escribe en ARCA. Guardá el certificado que te dé ARCA en el mismo",
-      "directorio, como arca-<entorno>.crt, y check lo encuentra solo. En una",
+      "nunca escribe en ARCA. En homologación copia el CSR al portapapeles, y",
+      "si no puede lo imprime para copiarlo de la terminal. Al final pide el",
+      "certificado y lo guarda como arca-<entorno>.crt; con Ctrl-C, --no-paste",
+      "o sin terminal, lo guardás vos o lo pegás después con cert. En una",
       "terminal pregunta el CUIT y el entorno; sin terminal, --cuit y --env",
       "son obligatorios.",
+    ],
+  },
+  cert: {
+    summary: CLI_COMMAND_SUMMARIES.cert,
+    usage: "npx facturas cert [opciones]",
+    sections: [
+      {
+        title: "Opciones:",
+        rows: [
+          {
+            name: "--env <test|production>",
+            description: "cuál par usar si están los dos",
+          },
+          {
+            name: "--dir <directorio>",
+            description: "dónde están los archivos (por defecto: el actual)",
+          },
+          {
+            name: "--force",
+            description: "sobrescribe el certificado existente",
+          },
+          { name: "--no-color", description: "sin colores" },
+          { name: "-h, --help", description: "esta ayuda" },
+        ],
+      },
+    ],
+    examples: [
+      "npx facturas cert",
+      "npx facturas cert --env production",
+      "npx facturas cert --dir credenciales --force",
+    ],
+    notes: [
+      "Pegás el certificado que te dio ARCA, de -----BEGIN CERTIFICATE----- a",
+      "-----END CERTIFICATE-----, y lo guarda como arca-<entorno>.crt junto a",
+      "la clave que generó init. Antes verifica que sea el certificado de esa",
+      "clave y de ese CUIT, y si no, no escribe nada. Es lo mismo que init",
+      "pregunta al final: cert está para cuando lo dejaste para después.",
     ],
   },
   check: {
