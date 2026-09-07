@@ -11,9 +11,8 @@ integración directa a WSFE y WSMTXCA.
 - **CLI incluido**: `npx facturas init` genera la clave y el CSR, y
   `npx facturas check` nombra la capa de ARCA que falla
 - **Integración directa con ARCA**, sin proxy ni dependencia alojada
-- **Login WSAA resuelto**: caché de tickets en memoria, stores de sesión
-  durables opcionales, deduplicación de logins en vuelo y recuperación de
-  `coe.alreadyAuthenticated`
+- **Login WSAA resuelto**: caché en memoria, stores de sesión durables,
+  deduplicación de logins en vuelo y recuperación de `coe.alreadyAuthenticated`
 - **API pública en TypeScript estricto**, con nombres al estilo JS mapeados a
   SOAP internamente
 - **Datos de referencia comunes de ARCA** exportados como constantes, para que
@@ -82,7 +81,8 @@ const factura = await arca.issue(input, { idempotencyKey: venta.id });
 ```
 
 Hay adaptadores para Postgres, Redis, archivos y memoria, y podés escribir el
-tuyo. Ver [Stores](./docs/stores.md).
+tuyo; con ellos, dos emisiones simultáneas sobre el mismo punto de venta se
+serializan y cada una escribe su número. Ver [Stores](./docs/stores.md).
 
 ## Nota de crédito
 

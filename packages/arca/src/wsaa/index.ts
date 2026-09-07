@@ -6,6 +6,7 @@ import {
   ArcaSoapFaultError,
   ArcaTransportError,
 } from "../errors";
+import { abortable } from "../internal/abort";
 import { postXmlWithMetadata } from "../internal/http";
 import type { ArcaLogger } from "../internal/logger";
 import { createSafeErrorDiagnostic } from "../internal/redaction";
@@ -177,37 +178,46 @@ export function createWsaaAuthModule(
 
   return {
     login(service, authOptions = {}) {
-      const sessionKey = buildWsaaSessionKey(options.config, service);
-      const cacheKey = serializeWsaaSessionKey(sessionKey);
+      // A deduplicated login is shared: the caller stops waiting on its own
+      // deadline, and the request keeps running for the other waiters.
+      return abortable(runLogin(service, authOptions), authOptions.signal);
+    },
+  };
 
-      if (authOptions.forceRefresh) {
-        const runningForced = forcedInFlight.get(cacheKey);
-        if (runningForced) {
-          return runningForced;
-        }
+  function runLogin(
+    service: ArcaWsaaServiceId,
+    authOptions: ArcaAuthOptions
+  ): Promise<ArcaAuthCredentials> {
+    const sessionKey = buildWsaaSessionKey(options.config, service);
+    const cacheKey = serializeWsaaSessionKey(sessionKey);
 
-        const runningOrdinary = ordinaryInFlight.get(cacheKey);
-        return trackLogin(forcedInFlight, cacheKey, async () => {
-          await runningOrdinary?.catch(() => undefined);
-          return await performLogin(service, sessionKey, cacheKey, true);
-        });
-      }
-
-      const runningOrdinary = ordinaryInFlight.get(cacheKey);
-      if (runningOrdinary) {
-        return runningOrdinary;
-      }
-
+    if (authOptions.forceRefresh) {
       const runningForced = forcedInFlight.get(cacheKey);
       if (runningForced) {
         return runningForced;
       }
 
-      return trackLogin(ordinaryInFlight, cacheKey, () =>
-        performLogin(service, sessionKey, cacheKey, false)
-      );
-    },
-  };
+      const runningOrdinary = ordinaryInFlight.get(cacheKey);
+      return trackLogin(forcedInFlight, cacheKey, async () => {
+        await runningOrdinary?.catch(() => undefined);
+        return await performLogin(service, sessionKey, cacheKey, true);
+      });
+    }
+
+    const runningOrdinary = ordinaryInFlight.get(cacheKey);
+    if (runningOrdinary) {
+      return runningOrdinary;
+    }
+
+    const runningForced = forcedInFlight.get(cacheKey);
+    if (runningForced) {
+      return runningForced;
+    }
+
+    return trackLogin(ordinaryInFlight, cacheKey, () =>
+      performLogin(service, sessionKey, cacheKey, false)
+    );
+  }
 }
 
 async function requestCredentials(

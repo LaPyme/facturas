@@ -119,6 +119,8 @@ export type WsfeAuthorizeVoucherInput = {
   data: WsfeVoucherInput;
   voucherNumber: number;
   forceRefresh?: boolean;
+  /** Aborts login, submission and consultation with the caller's deadline. */
+  signal?: AbortSignal;
 };
 
 /** Structured evidence from one exact WSFE authorization attempt. */
@@ -219,6 +221,7 @@ export type WsfeService = {
     salesPoint: number;
     voucherType: number;
     forceRefresh?: boolean;
+    signal?: AbortSignal;
   }): Promise<number>;
   /**
    * @deprecated Use `getNextVoucherNumber()` instead.
@@ -304,6 +307,7 @@ export type WsfeService = {
     salesPoint: number;
     voucherType: number;
     forceRefresh?: boolean;
+    signal?: AbortSignal;
   }): Promise<WsfeVoucherLookupResult>;
 };
 
@@ -380,6 +384,7 @@ export function createWsfeService(
     input: {
       representedTaxId?: ArcaRepresentedTaxId;
       forceRefresh?: boolean;
+      signal?: AbortSignal;
     },
     body: Record<string, unknown> = {},
     retries?: number
@@ -387,6 +392,7 @@ export function createWsfeService(
     const auth = await options.auth.login("wsfe", {
       representedTaxId: input.representedTaxId,
       forceRefresh: input.forceRefresh,
+      signal: input.signal,
     });
     const response = await options.soap.execute<
       Record<string, unknown>,
@@ -395,6 +401,7 @@ export function createWsfeService(
       service: "wsfe",
       operation,
       ...(retries === undefined ? {} : { retries }),
+      signal: input.signal,
       body: {
         Auth: createWsfeAuth(
           input.representedTaxId ?? options.config.taxId,
@@ -413,6 +420,7 @@ export function createWsfeService(
     input: {
       representedTaxId?: ArcaRepresentedTaxId;
       forceRefresh?: boolean;
+      signal?: AbortSignal;
     },
     body: Record<string, unknown> = {}
   ) {
@@ -423,7 +431,11 @@ export function createWsfeService(
       async execute(forceRefresh) {
         const result = await executeWsfeAuthenticatedRawOperation(
           operation,
-          { representedTaxId: input.representedTaxId, forceRefresh },
+          {
+            representedTaxId: input.representedTaxId,
+            forceRefresh,
+            signal: input.signal,
+          },
           body
         );
         throwForWsfeOperationErrors(operation, result);
@@ -455,17 +467,20 @@ export function createWsfeService(
     salesPoint,
     voucherType,
     forceRefresh,
+    signal,
   }: {
     representedTaxId?: number | string;
     salesPoint: number;
     voucherType: number;
     forceRefresh?: boolean;
+    signal?: AbortSignal;
   }) {
     const result = await executeWsfeAuthenticatedOperation(
       "FECompUltimoAutorizado",
       {
         representedTaxId,
         forceRefresh,
+        signal,
       },
       {
         PtoVta: salesPoint,
@@ -495,6 +510,7 @@ export function createWsfeService(
     data,
     voucherNumber,
     forceRefresh,
+    signal,
   }: WsfeAuthorizeVoucherInput): Promise<WsfeAuthorizationOutcome> {
     const normalizedInput = normalizeWsfeVoucherInput(data);
     return executeWsfeAuthorization({
@@ -502,6 +518,7 @@ export function createWsfeService(
       data: normalizedInput,
       voucherNumber,
       forceRefresh,
+      signal,
     }).then(({ outcome }) => outcome);
   }
 
@@ -510,11 +527,13 @@ export function createWsfeService(
     data: normalizedInput,
     voucherNumber,
     forceRefresh,
+    signal,
   }: {
     representedTaxId?: number | string;
     data: NormalizedWsfeVoucherInput;
     voucherNumber: number;
     forceRefresh?: boolean;
+    signal?: AbortSignal;
   }): Promise<{
     outcome: WsfeAuthorizationOutcome;
     error?: unknown;
@@ -524,7 +543,7 @@ export function createWsfeService(
     try {
       const result = await executeWsfeAuthenticatedRawOperation(
         "FECAESolicitar",
-        { representedTaxId, forceRefresh },
+        { representedTaxId, forceRefresh, signal },
         {
           FeCAEReq: {
             FeCabReq: {
@@ -557,12 +576,14 @@ export function createWsfeService(
     salesPoint,
     voucherType,
     forceRefresh,
+    signal,
   }: {
     representedTaxId?: number | string;
     number: number;
     salesPoint: number;
     voucherType: number;
     forceRefresh?: boolean;
+    signal?: AbortSignal;
   }): Promise<WsfeVoucherLookupResult> {
     return executeWithAuthenticationRecovery({
       service: "wsfe",
@@ -575,6 +596,7 @@ export function createWsfeService(
           salesPoint,
           voucherType,
           forceRefresh: attemptForceRefresh,
+          signal,
         }),
     });
   }
@@ -585,17 +607,19 @@ export function createWsfeService(
     salesPoint,
     voucherType,
     forceRefresh,
+    signal,
   }: {
     representedTaxId?: number | string;
     number: number;
     salesPoint: number;
     voucherType: number;
     forceRefresh?: boolean;
+    signal?: AbortSignal;
   }): Promise<WsfeVoucherLookupResult> {
     const operation = "FECompConsultar";
     const result = await executeWsfeAuthenticatedRawOperation(
       operation,
-      { representedTaxId, forceRefresh },
+      { representedTaxId, forceRefresh, signal },
       {
         FeCompConsReq: {
           CbteNro: number,

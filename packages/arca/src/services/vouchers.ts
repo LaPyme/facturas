@@ -8,10 +8,13 @@ import { normalizeArcaAmountToMinorUnits } from "../internal/decimal";
 import type { ArcaEnvironment } from "../internal/types";
 import {
   type ArcaAttemptRecord,
+  type ArcaSequenceRecord,
   type ArcaSettledRecord,
   type ArcaStore,
   attemptKey,
   canonicalHash,
+  sequenceKey,
+  sequenceLockKey,
   settledKey,
   storeCall,
 } from "../store/types";
@@ -71,7 +74,7 @@ export type DebitNoteInput =
   | PeriodNoteInput;
 export type RecoveryOptions = Pick<
   IssueOptions,
-  "representedTaxId" | "forceRefresh" | "include"
+  "representedTaxId" | "forceRefresh" | "include" | "signal"
 >;
 export type VouchersService = {
   /** Consults a durable reservation. Never allocates or authorizes a voucher. */
@@ -161,6 +164,7 @@ type IssueWsfeService = {
     >
   >;
 };
+type SelectService = (options: IssueOptions) => IssueWsfeService;
 type StoreContext = {
   store?: ArcaStore;
   environment: ArcaEnvironment;
@@ -199,7 +203,8 @@ export function createVouchersService(
         input,
         options ?? {},
         context,
-        "debitNote"
+        "debitNote",
+        select
       ) as Promise<IssueOutcome<typeof options & IssueOptions>>,
     previewCreditNote: async <O extends PreviewOptions = { service?: never }>(
       input: CreditNoteInput | PeriodNoteInput,
@@ -231,7 +236,9 @@ export function createVouchersService(
         select(options),
         input,
         options === undefined ? {} : options,
-        context
+        context,
+        "creditNote",
+        select
       );
       return result as IssueOutcome<O>;
     },
@@ -243,7 +250,8 @@ export function createVouchersService(
         select(options),
         input,
         options === undefined ? {} : options,
-        context
+        context,
+        select
       );
       // issueInvoice conditionally adds the fields specified by O at runtime.
       return result as IssueOutcome<O>;
@@ -318,9 +326,10 @@ async function issueInvoice(
   wsfe: IssueWsfeService,
   input: IssueInput,
   inputOptions: IssueOptions,
-  context?: StoreContext
+  context?: StoreContext,
+  select?: SelectService
 ): Promise<IssueOutcome<IssueOptions>> {
-  const options = structuredClone(inputOptions);
+  const options = cloneOptions(inputOptions);
   validateOptions(options);
   validateKeyStore(options, context);
   const prepared = prepareInvoice(input, options);
@@ -331,7 +340,8 @@ async function issueInvoice(
     () => Promise.resolve(prepared),
     options,
     context,
-    prepared.amounts
+    prepared.amounts,
+    select
   );
 }
 
@@ -342,17 +352,16 @@ async function runOperation(
   prepare: () => Promise<Prepared>,
   options: IssueOptions,
   context?: StoreContext,
-  replayAmounts?: Prepared["amounts"]
+  replayAmounts?: Prepared["amounts"],
+  select?: SelectService
 ): Promise<IssueOutcome<IssueOptions>> {
   if (options.idempotencyKey === undefined || !context?.store) {
     return runAuthorization(wsfe, await prepare(), options);
   }
   const store: ArcaStore = context.store;
-  const key = attemptKey(
-    context.environment,
-    context.taxId,
-    options.idempotencyKey
-  );
+  const { environment, taxId } = context;
+  const idempotencyKey = options.idempotencyKey;
+  const key = attemptKey(environment, taxId, idempotencyKey);
   const representedTaxId =
     options.representedTaxId === undefined
       ? undefined
@@ -363,46 +372,116 @@ async function runOperation(
     ...(options.service === "wsmtxca" ? { service: "wsmtxca" } : {}),
     ...(options.number === undefined ? {} : { number: options.number }),
   });
-  const settled = settledKey(
-    context.environment,
-    context.taxId,
-    options.idempotencyKey
-  );
+  const settled = settledKey(environment, taxId, idempotencyKey);
   const existing = await storeCall(() => store.get(key));
   if (existing !== null) {
     return await replay(existing);
   }
   const prepared = await prepare();
-  const number = await nextNumber(wsfe, prepared.data, options);
-  // A WSMTXCA or detailed reservation is a v2 record: 0.10 accepts any v1 record
-  // and would replay it through WSFE, so it must not be able to read this one.
-  const service = options.service ?? "wsfe";
-  const versioned =
-    service === "wsmtxca" || prepared.data.details !== undefined;
-  const record: ArcaAttemptRecord = {
-    v: versioned ? 2 : 1,
-    operation,
-    ...(versioned ? { service } : {}),
-    representedTaxId,
-    inputHash,
-    number,
-    salesPoint: prepared.data.salesPoint,
-    voucherType: prepared.data.voucherType,
-    sent: prepared.data,
-    createdAt: new Date().toISOString(),
+  const sequence = {
+    coordinates: {
+      salesPoint: prepared.data.salesPoint,
+      voucherType: prepared.data.voucherType,
+    },
+    // The sequence belongs to the taxpayer whose numbering ARCA advances.
+    taxId: String(options.representedTaxId ?? context.taxId),
   };
-  if (await storeCall(() => store.add(key, JSON.stringify(record)))) {
-    return await settle(runAuthorization(wsfe, prepared, options, number));
+  const sequenceRecord = sequenceKey(
+    environment,
+    sequence.taxId,
+    sequence.coordinates.salesPoint,
+    sequence.coordinates.voucherType
+  );
+  if (!store.withLock) {
+    return await claim();
   }
-  const winner = await storeCall(() => store.get(key));
-  if (winner === null) {
-    throw new ArcaConfigurationError(
-      "ARCA reservation disappeared after atomic creation lost."
-    );
-  }
-  return await replay(winner);
+  // Serialize the claim across every process that shares this store: read the
+  // next number, reserve it, submit and resolve while holding the lease.
+  return await store.withLock(
+    sequenceLockKey(
+      environment,
+      sequence.taxId,
+      sequence.coordinates.salesPoint,
+      sequence.coordinates.voucherType
+    ),
+    async () => {
+      const barrier = await runSequenceBarrier({
+        store,
+        environment,
+        taxId,
+        sequence: sequenceRecord,
+        coordinates: sequence.coordinates,
+        select: select ?? (() => wsfe),
+        options,
+        supersededBy: idempotencyKey,
+        readNext: () => nextNumber(wsfe, prepared.data, options),
+      });
+      return "blocked" in barrier
+        ? barrier.blocked
+        : await claim(barrier.reserved);
+    }
+  );
 
-  async function replay(json: string) {
+  async function claim(reserved?: number) {
+    const number =
+      options.number ??
+      reserved ??
+      (await nextNumber(wsfe, prepared.data, options));
+    // A WSMTXCA or detailed reservation is a v2 record: 0.10 accepts any v1
+    // record and would replay it through WSFE, so it must not read this one.
+    const service = options.service ?? "wsfe";
+    const versioned =
+      service === "wsmtxca" || prepared.data.details !== undefined;
+    const record: ArcaAttemptRecord = {
+      v: versioned ? 2 : 1,
+      operation,
+      ...(versioned ? { service } : {}),
+      representedTaxId,
+      inputHash,
+      number,
+      salesPoint: prepared.data.salesPoint,
+      voucherType: prepared.data.voucherType,
+      sent: prepared.data,
+      createdAt: new Date().toISOString(),
+    };
+    if (await storeCall(() => store.add(key, JSON.stringify(record)))) {
+      const claimed: ArcaSequenceRecord = {
+        v: 1,
+        key: idempotencyKey,
+        number,
+        claimedAt: new Date().toISOString(),
+      };
+      const coordinated = store.withLock !== undefined;
+      if (coordinated) {
+        await storeCall(() =>
+          store.set(sequenceRecord, JSON.stringify(claimed))
+        );
+      }
+      const outcome = await settle(
+        runAuthorization(wsfe, prepared, options, number)
+      );
+      if (coordinated && outcome.kind !== "indeterminate") {
+        // ARCA reported this claim, so the next one needs no consultation.
+        await storeCall(() =>
+          store.set(
+            sequenceRecord,
+            JSON.stringify({ ...claimed, resolvedAt: new Date().toISOString() })
+          )
+        );
+      }
+      return outcome;
+    }
+    const winner = await storeCall(() => store.get(key));
+    if (winner === null) {
+      throw new ArcaConfigurationError(
+        "ARCA reservation disappeared after atomic creation lost."
+      );
+    }
+    // Already inside the sequence lock: the winner's replay must not retake it.
+    return await replay(winner, true);
+  }
+
+  async function replay(json: string, locked = false) {
     const stored = readRecord(json);
     if (
       (stored.service ?? "wsfe") !== (options.service ?? "wsfe") ||
@@ -418,21 +497,44 @@ async function runOperation(
         }
       );
     }
-    const recorded = await storeCall(() => store.get(settled));
-    if (recorded !== null) {
-      return settledConflict(readSettledRecord(recorded), stored);
+    // The settled record is read under the lock: a barrier running right now
+    // may be superseding this very reservation.
+    const consult = async () => {
+      const recorded = await storeCall(() => store.get(settled));
+      if (recorded !== null) {
+        return await settledOutcome(
+          select ?? (() => wsfe),
+          stored,
+          readSettledRecord(recorded),
+          options
+        );
+      }
+      return await settle(
+        runAuthorization(
+          wsfe,
+          {
+            ...preparedFromRecord(stored),
+            ...(replayAmounts ? { amounts: replayAmounts } : {}),
+          },
+          options,
+          stored.number,
+          true
+        )
+      );
+    };
+    if (locked || !store.withLock) {
+      return await consult();
     }
-    return await settle(
-      runAuthorization(
-        wsfe,
-        {
-          ...preparedFromRecord(stored),
-          ...(replayAmounts ? { amounts: replayAmounts } : {}),
-        },
-        options,
-        stored.number,
-        true
-      )
+    // A replay may resend the reserved number, so it belongs to the sequence
+    // it reserved. It never runs the barrier: it is the claim being consulted.
+    return await store.withLock(
+      sequenceLockKey(
+        environment,
+        stored.representedTaxId ?? taxId,
+        stored.salesPoint,
+        stored.voucherType
+      ),
+      consult
     );
   }
   /** Every conflict becomes durable before it reaches the caller. */
@@ -473,10 +575,10 @@ function readSettledRecord(json: string): ArcaSettledRecord {
     if (
       !record ||
       record.v !== 1 ||
-      record.kind !== "conflict" ||
-      !record.found ||
-      typeof record.found !== "object" ||
-      !Number.isSafeInteger(record.number)
+      !Number.isSafeInteger(record.number) ||
+      (record.kind === "conflict"
+        ? !record.found || typeof record.found !== "object"
+        : record.kind !== "superseded" || typeof record.by !== "string")
     ) {
       throw new Error("Invalid settled structure");
     }
@@ -489,8 +591,39 @@ function readSettledRecord(json: string): ArcaSettledRecord {
   }
 }
 
-function settledConflict(
+/**
+ * Answers a key whose outcome is already recorded. A conflict repeats with no
+ * provider call. A superseded key consults its number once and never resends:
+ * a voucher there belongs to whoever took the sequence, and an empty number
+ * means this key will never write.
+ */
+async function settledOutcome(
+  select: SelectService,
+  reservation: ArcaAttemptRecord,
   settled: ArcaSettledRecord,
+  options: RecoveryOptions
+): Promise<IssueOutcome<IssueOptions>> {
+  if (settled.kind === "conflict") {
+    return settledConflict(settled, reservation);
+  }
+  const outcome = await consultReservation(select, reservation, options, true);
+  if (outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found") {
+    return {
+      kind: "indeterminate",
+      attempted: {
+        salesPoint: reservation.salesPoint,
+        voucherType: reservation.voucherType,
+        number: settled.number,
+      },
+      attempt: replayEvidence(reservation.service),
+      lookup: { kind: "superseded", by: settled.by },
+    };
+  }
+  return outcome;
+}
+
+function settledConflict(
+  settled: Extract<ArcaSettledRecord, { kind: "conflict" }>,
   reservation: ArcaAttemptRecord
 ): IssueOutcome<IssueOptions> {
   return {
@@ -588,6 +721,7 @@ async function nextNumber(
   const number = await wsfe.getNextVoucherNumber({
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,
   });
@@ -616,6 +750,7 @@ async function runAuthorization(
   const auth = {
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
   const includeRaw = options.include?.raw === true;
   const includeExact = options.include?.exactInput === true;
@@ -654,7 +789,9 @@ async function runAuthorization(
         kind: "indeterminate",
         attempted,
         attempt,
-        lookup: { kind: "failed", error: toArcaSafeErrorMetadata(error) },
+        lookup: options.signal?.aborted
+          ? { kind: "aborted" }
+          : { kind: "failed", error: toArcaSafeErrorMetadata(error) },
       };
     }
     if (lookup.kind === "found") {
@@ -681,42 +818,13 @@ async function runAuthorization(
     };
   }
   if (authorization.kind === "rejected") {
-    if (
-      options.idempotencyKey !== undefined &&
-      (options.service === "wsmtxca" ||
-        [...authorization.errors, ...authorization.observations].some(
-          (issue) => issue.code === "10016"
-        ))
-    ) {
-      const recovered = await recoverInvoice({
-        ...recovery,
-        attempt: projectEvidence(
-          {
-            ...authorization,
-            kind: "indeterminate",
-            reason: "contradictory_response",
-          },
-          includeRaw
-        ),
-        // A number this call reserved and ARCA refused can only hold somebody
-        // else's voucher, and identical fiscal data is not authorship. Only a
-        // pre-existing reservation may recover its own lost write by identity.
-        strangerAtNumber: !replay,
-      });
-      // A stranger at the reserved number is a conflict; a failed or empty
-      // lookup keeps the provider rejection as the answer.
-      if (recovered.kind === "authorized" || recovered.kind === "conflict") {
-        return recovered;
-      }
-    }
-    return {
-      kind: "rejected",
-      attempted,
-      issues: [...authorization.errors, ...authorization.observations].map(
-        projectIssue
-      ),
-      authorization: projectEvidence(authorization, includeRaw),
-    };
+    return await resolveRejection(
+      authorization,
+      recovery,
+      options,
+      includeRaw,
+      replay
+    );
   }
   // The exact outcome type permits an absent expiry. Keep that uncertainty visible.
   const uncertain =
@@ -744,10 +852,53 @@ async function runAuthorization(
   });
 }
 
+/**
+ * A rejection with a key checks the reserved number once. On a reservation
+ * this call created, any voucher there is a stranger and the answer is a
+ * conflict; identity matching is left to a true retry. A failed or empty
+ * lookup keeps the provider rejection as the answer.
+ */
+async function resolveRejection(
+  authorization: Extract<ArcaAuthorizationOutcome, { kind: "rejected" }>,
+  recovery: Omit<RecoveryInput, "attempt">,
+  options: IssueOptions,
+  includeRaw: boolean,
+  replay: boolean
+): Promise<IssueOutcome<IssueOptions>> {
+  const issues = [...authorization.errors, ...authorization.observations];
+  const consult =
+    options.idempotencyKey !== undefined &&
+    (options.service === "wsmtxca" ||
+      issues.some((issue) => issue.code === "10016"));
+  if (consult) {
+    const recovered = await recoverInvoice({
+      ...recovery,
+      attempt: projectEvidence(
+        {
+          ...authorization,
+          kind: "indeterminate",
+          reason: "contradictory_response",
+        },
+        includeRaw
+      ),
+      strangerAtNumber: !replay,
+    });
+    if (recovered.kind === "authorized" || recovered.kind === "conflict") {
+      return recovered;
+    }
+  }
+  return {
+    kind: "rejected",
+    attempted: recovery.attempted,
+    issues: issues.map(projectIssue),
+    authorization: projectEvidence(authorization, includeRaw),
+  };
+}
+
 type RecoveryInput = {
   wsfe: IssueWsfeService;
   lookup?: Awaited<ReturnType<IssueWsfeService["lookupVoucher"]>>;
-  auth: Pick<IssueOptions, "representedTaxId" | "forceRefresh">;
+  auth: Pick<IssueOptions, "representedTaxId" | "forceRefresh" | "signal">;
   data: FiscalHeader;
   service?: "wsfe" | "wsmtxca";
   attempted: VoucherCoordinates;
@@ -774,6 +925,15 @@ async function recoverInvoice({
   service,
   strangerAtNumber = false,
 }: RecoveryInput): Promise<IssueOutcome<IssueOptions>> {
+  if (suppliedLookup === undefined && auth.signal?.aborted) {
+    // The write may have landed; the reservation stays and recover() settles it.
+    return {
+      kind: "indeterminate",
+      attempted,
+      attempt,
+      lookup: { kind: "aborted" },
+    };
+  }
   let lookup: Awaited<ReturnType<IssueWsfeService["lookupVoucher"]>>;
   try {
     lookup =
@@ -783,7 +943,9 @@ async function recoverInvoice({
       kind: "indeterminate",
       attempted,
       attempt,
-      lookup: { kind: "failed", error: toArcaSafeErrorMetadata(error) },
+      lookup: auth.signal?.aborted
+        ? { kind: "aborted" }
+        : { kind: "failed", error: toArcaSafeErrorMetadata(error) },
     };
   }
   const raw = includeRaw ? { raw: lookup.raw } : {};
@@ -916,6 +1078,16 @@ function projectEvidence<T extends ArcaAuthorizationOutcome>(
   return projected as Omit<T, "raw"> & { raw?: Record<string, unknown> };
 }
 
+/** An AbortSignal cannot be cloned, so the caller's deadline is carried over. */
+function cloneOptions<T extends IssueOptions>(options: T): T {
+  assertIssueObject(options, "options");
+  const { signal, ...rest } = options;
+  return {
+    ...(structuredClone(rest) as T),
+    ...(signal === undefined ? {} : { signal }),
+  };
+}
+
 function validateOptions(options: IssueOptions) {
   assertIssueObject(options, "options");
   assertIssueKeys(
@@ -927,9 +1099,22 @@ function validateOptions(options: IssueOptions) {
       "idempotencyKey",
       "service",
       "number",
+      "signal",
     ],
     "options"
   );
+  if (
+    options.signal !== undefined &&
+    (typeof options.signal !== "object" ||
+      options.signal === null ||
+      typeof options.signal.aborted !== "boolean" ||
+      typeof options.signal.addEventListener !== "function")
+  ) {
+    throw new ArcaInputError("options.signal must be an AbortSignal.", {
+      code: "ARCA_INPUT_INVALID_VALUE",
+      field: "options.signal",
+    });
+  }
   if (
     options.service !== undefined &&
     options.service !== "wsfe" &&
@@ -1007,9 +1192,10 @@ async function issueCreditNote(
   input: CreditNoteInput | PeriodNoteInput,
   inputOptions: IssueOptions,
   context?: StoreContext,
-  kind: "creditNote" | "debitNote" = "creditNote"
+  kind: "creditNote" | "debitNote" = "creditNote",
+  select?: SelectService
 ): Promise<IssueOutcome<IssueOptions>> {
-  const options = structuredClone(inputOptions);
+  const options = cloneOptions(inputOptions);
   validateOptions(options);
   validateKeyStore(options, context);
   // Copy before the first await: caller mutation must not change the reservation.
@@ -1030,7 +1216,9 @@ async function issueCreditNote(
     note,
     () => prepareNote(wsfe, note, options, context, kind),
     options,
-    context
+    context,
+    undefined,
+    select
   );
 }
 async function previewNote(
@@ -1176,11 +1364,11 @@ async function recoverOperation(
   inputOptions: RecoveryOptions,
   context?: StoreContext
 ): Promise<IssueOutcome<IssueOptions>> {
-  const options = structuredClone(inputOptions);
+  const options = cloneOptions(inputOptions);
   assertIssueObject(options, "options");
   assertIssueKeys(
     options,
-    ["representedTaxId", "forceRefresh", "include"],
+    ["representedTaxId", "forceRefresh", "include", "signal"],
     "options"
   );
   validateOptions(options);
@@ -1219,45 +1407,180 @@ async function recoverOperation(
   }
   const recorded = await storeCall(() => store.get(settled));
   if (recorded !== null) {
-    return settledConflict(readSettledRecord(recorded), record);
+    return await settledOutcome(
+      select,
+      record,
+      readSettledRecord(recorded),
+      options
+    );
   }
+  return await recordConflict(
+    store,
+    settled,
+    await consultReservation(select, record, options)
+  );
+}
+
+/**
+ * Consults one reservation without ever writing to ARCA: the read-only path
+ * `recover()` uses, and the one the sequence barrier runs for a claim whose
+ * fate nobody recorded.
+ */
+function consultReservation(
+  select: SelectService,
+  record: ArcaAttemptRecord,
+  options: RecoveryOptions,
+  strangerAtNumber = false
+): Promise<IssueOutcome<IssueOptions>> {
   const storedOptions = {
     ...options,
     service: record.service ?? ("wsfe" as const),
     representedTaxId: record.representedTaxId,
   };
   const prepared = preparedFromRecord(record);
-  return await recordConflict(
+  const attempted = {
+    salesPoint: record.salesPoint,
+    voucherType: record.voucherType,
+    number: record.number,
+  };
+  return recoverInvoice({
+    wsfe: select(storedOptions),
+    service: storedOptions.service,
+    auth: storedOptions,
+    data: prepared.data,
+    strangerAtNumber,
+    attempted,
+    attempt: replayEvidence(storedOptions.service),
+    includeRaw: options.include?.raw === true,
+    exact: exactEvidence(
+      prepared.data,
+      record.number,
+      storedOptions,
+      options.include?.exactInput === true
+    ),
+    voucher: (cae, caeExpiry) => ({
+      ...attempted,
+      voucherClass: prepared.voucherClass,
+      date: prepared.data.voucherDate,
+      amounts: prepared.amounts,
+      cae,
+      caeExpiry,
+    }),
+  });
+}
+
+type SequenceBarrier = {
+  store: ArcaStore;
+  environment: ArcaEnvironment;
+  taxId: string;
+  sequence: string;
+  coordinates: Omit<VoucherCoordinates, "number">;
+  select: SelectService;
+  options: IssueOptions;
+  supersededBy: string;
+  readNext: () => Promise<number>;
+};
+/** Either the sequence is free, with the number already read, or it is held. */
+type BarrierResult =
+  | { blocked: IssueOutcome<IssueOptions> }
+  | { reserved?: number };
+
+/**
+ * Holds the sequence while the last claim on it is unresolved. A claim ARCA
+ * already reported and a recorded conflict clear it. An empty number clears it
+ * only once the sequence proves it never moved: then the old key is recorded
+ * as superseded, so its own retry can never take the number this call is about
+ * to write. A lookup that cannot answer writes nothing at all.
+ */
+async function runSequenceBarrier({
+  store,
+  environment,
+  taxId,
+  sequence,
+  coordinates,
+  select,
+  options,
+  supersededBy,
+  readNext,
+}: SequenceBarrier): Promise<BarrierResult> {
+  const json = await storeCall(() => store.get(sequence));
+  if (json === null) {
+    return {};
+  }
+  const claimed = readSequenceRecord(json);
+  if (claimed.resolvedAt !== undefined) {
+    return {};
+  }
+  const settled = settledKey(environment, taxId, claimed.key);
+  if ((await storeCall(() => store.get(settled))) !== null) {
+    return {};
+  }
+  const reservation = await storeCall(() =>
+    store.get(attemptKey(environment, taxId, claimed.key))
+  );
+  if (reservation === null) {
+    return {};
+  }
+  const blocked: BarrierResult = {
+    blocked: {
+      kind: "indeterminate",
+      attempted: { ...coordinates, number: claimed.number },
+      attempt: replayEvidence(options.service),
+      lookup: { kind: "blocked", by: claimed.key },
+    },
+  };
+  const outcome = await recordConflict(
     store,
     settled,
-    await recoverInvoice({
-      wsfe: select(storedOptions),
-      service: storedOptions.service,
-      auth: storedOptions,
-      data: prepared.data,
-      attempted: {
-        salesPoint: record.salesPoint,
-        voucherType: record.voucherType,
-        number: record.number,
-      },
-      attempt: replayEvidence(storedOptions.service),
-      includeRaw: options.include?.raw === true,
-      exact: exactEvidence(
-        prepared.data,
-        record.number,
-        storedOptions,
-        options.include?.exactInput === true
-      ),
-      voucher: (cae, caeExpiry) => ({
-        salesPoint: record.salesPoint,
-        voucherType: record.voucherType,
-        number: record.number,
-        voucherClass: prepared.voucherClass,
-        date: prepared.data.voucherDate,
-        amounts: prepared.amounts,
-        cae,
-        caeExpiry,
-      }),
+    await consultReservation(select, readRecord(reservation), {
+      forceRefresh: options.forceRefresh,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
   );
+  if (outcome.kind === "authorized" || outcome.kind === "conflict") {
+    return {};
+  }
+  if (outcome.kind !== "indeterminate" || outcome.lookup.kind !== "not_found") {
+    return blocked;
+  }
+  // The consultation saw nothing. Only the sequence itself proves the number is
+  // free: if ARCA already moved past it, a write this lookup could not see is
+  // out there and nothing may be superseded.
+  const next = await readNext();
+  if (next !== claimed.number) {
+    return blocked;
+  }
+  await storeCall(() =>
+    store.add(
+      settled,
+      JSON.stringify({
+        v: 1,
+        kind: "superseded",
+        number: claimed.number,
+        by: supersededBy,
+        settledAt: new Date().toISOString(),
+      } satisfies ArcaSettledRecord)
+    )
+  );
+  return { reserved: next };
+}
+
+function readSequenceRecord(json: string): ArcaSequenceRecord {
+  try {
+    const record = JSON.parse(json) as ArcaSequenceRecord;
+    if (
+      !record ||
+      record.v !== 1 ||
+      typeof record.key !== "string" ||
+      !Number.isSafeInteger(record.number)
+    ) {
+      throw new Error("Invalid sequence structure");
+    }
+    return record;
+  } catch (cause) {
+    throw new ArcaConfigurationError(
+      "Invalid ARCA sequence record; delete the sequence key to resume.",
+      { cause }
+    );
+  }
 }

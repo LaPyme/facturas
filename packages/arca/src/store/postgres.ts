@@ -1,4 +1,5 @@
 import { ArcaConfigurationError } from "../errors";
+import { ARCA_LEASE_MS, withLease } from "./lock";
 import { type ArcaStore, storeCall } from "./types";
 
 type Row = { key?: string; value?: string };
@@ -14,6 +15,7 @@ export function createPostgresStore({
     throw new ArcaConfigurationError("Invalid ARCA store table identifier.");
   }
   const name = `"${table}"`;
+  const lease = Math.round(ARCA_LEASE_MS / 1000);
   const run = (text: string, params: string[]) =>
     storeCall(async () => {
       const result = await query(text, params);
@@ -44,6 +46,42 @@ export function createPostgresStore({
     },
     async delete(key) {
       await run(`DELETE FROM ${name} WHERE key = $1`, [key]);
+    },
+    withLock(key, fn) {
+      // A lease row, not an advisory lock: it survives a transaction-mode
+      // pooler, where a session-scoped lock would be taken on another backend.
+      return withLease(
+        key,
+        {
+          async acquire(owner) {
+            const taken = await run(
+              `INSERT INTO ${name} (key, value) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING key`,
+              [key, owner]
+            );
+            if (taken.length > 0) {
+              return true;
+            }
+            const expired = await run(
+              `UPDATE ${name} SET value = $2, updated_at = now() WHERE key = $1 AND updated_at < now() - interval '${lease} seconds' RETURNING key`,
+              [key, owner]
+            );
+            return expired.length > 0;
+          },
+          async renew(owner) {
+            await run(
+              `UPDATE ${name} SET updated_at = now() WHERE key = $1 AND value = $2`,
+              [key, owner]
+            );
+          },
+          async release(owner) {
+            await run(`DELETE FROM ${name} WHERE key = $1 AND value = $2`, [
+              key,
+              owner,
+            ]);
+          },
+        },
+        fn
+      );
     },
   };
 }
