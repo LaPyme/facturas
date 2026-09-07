@@ -24,6 +24,24 @@ afterEach(() => {
 });
 
 describe("runInit", () => {
+  it("derives an alphanumeric alias, because ARCA rejects anything else", async () => {
+    const { io, stdout, directory } = createTestIo();
+
+    await runInit(
+      io,
+      {
+        cuit: "20123456786",
+        env: "production",
+        dir: directory,
+        name: "mi-sistema.v2",
+      },
+      createWriter(io.stdout, { color: false })
+    );
+
+    expect(stdout()).toContain("misistemav2Production");
+    expect(stdout()).not.toContain("mi-sistema.v2Production");
+  });
+
   it("creates the target directory when it does not exist", async () => {
     const { io, directory } = createTestIo();
     const nested = join(directory, "creds", "arca");
@@ -68,14 +86,14 @@ describe("runInit", () => {
            → ARCA → Servicios Interactivos → WSASS, y volvé a entrar. Va con tu
            clave fiscal de persona física, nivel 2 o superior: no es delegable.
         3. En el menú, "Nuevo Certificado":
-             Nombre simbólico del DN:    facturas-test
+             Nombre simbólico del DN:    facturasTest
              Solicitud de certificado:   pegá (ya está en tu portapapeles)
            Apretá "Crear DN y Obtener Certificado".
         4. El certificado sale en el cuadro de resultado, de
            -----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.
            Copialo entero y guardalo acá como arca-test.crt.
         5. En el menú, "Crear autorización a servicio":
-             Nombre simbólico del DN a autorizar:   facturas-test
+             Nombre simbólico del DN a autorizar:   facturasTest
              CUIT representado:                     20123456786
              Servicio al que desea acceder:         wsfe - Facturación Electrónica
            Apretá "Crear Autorización de Acceso".
@@ -133,7 +151,7 @@ describe("runInit", () => {
            → BUSCAR → Servicios Interactivos → Administración de Certificados
            Digitales → Confirmar, y volvé a entrar.
         3. Apretá "Agregar alias":
-             Alias:                 facturas-production
+             Alias:                 facturasProduction
              Seleccionar archivo:   arca-production.csr
            Apretá "Agregar alias" para subirlo.
         4. En la lista, entrá con "Ver" y usá el icono "Descargar"
@@ -141,7 +159,7 @@ describe("runInit", () => {
            Guardalo acá como arca-production.crt.
         5. Volvé a Administrador de Relaciones, "Nueva Relación":
              Servicio:        BUSCAR → Webservices → Facturación Electrónica
-             Representante:   BUSCAR → el computador fiscal facturas-production
+             Representante:   BUSCAR → el computador fiscal facturasProduction
            Apretá "Confirmar", revisá y volvé a apretar "Confirmar".
 
       Cuando tengas el certificado, guardalo acá como arca-production.crt,
@@ -261,7 +279,7 @@ describe("runInit", () => {
 
     expect(stdout()).toContain("CN=mi-sistema");
     expect(stdout()).toContain("Nombre simbólico del DN:");
-    expect(stdout()).toContain("mi-sistema-test");
+    expect(stdout()).toContain("misistemaTest");
   });
 
   it("exits 2 without a TTY and without --cuit", async () => {
@@ -465,7 +483,7 @@ describe("runInit", () => {
            → ARCA → Servicios Interactivos → WSASS, y volvé a entrar. Va con tu
            clave fiscal de persona física, nivel 2 o superior: no es delegable.
         3. En el menú, "Nuevo Certificado":
-             Nombre simbólico del DN:    facturas-test
+             Nombre simbólico del DN:    facturasTest
              Solicitud de certificado:   copiá esto entero:
              -----BEGIN CERTIFICATE REQUEST-----
              <base64>
@@ -488,7 +506,7 @@ describe("runInit", () => {
            -----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.
            Copialo entero y guardalo acá como arca-test.crt.
         5. En el menú, "Crear autorización a servicio":
-             Nombre simbólico del DN a autorizar:   facturas-test
+             Nombre simbólico del DN a autorizar:   facturasTest
              CUIT representado:                     20123456786
              Servicio al que desea acceder:         wsfe - Facturación Electrónica
            Apretá "Crear Autorización de Acceso".
@@ -565,14 +583,14 @@ describe("runInit", () => {
            → ARCA → Servicios Interactivos → WSASS, y volvé a entrar. Va con tu
            clave fiscal de persona física, nivel 2 o superior: no es delegable.
         3. En el menú, "Nuevo Certificado":
-             Nombre simbólico del DN:    facturas-test
+             Nombre simbólico del DN:    facturasTest
              Solicitud de certificado:   pegá (ya está en tu portapapeles)
            Apretá "Crear DN y Obtener Certificado".
         4. El certificado sale en el cuadro de resultado, de
            -----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.
            Copialo entero y pegalo acá abajo.
         5. En el menú, "Crear autorización a servicio":
-             Nombre simbólico del DN a autorizar:   facturas-test
+             Nombre simbólico del DN a autorizar:   facturasTest
              CUIT representado:                     20123456786
              Servicio al que desea acceder:         wsfe - Facturación Electrónica
            Apretá "Crear Autorización de Acceso".
