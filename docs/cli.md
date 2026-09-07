@@ -492,7 +492,7 @@ npx facturas issue --sales-point 3 --issuer monotributo
 ```
 
 ```
-✓ factura C 0003-00000007   CAE 74123456789012   vence 2026-09-16   ARS 1,00
+✓ Factura C emitida - 00003-00000007   CAE 74123456789012   Vto. CAE 2026-09-16   ARS 1,00
 
 Esta es la llamada que hizo el CLI. Pegala en tu aplicación:
 
