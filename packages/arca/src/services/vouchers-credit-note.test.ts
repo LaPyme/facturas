@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
-import { type ArcaAttemptRecord, attemptKey } from "../store/types";
+import {
+  type ArcaAttemptRecord,
+  type ArcaStore,
+  attemptKey,
+} from "../store/types";
 import { createVouchersService } from "./vouchers";
 import type { IssueOptions } from "./vouchers-types";
 import {
@@ -72,7 +76,16 @@ function found(sent = data, number = 1): WsfeVoucherLookupResult {
     },
   };
 }
-function fake() {
+/** A custom store without withLock: no sequence lock, no barrier, no claim. */
+function withoutLock(store: ArcaStore): ArcaStore {
+  return {
+    get: (key) => store.get(key),
+    set: (key, value) => store.set(key, value),
+    add: (key, value) => store.add(key, value),
+    delete: (key) => store.delete?.(key) ?? Promise.resolve(),
+  };
+}
+function fake({ coordinated = true } = {}) {
   const store = createMemoryStore();
   const calls: string[] = [];
   let written: WsfeVoucherInput | undefined;
@@ -99,7 +112,7 @@ function fake() {
     store,
     calls,
     service: createVouchersService(wsfe, {
-      store,
+      store: coordinated ? store : withoutLock(store),
       environment: "test",
       taxId: "20123456789",
     }),
@@ -387,8 +400,8 @@ describe("credit note orchestration", () => {
   });
 });
 
-it("issueCreditNote recovers concurrent keyed writes through 10016", async () => {
-  const { service, wsfe } = fake();
+it("issueCreditNote recovers concurrent keyed writes through 10016 without withLock", async () => {
+  const { service, wsfe } = fake({ coordinated: false });
   let writes = 0;
   let written: WsfeVoucherInput | undefined;
   let release: () => void = () => undefined;

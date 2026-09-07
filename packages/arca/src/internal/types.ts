@@ -88,6 +88,8 @@ export type ArcaSoapResponse<TResult> = {
 export type ArcaAuthOptions = {
   forceRefresh?: boolean;
   representedTaxId?: ArcaRepresentedTaxId;
+  /** Aborts login, submission and consultation with the caller's deadline. */
+  signal?: AbortSignal;
 };
 
 export type ArcaSoapExecutionOptions<TBody> = {
@@ -98,6 +100,7 @@ export type ArcaSoapExecutionOptions<TBody> = {
   bodyElementName?: string;
   bodyElementNamespaceMode?: "default" | "prefix";
   body: TBody;
+  signal?: AbortSignal;
 };
 
 export type ArcaClientOptions = Omit<

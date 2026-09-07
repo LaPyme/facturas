@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createArcaClient } from "../client";
 import { ArcaTransportError } from "../errors";
+import { createMemoryStore } from "../store/memory";
 import { createVouchersService } from "./vouchers";
 import type { IssueOptions } from "./vouchers-types";
 import {
@@ -359,13 +360,34 @@ describe("vouchers.issue", () => {
     expect(wsfe.issue).not.toHaveBeenCalled();
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
   });
-  it("does not serialize concurrent calls", async () => {
+  it("does not serialize concurrent calls without a store", async () => {
     const { service, wsfe } = fake();
     await Promise.all([service.issue(input), service.issue(input)]);
     expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(2);
     expect(
       wsfe.issue.mock.calls.map(([attempt]) => attempt.voucherNumber)
     ).toEqual([77, 77]);
+  });
+  it("serializes concurrent keyed calls with a store", async () => {
+    const { wsfe } = fake();
+    let next = 77;
+    wsfe.getNextVoucherNumber.mockImplementation(() => Promise.resolve(next));
+    wsfe.issue.mockImplementation(({ voucherNumber }) => {
+      next = voucherNumber + 1;
+      return Promise.resolve({ ...authorized, voucherNumber });
+    });
+    const service = createVouchersService(wsfe, {
+      store: createMemoryStore(),
+      environment: "test",
+      taxId: "20123456789",
+    });
+    await Promise.all([
+      service.issue(input, { idempotencyKey: "one" }),
+      service.issue(input, { idempotencyKey: "two" }),
+    ]);
+    expect(
+      wsfe.issue.mock.calls.map(([attempt]) => attempt.voucherNumber)
+    ).toEqual([77, 78]);
   });
   it("snapshots caller assertions before awaiting the sequence read", async () => {
     const { service, wsfe } = fake();

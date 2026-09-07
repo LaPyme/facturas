@@ -50,8 +50,21 @@ input cambia, se lanza `ARCA_INPUT_IDEMPOTENCY_MISMATCH`. Las claves están
 alcanzadas al CUIT del cliente y al entorno. `representedTaxId` también se
 controla como parte de la identidad del input. Una clave sin store lanza antes
 de cualquier I/O con el proveedor. Claves distintas identifican operaciones de
-negocio distintas; una clave no reserva toda la secuencia del punto de venta
-frente a otros escritores.
+negocio distintas.
+
+Con un store que provee `withLock` —Postgres, Redis, archivos, memoria o el
+tuyo—, las llamadas con clave sobre el mismo punto de venta y tipo de
+comprobante se serializan: cada una toma el número siguiente y escribe una sola
+vez. La coordinación alcanza a los procesos que comparten ese store, no a otros
+escritores del mismo punto de venta. El detalle, con la tabla de garantías por
+adaptador, está en [Stores](./stores.md#qué-garantiza-cada-store).
+
+`signal` es tu deadline, un `AbortSignal` cualquiera, por ejemplo
+`AbortSignal.timeout(20_000)`. Aborta el login WSAA, la escritura y las
+consultas de esa llamada. Si se corta después de haber enviado la escritura, el
+resultado es `indeterminate` con `lookup.kind === "aborted"`: la reserva queda y
+`recover()` la concilia. No hay un `timeoutMs` aparte: un solo `signal` compone
+con el que ya tenga tu aplicación.
 
 El ejemplo completo, con el tratamiento de los cuatro resultados, está en
 [examples/issue-invoice.ts](../examples/issue-invoice.ts).
@@ -62,7 +75,7 @@ ni reserva un número nuevo. Si ARCA confirma que el número está vacío, el
 resultado es `indeterminate` con `lookup.kind === "not_found"`, no una
 autorización; para emitir se llama `issue()` con la misma clave. Si no hay
 reserva para esa clave, lanza `ArcaInputError`. Acepta `representedTaxId`,
-`forceRefresh` e `include`.
+`forceRefresh`, `include` y `signal`.
 
 ## Revisá antes de emitir
 
@@ -216,7 +229,15 @@ responder; una repetición con esa clave, o un `recover()`, devuelve el mismo
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
-El segundo argumento acepta `idempotencyKey`, `representedTaxId`,
+Un `indeterminate` informa en `lookup` por qué quedó abierto: `not_found`,
+`incomplete`, `failed`, `aborted` cuando venció tu `signal`, `blocked` cuando
+otra reserva sin resolver todavía frena la secuencia y `superseded` cuando la
+secuencia siguió sin esta clave. En `blocked` no se reservó ningún número:
+`by` nombra la clave a conciliar con `recover()`. En `superseded` la clave
+`by` se llevó el número: esta clave nunca va a escribir, así que emití bajo una
+clave nueva.
+
+El segundo argumento acepta `idempotencyKey`, `signal`, `representedTaxId`,
 `forceRefresh`, `service`, `number` e
 `include: { raw: true, exactInput: true }`.
 Los resultados no traen la evidencia cruda por defecto; `sent` se incluye solo

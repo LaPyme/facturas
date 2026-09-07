@@ -27,6 +27,7 @@ type PostXmlOptions = {
   logger?: ArcaLogger;
   service?: string;
   operation?: string;
+  signal?: AbortSignal;
 };
 
 export type PostXmlResponse = {
@@ -52,6 +53,7 @@ export async function postXmlWithMetadata({
   logger,
   service,
   operation,
+  signal,
 }: PostXmlOptions): Promise<PostXmlResponse> {
   const totalAttempts = retries + 1;
   for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
@@ -63,13 +65,15 @@ export async function postXmlWithMetadata({
         soapAction,
         useLegacyTlsSecurityLevel0,
         timeout,
+        signal,
       });
     } catch (error) {
       if (!(error instanceof ArcaTransportError)) {
         throw error;
       }
 
-      if (attempt >= totalAttempts) {
+      // An aborted call is the caller's deadline, never a transient failure.
+      if (attempt >= totalAttempts || signal?.aborted) {
         logger?.error("ARCA transport request failed", {
           service,
           operation,
@@ -107,15 +111,21 @@ async function postXmlOnce({
   soapAction,
   useLegacyTlsSecurityLevel0,
   timeout,
+  signal,
 }: Required<
   Pick<
     PostXmlOptions,
     "url" | "body" | "contentType" | "useLegacyTlsSecurityLevel0" | "timeout"
   >
 > &
-  Pick<PostXmlOptions, "soapAction">): Promise<PostXmlResponse> {
+  Pick<PostXmlOptions, "soapAction" | "signal">): Promise<PostXmlResponse> {
   const endpoint = new URL(url);
   const requestBody = Buffer.from(body, "utf8");
+  if (signal?.aborted) {
+    throw new ArcaTransportError("ARCA HTTP request was aborted", {
+      cause: signal.reason,
+    });
+  }
 
   return await new Promise((resolve, reject) => {
     let settled = false;
@@ -243,6 +253,16 @@ async function postXmlOnce({
         })
       );
     });
+
+    const abort = () => {
+      const cause = new Error("ARCA HTTP request was aborted");
+      settleReject(
+        new ArcaTransportError("ARCA HTTP request was aborted", { cause })
+      );
+      request.destroy(cause);
+    };
+    signal?.addEventListener("abort", abort, { once: true });
+    request.on("close", () => signal?.removeEventListener("abort", abort));
 
     request.write(requestBody);
     request.end();

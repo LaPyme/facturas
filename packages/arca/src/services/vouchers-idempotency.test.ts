@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ArcaConfigurationError } from "../errors";
 import { createMemoryStore } from "../store/memory";
-import { type ArcaAttemptRecord, attemptKey } from "../store/types";
+import {
+  type ArcaAttemptRecord,
+  type ArcaStore,
+  attemptKey,
+} from "../store/types";
 import { createVouchersService } from "./vouchers";
 import type { IssueOptions } from "./vouchers-types";
 import {
@@ -80,7 +84,16 @@ function found(data = deriveWsfeInvoice(input).data): WsfeVoucherLookupResult {
     },
   };
 }
-function fake() {
+/** A custom store without withLock: no sequence lock, no barrier, no claim. */
+function withoutLock(store: ArcaStore): ArcaStore {
+  return {
+    get: (key) => store.get(key),
+    set: (key, value) => store.set(key, value),
+    add: (key, value) => store.add(key, value),
+    delete: (key) => store.delete?.(key) ?? Promise.resolve(),
+  };
+}
+function fake({ coordinated = true } = {}) {
   const store = createMemoryStore();
   const wsfe = {
     getNextVoucherNumber: vi.fn().mockResolvedValue(77),
@@ -92,7 +105,7 @@ function fake() {
     lookupVoucher: vi.fn().mockResolvedValue(found()),
   };
   const service = createVouchersService(wsfe, {
-    store,
+    store: coordinated ? store : withoutLock(store),
     environment: "test",
     taxId: "20123456789",
   });
@@ -243,8 +256,8 @@ describe("keyed issue", () => {
     expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(1);
     expect(wsfe.issue).toHaveBeenCalledTimes(1);
   });
-  it("recovers a concurrent authorization rejected with 10016", async () => {
-    const { store, wsfe, service } = fake();
+  it("recovers a concurrent authorization rejected with 10016 without withLock", async () => {
+    const { store, wsfe, service } = fake({ coordinated: false });
     let writes = 0;
     let release: () => void = () => undefined;
     const waiting = new Promise<void>((resolve) => {
