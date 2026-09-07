@@ -5,8 +5,18 @@
 Necesitás CUIT, certificado y clave privada, la relación del certificado con
 el servicio **Facturación Electrónica**, y un punto de venta habilitado para
 web services. Homologación y producción tienen certificados y puntos de venta
-propios. El SDK no hace estas habilitaciones por vos: el paso a paso y las
-referencias oficiales están en [Habilitación en ARCA](./habilitacion-arca.md).
+propios. El SDK no hace estas habilitaciones por vos, pero el CLI te acompaña:
+
+```sh
+npx facturas init --cuit 20123456786 --env test
+```
+
+Genera la clave privada y el CSR que se sube en ARCA, y después imprime los
+pasos exactos: qué página, qué botón y qué servicio autorizar. Cuando ARCA te
+dé el certificado, guardalo en ese mismo directorio como `arca-test.crt`. El
+paso a paso completo y las referencias oficiales están en
+[Habilitación en ARCA](./habilitacion-arca.md); los comandos, en
+[CLI](./cli.md).
 
 ## 2. Instalá
 
@@ -35,6 +45,20 @@ Con eso alcanza para emitir: el cliente lee las variables de entorno y guarda
 el ticket WSAA en memoria. No necesitás base de datos ni ningún servicio
 externo. El resto de las opciones está en [Configuración](./configuracion.md).
 
+Antes de escribir código, confirmá las habilitaciones:
+
+```sh
+npx facturas check
+```
+
+Prueba la configuración, el certificado, WSAA, WSFE y los puntos de venta en
+ese orden, y nombra la capa que falla con la página de ARCA que la arregla. No
+hace falta exportar nada para correrlo: si `arca-test.crt` y `arca-test.key`
+están en el directorio, los usa, y saca de ahí el entorno y el CUIT. No
+escribe nada en ARCA; sí guarda el ticket WSAA en el directorio temporal, para
+poder repetirse. La tabla completa de diagnósticos está en
+[CLI](./cli.md#diagnósticos).
+
 ## 4. Emití la primera factura
 
 Elegí tu condición real de emisor y tu punto de venta habilitado. Este bloque
@@ -51,6 +75,9 @@ const factura = await arca.issue({
 
 El importe se expresa en centavos. Para responsables inscriptos usá
 `issuer: "responsable_inscripto"` e ítems como `{ gross: 12_100, vat: 21 }`.
+Si preferís probar el circuito antes de escribir código,
+`npx facturas issue --sales-point 3 --issuer monotributo` emite una factura de
+ARS 1 en homologación y te imprime la llamada que hizo.
 ARCA valida la habilitación fiscal; el SDK no infiere tu condición. Todos los
 campos del input están en [Facturas](./facturas.md#datos-de-la-factura).
 

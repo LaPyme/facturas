@@ -1,5 +1,7 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 
@@ -161,9 +163,45 @@ assertAuthenticationErrorIdentity(
   "facturas/wsmtxca"
 );
 
+await assertCliBinResolves();
+
 console.log(
   "Package runtime exports resolve as ESM-only entrypoints with shared error identities."
 );
+
+/** The published `facturas` bin must exist and reach the built CLI entry. */
+async function assertCliBinResolves() {
+  const manifestPath = require.resolve("facturas/package.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const binPath = manifest.bin?.facturas;
+
+  if (binPath === undefined) {
+    throw new Error(
+      "Expected facturas package.json to declare a facturas bin."
+    );
+  }
+  if (!manifest.files?.includes("bin")) {
+    throw new Error("Expected facturas package.json files to include bin.");
+  }
+
+  const packageRoot = dirname(manifestPath);
+  const resolvedBin = resolve(packageRoot, binPath);
+  const bin = readFileSync(resolvedBin, "utf8");
+
+  if (!bin.startsWith("#!/usr/bin/env node")) {
+    throw new Error(`Expected ${binPath} to start with a node shebang.`);
+  }
+  if (!bin.includes("../dist/cli.mjs")) {
+    throw new Error(`Expected ${binPath} to import ../dist/cli.mjs.`);
+  }
+
+  const cli = await import(resolve(packageRoot, "dist/cli.mjs"));
+  for (const runtimeExport of ["main", "run"]) {
+    if (typeof cli[runtimeExport] !== "function") {
+      throw new Error(`Expected dist/cli.mjs to export ${runtimeExport}().`);
+    }
+  }
+}
 
 function createServiceOptions(execute) {
   return {

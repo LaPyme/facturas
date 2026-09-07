@@ -24,7 +24,7 @@ Pasale un objeto de configuración a `createArcaClient`:
 import { createArcaClient } from "facturas";
 
 const client = createArcaClient({
-  taxId: "20123456789",
+  taxId: "20123456786",
   certificatePem: process.env.ARCA_CERTIFICATE_PEM!,
   privateKeyPem: process.env.ARCA_PRIVATE_KEY_PEM!,
   environment: "test",
@@ -57,7 +57,7 @@ Eso mantiene los scripts y las apps de un solo proceso sin configuración:
 
 ```ts
 const client = createArcaClient({
-  taxId: "20123456789",
+  taxId: "20123456786",
   certificatePem: process.env.ARCA_CERTIFICATE_PEM!,
   privateKeyPem: process.env.ARCA_PRIVATE_KEY_PEM!,
   environment: "production",
@@ -96,7 +96,7 @@ const wsaaSessionStore = {
 };
 
 const client = createArcaClient({
-  taxId: "20123456789",
+  taxId: "20123456786",
   certificatePem: process.env.ARCA_CERTIFICATE_PEM!,
   privateKeyPem: process.env.ARCA_PRIVATE_KEY_PEM!,
   environment: "production",
@@ -122,7 +122,7 @@ los reintentos.
 
 ```ts
 const client = createArcaClient({
-  taxId: "20123456789",
+  taxId: "20123456786",
   certificatePem: "...",
   privateKeyPem: "...",
   environment: "test",
@@ -134,7 +134,7 @@ Los sinks de logger propios reciben `(level, message, ...args)`:
 
 ```ts
 const client = createArcaClient({
-  taxId: "20123456789",
+  taxId: "20123456786",
   certificatePem: "...",
   privateKeyPem: "...",
   environment: "production",

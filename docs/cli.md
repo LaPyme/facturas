@@ -1,0 +1,413 @@
+# CLI
+
+El paquete trae un comando, `facturas`, para la parte más difícil del primer
+comprobante: las habilitaciones de ARCA. Genera la clave y el CSR, prueba cada
+capa en orden y nombra la que falla, con la página y la acción exactas.
+
+```sh
+npx facturas init      # clave privada y CSR, más los pasos exactos en ARCA
+npx facturas check     # prueba cada capa en orden y nombra la que falla
+npx facturas issue     # una factura de ARS 1 en homologación, solo a pedido
+npx facturas --help
+npx facturas --version
+```
+
+Necesitás Node.js 20 o superior. No instala nada aparte del paquete.
+
+## Ayuda
+
+`npx facturas --help` lista los tres comandos y las opciones globales, nada
+más. Las opciones de cada comando están en su propia ayuda, con dos o tres
+ejemplos y una nota corta de qué escribe y qué guarda:
+
+```sh
+npx facturas init --help
+npx facturas check --help
+npx facturas issue --help
+```
+
+`-h` y `-v` son alias de `--help` y `--version`. `--help` sale con código 0 y
+nunca toca la red ni pregunta nada, aunque el resto de la línea esté mal.
+
+## Qué guarda y qué nunca hace
+
+- `init` y `check` **nunca escriben en ARCA**. Solo leen.
+- Lo único que el CLI guarda, aparte de los archivos de `init`, es el **ticket
+  WSAA**: en `<temporal del sistema>/facturas-cli`, con el directorio en `0700`
+  y los archivos en `0600`. ARCA rechaza un segundo login mientras hay un
+  ticket vigente (`coe.alreadyAuthenticated`, hasta 12 horas), así que sin ese
+  archivo no podrías correr `check` dos veces ni encadenar `check` con `issue`.
+  Con `--no-cache` el CLI no lee ni escribe nada: pide un ticket nuevo y lo usa
+  solo en memoria.
+- No hay archivo de configuración, ni telemetría, ni ningún otro dato guardado.
+- Nunca imprime el contenido de un PEM, un token, una firma ni un CMS. Los
+  errores que no están en la tabla salen con el mensaje seguro del SDK.
+- `issue` **sí escribe** en ARCA: emite un comprobante real de homologación. Se
+  niega fuera de `test`.
+
+## `init`
+
+Genera una clave privada RSA 2048 en PKCS#8 sin cifrar y el CSR que se sube en
+ARCA. El subject es el que pide el instructivo oficial:
+`C=AR, O=<organización>, CN=<alias>, serialNumber=CUIT <cuit>`, con un espacio
+literal después de `CUIT`.
+
+```sh
+npx facturas init --cuit 20123456786 --env test
+```
+
+Sin flags y en una terminal, pregunta el CUIT y el entorno.
+
+El CUIT se valida antes de escribir nada: 11 dígitos y el dígito verificador
+de módulo 11, el mismo que usa ARCA. Podés escribirlo con guiones o con
+espacios, `20-12345678-6` o `20 12345678 6`; el CSR lleva solo los dígitos. Un
+CUIT equivocado se nombra como equivocado, con lo que recibió y por qué:
+
+```
+CUIT inválido: 2012345678 tiene 10 dígitos y necesita 11.
+CUIT inválido: 20123456789 no pasa el dígito verificador.
+```
+
+En una terminal vuelve a preguntar con esa razón, hasta tres veces, y recién
+ahí sale con código 2. Sin terminal sale con código 2 en el primer intento. La
+misma validación corre en `--tax-id` y en `ARCA_TAX_ID` para `check` e
+`issue`.
+
+| Flag | Por defecto | Qué hace |
+| --- | --- | --- |
+| `--cuit <cuit>` | pregunta | CUIT de 11 dígitos, con o sin guiones |
+| `--env <test\|production>` | pregunta | Entorno de destino |
+| `--name <alias>` | `facturas` | Common name del CSR |
+| `--org <razón social>` | el CUIT | Organización del CSR |
+| `--dir <directorio>` | el actual | Dónde escribir los archivos |
+| `--force` | — | Sobrescribe los archivos existentes |
+
+Escribe `arca-<entorno>.key` con permisos `0600` y `arca-<entorno>.csr`. Si ya
+existe alguno, se niega y sale con código 1; `--force` los pisa. Si hay un
+`.gitignore` en el directorio, le agrega `arca-*.key` y `arca-*.crt` una sola
+vez y te lo dice. En Windows los permisos `0600` no se aplican: guardá la clave
+fuera del repositorio.
+
+Sin terminal (CI, scripts), `--cuit` y `--env` son obligatorios; si faltan, sale
+con código 2.
+
+Después imprime los pasos exactos en ARCA, en una sola lista para el entorno
+que elegiste: `init` ya sabe si es homologación o producción, así que no
+imprime los dos caminos. Los nombres de página, campo y botón están
+verificados contra las referencias oficiales que lista
+[Habilitación en ARCA](./habilitacion-arca.md).
+
+Para `--env test`:
+
+```
+Listo. Ahora en ARCA, para homologación:
+
+  1. Entrá con clave fiscal en
+     https://auth.afip.gob.ar/contribuyente_/login.xhtml
+  2. Abrí "WSASS - Autogestión Certificados Homologación" en Mis Servicios.
+     Si no está, agregalo en Administrador de Relaciones → Adherir Servicio
+     → ARCA → Servicios Interactivos → WSASS, y volvé a entrar. Va con tu
+     clave fiscal de persona física, nivel 2 o superior: no es delegable.
+  3. En el menú, "Nuevo Certificado":
+       Nombre simbólico del DN:    facturas-test
+       Solicitud de certificado:   pegá arca-test.csr entero
+     Apretá "Crear DN y Obtener Certificado".
+     (cat arca-test.csr lo muestra; copiá también las líneas BEGIN y END)
+  4. El certificado sale en el cuadro de resultado, de
+     -----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.
+     Copialo entero y guardalo acá como arca-test.crt.
+  5. En el menú, "Crear autorización a servicio":
+       Nombre simbólico del DN a autorizar:   facturas-test
+       CUIT representado:                     20123456786
+       Servicio al que desea acceder:         wsfe - Facturación Electrónica
+     Apretá "Crear Autorización de Acceso".
+
+Después:
+
+  $ npx facturas check
+```
+
+En homologación **no hay descarga**: el certificado aparece en el cuadro de
+resultado del propio WSASS, en PEM, y se copia y se pega en un archivo de
+texto. El campo del CSR es el que el manual llama
+`Solicitud de certificado en formato PKCS10`.
+
+Para `--env production`:
+
+```
+Listo. Ahora en ARCA, para producción:
+
+  1. Entrá con clave fiscal en
+     https://auth.afip.gob.ar/contribuyente_/login.xhtml
+  2. Abrí "Administración de Certificados Digitales" en Mis Servicios.
+     Si no está, agregalo en Administrador de Relaciones → Nueva Relación
+     → BUSCAR → Servicios Interactivos → Administración de Certificados
+     Digitales → Confirmar, y volvé a entrar.
+  3. Apretá "Agregar alias":
+       Alias:                 facturas-production
+       Seleccionar archivo:   arca-production.csr
+     Apretá "Agregar alias" para subirlo.
+  4. En la lista, entrá con "Ver" y usá el icono "Descargar"
+     para bajar el certificado (archivo CRT).
+     Guardalo acá como arca-production.crt.
+  5. Volvé a Administrador de Relaciones, "Nueva Relación":
+       Servicio:        BUSCAR → Webservices → Facturación Electrónica
+       Representante:   BUSCAR → el computador fiscal facturas-production
+     Apretá "Confirmar", revisá y volvé a apretar "Confirmar".
+
+Después:
+
+  $ npx facturas check
+```
+
+En producción el alias es el **computador fiscal**: el mismo nombre aparece
+después en `Representante` al crear la relación con el servicio.
+
+Las páginas, en una tabla, para tenerlas juntas:
+
+| Dónde | Homologación | Producción |
+| --- | --- | --- |
+| Ingreso | [Clave fiscal](https://auth.afip.gob.ar/contribuyente_/login.xhtml) | igual |
+| Subir el CSR | `WSASS - Autogestión Certificados Homologación` → `Nuevo Certificado` → `Crear DN y Obtener Certificado` | `Administración de Certificados Digitales` → `Agregar alias` |
+| Obtener el certificado | el cuadro de resultado del WSASS, en PEM: se copia y se pega | `Ver` → icono `Descargar` (archivo CRT) |
+| Autorizar `wsfe` | el mismo WSASS → `Crear autorización a servicio` → `Crear Autorización de Acceso` | `Administrador de Relaciones` → `Nueva Relación` → `Webservices` → `Facturación Electrónica` → el computador fiscal → `Confirmar` |
+| Punto de venta | `Administración de Puntos de Venta y Domicilios` | igual |
+
+El punto de venta no está en la salida de `init`: `check` es el que informa
+cuáles tenés habilitados. Su sistema depende de tu condición: `RECE para
+aplicativo y Web Services` para responsable inscripto, y las opciones
+`Factura Electrónica – Monotributo – Web Services` o
+`Factura Electrónica – Exento en IVA – Web Services` para monotributo y exento.
+`Comprobantes en línea` es otro sistema y no sirve para web services.
+
+No hay ningún `export` que copiar: `check` encuentra el par de archivos en el
+directorio. Las variables de entorno son para tu aplicación, no para el CLI, y
+están en [Inicio rápido](./inicio-rapido.md#3-configurá-el-cliente).
+
+## `check`
+
+Prueba las capas en orden y para en la primera que falla. Después de `init`,
+con el certificado guardado al lado de la clave, no necesita nada más:
+
+```sh
+npx facturas check
+```
+
+```
+✓ configuración          arca-test.crt en este directorio, CUIT 20123456786 del certificado
+✓ certificado y clave    coinciden, vence 2027-09-05
+✓ WSAA                   ticket obtenido
+✓ WSFE                   servidor ok
+✓ puntos de venta        1 informado
+  3 (habilitado, CAE)
+```
+
+Las variables de entorno siguen funcionando igual, y son las que va a usar tu
+aplicación:
+
+```sh
+export ARCA_TAX_ID=20123456786
+export ARCA_ENVIRONMENT=test
+export ARCA_CERTIFICATE_PEM="$(cat arca-test.crt)"
+export ARCA_PRIVATE_KEY_PEM="$(cat arca-test.key)"
+npx facturas check
+```
+
+```
+✓ configuración          ARCA_TAX_ID, ARCA_ENVIRONMENT=test
+```
+
+### De dónde sale cada valor
+
+`check` e `issue` buscan en este orden, y el primero que responde gana:
+
+| # | Fuente | Qué aporta |
+| --- | --- | --- |
+| 1 | Los flags | `--tax-id`, `--env`, `--cert`, `--key` |
+| 2 | Las variables de entorno | `ARCA_TAX_ID`, `ARCA_ENVIRONMENT`, `ARCA_CERTIFICATE_PEM`, `ARCA_PRIVATE_KEY_PEM` |
+| 3 | Los archivos del directorio | `arca-<entorno>.crt` y `arca-<entorno>.key`, y con ellos el entorno y el CUIT |
+
+Los archivos son los que escribe `init`, con el nombre que `init` te dice que
+uses. La búsqueda es en el directorio actual, o en `--dir`. Reglas:
+
+- Si está **un solo par completo**, ese se usa, y el entorno sale del nombre
+  del archivo: `arca-test.crt` es homologación.
+- Si están **los dos pares**, el CLI no adivina: sale con código 1 y te pide
+  `--env test` o `--env production`.
+- Si está **medio par**, te dice cuál falta. Entre `init` y la respuesta de
+  ARCA vas a ver `Está arca-test.key pero falta arca-test.crt.`
+- El **CUIT** sale del `serialNumber` del certificado, donde ARCA lo escribe
+  como `CUIT <11 dígitos>`. Si el certificado no lo trae y tampoco lo pasaste,
+  el CLI te pide `--tax-id`. Si pasaste uno y el certificado dice otro, para:
+  es un certificado de otro contribuyente, y falla la capa
+  `certificado y clave` con los dos números a la vista.
+
+Esto es una comodidad del CLI y nada más. `createArcaClient()` no mira el
+disco: sigue leyendo variables de entorno, como explica
+[Configuración](./configuracion.md).
+
+| Flag | Qué hace |
+| --- | --- |
+| `--cert <archivo>` | Lee el certificado PEM de un archivo, en vez de `ARCA_CERTIFICATE_PEM` |
+| `--key <archivo>` | Lee la clave PEM de un archivo, en vez de `ARCA_PRIVATE_KEY_PEM` |
+| `--tax-id <cuit>` | CUIT, en vez de `ARCA_TAX_ID` |
+| `--env <test\|production>` | Entorno, en vez de `ARCA_ENVIRONMENT` |
+| `--dir <directorio>` | Dónde buscar `arca-<entorno>.crt` y `.key` (por defecto, el actual) |
+| `--sales-point <n>` | Verifica ese punto de venta en particular. Es un entero de 1 a 99999, como el `PtoVta` de WSFE; cualquier otra cosa sale con código 2 |
+| `--no-cache` | No reusa ni guarda el ticket WSAA: un login forzado, solo en memoria |
+
+Las capas, en orden:
+
+| # | Capa | Qué corre |
+| --- | --- | --- |
+| 1 | `configuración` | Resuelve flags, variables y archivos, y valida lo que salga |
+| 2 | `certificado y clave` | Parsea los dos PEM, verifica que la clave sea la del certificado y lee el vencimiento |
+| 3 | `WSAA` | Un login para el servicio `wsfe`. Reusa el ticket guardado si sigue vigente: la línea dice `ticket obtenido` o `ticket vigente` |
+| 4 | `WSFE` | `getServerStatus()` y después `getSalesPoints()` |
+| 5 | `puntos de venta` | La lista del paso 4, y el `--sales-point` si lo pasaste |
+
+Hay dos advertencias que no son fallas y mantienen el código de salida 0: un
+certificado que vence en menos de 30 días, y una lista de puntos de venta vacía
+en homologación, donde ARCA muchas veces no los informa aunque funcionen. En
+ese caso un `--sales-point` que no figura en la lista sale como
+`3 (no informado)` y `issue` puede seguir.
+
+En producción no hay excepción: si ARCA no informa ningún punto de venta, no
+hay comprobante que puedas emitir, así que la capa falla y `check` sale con
+código 1.
+
+### Diagnósticos
+
+Cada falla que el CLI sabe nombrar tiene exactamente una fila. Es la tabla
+completa:
+
+| Capa | Caso | Diagnóstico | Solución |
+| --- | --- | --- | --- |
+| configuración | no hay CUIT en ningún lado | Falta el CUIT. | `export ARCA_TAX_ID=20123456786` |
+| configuración | `ARCA_TAX_ID` o `--tax-id` inválido | CUIT inválido: `<cuit>` tiene `<n>` dígitos y necesita 11. / CUIT inválido: `<cuit>` no pasa el dígito verificador. | Son 11 dígitos y el último es el verificador; podés escribirlo con guiones. |
+| configuración | el certificado no dice el CUIT | El certificado no dice de qué CUIT es. | Pasá `--tax-id 20123456786` o definí `ARCA_TAX_ID`. |
+| configuración | falta `ARCA_ENVIRONMENT` | Falta el entorno. | `export ARCA_ENVIRONMENT=test` |
+| configuración | falta un PEM | Falta el certificado o la clave. | Guardá `arca-<entorno>.crt` y `arca-<entorno>.key` acá, o pasá `--cert` y `--key`, o definí las variables `ARCA_*_PEM`. |
+| configuración | están los dos entornos en el directorio | Están `arca-test.crt` y `arca-production.crt` en este directorio y no sé cuál querés. | Elegí con `--env test` o `--env production`. |
+| configuración | está la clave y falta el certificado | Está `arca-test.key` pero falta `arca-test.crt`. | Descargá el certificado de ARCA y guardalo acá como `arca-test.crt`. |
+| configuración | está el certificado y falta la clave | Está `arca-test.crt` pero falta `arca-test.key`. | Poné acá la clave con la que generaste el CSR, o pasá `--key`. |
+| certificado y clave | el certificado es de otro CUIT | El certificado es del CUIT `<a>` y el configurado es `<b>`. | Usá el certificado de ese CUIT, o corregí `--tax-id` o `ARCA_TAX_ID`. |
+| certificado y clave | el PEM no parsea | El archivo no es un PEM válido. | Revisá que copiaste el bloque completo, con BEGIN y END. |
+| certificado y clave | la clave no es la del certificado | La clave privada no corresponde a este certificado. | Usá la clave con la que generaste el CSR (`arca-<entorno>.key`). |
+| certificado y clave | vencido | El certificado venció el `<fecha>`. | Generá un CSR nuevo con `npx facturas init` y renovalo en ARCA. |
+| WSAA | `cms.cert.expired` | El certificado venció. | idem |
+| WSAA | `cms.cert.untrusted`, `cms.cert.invalid` | ARCA no reconoce este certificado en este entorno. | Homologación y producción tienen certificados propios; revisá `ARCA_ENVIRONMENT`. |
+| WSAA | `cms.bad`, `cms.sign.invalid` | La firma del pedido no es válida. | La clave no corresponde al certificado, o el PEM está truncado. |
+| WSAA | `coe.notAuthorized` | El certificado no está autorizado para `wsfe`. | `WSASS - Autogestión Certificados Homologación` → `Crear autorización a servicio` (homologación) / `Administrador de Relaciones` (producción). |
+| WSAA | `coe.alreadyAuthenticated` | Ya hay un ticket vigente para este certificado. | Otro proceso o máquina tiene el ticket vigente. Esperá hasta 12 horas, o corré `check` desde donde lo pediste. |
+| WSAA | `xml.generationTime.invalid`, `xml.expirationTime.*` | La hora de tu máquina difiere de la de ARCA. | Sincronizá el reloj (NTP) y volvé a probar. |
+| WSAA | falla de transporte | No se pudo conectar con `<host>`. | Revisá red, proxy o firewall; ARCA homologación suele caerse los fines de semana. |
+| WSFE | `reason: missing_relationship` | El certificado no tiene la relación con Facturación Electrónica. | `Administrador de Relaciones` → `Nueva Relación` → `Webservices` → `Facturación Electrónica`. |
+| WSFE | `reason: unauthorized_computer` | El certificado o computador no está autorizado. | Verificá que el alias esté asociado al servicio en este entorno. |
+| WSFE | `reason: invalid_token` | El ticket fue rechazado. | Volvé a ejecutar `check`; si persiste, revisá el reloj. |
+| WSFE | `reason: authentication_rejected` | ARCA denegó el acceso al servicio. | Revisá entorno y relación del certificado. |
+| WSFE | otro error de servicio o SOAP fault | ARCA respondió con un error: `<mensaje>`. | — |
+| puntos de venta | el `--sales-point` no está en la lista | El punto de venta `<n>` no está habilitado para web services. | ARCA → `Administración de Puntos de Venta y Domicilios` → Nuevo → el sistema de web services de tu condición. |
+| puntos de venta | producción no informa ninguno | ARCA no informa ningún punto de venta para web services. | ARCA → `Administración de Puntos de Venta y Domicilios` → Nuevo → `RECE para aplicativo y Web Services` para responsable inscripto, `Factura Electrónica – Monotributo – Web Services` para monotributo. |
+| puntos de venta | está pero bloqueado | El punto de venta `<n>` está bloqueado. | Revisalo en ARCA. |
+
+Cualquier otro error sale con el mensaje seguro del SDK y su código estable.
+Las clases de error están en [Errores](./errores.md).
+
+### `--json`
+
+`check` e `issue` aceptan `--json`. `check` imprime un solo objeto; las capas a
+las que no llegó no aparecen.
+
+```json
+{
+  "ok": false,
+  "environment": "test",
+  "taxId": "20123456786",
+  "layers": [
+    { "name": "config", "ok": true, "detail": "ARCA_TAX_ID, ARCA_ENVIRONMENT=test" },
+    { "name": "certificate", "ok": true, "detail": "coinciden, vence 2027-09-05", "expiresAt": "2027-09-05" },
+    { "name": "wsaa", "ok": true, "detail": "ticket vigente" },
+    {
+      "name": "wsfe",
+      "ok": false,
+      "code": "ARCA_AUTHENTICATION_ERROR",
+      "reason": "missing_relationship",
+      "diagnosis": "El certificado no tiene la relación con Facturación Electrónica.",
+      "fix": "Administrador de Relaciones → Nueva Relación → Webservices → Facturación Electrónica."
+    }
+  ],
+  "salesPoints": [{ "number": 3, "blocked": false, "system": "CAE" }]
+}
+```
+
+`issue --json` imprime el resultado tal como lo devuelve `issue()` del SDK, sin
+evidencia cruda. Si ARCA falla durante la emisión —entre la consulta del número
+y la autorización— sale un objeto con la misma forma que el de `check`, con el
+mensaje seguro y el código estable del SDK:
+
+```json
+{
+  "ok": false,
+  "environment": "test",
+  "taxId": "20123456786",
+  "error": { "code": "ARCA_SERVICE_ERROR", "message": "ARCA respondió con un error" }
+}
+```
+
+## `issue`
+
+Emite **una** factura de ARS 1 en homologación, para probar el circuito
+completo. Se niega si `ARCA_ENVIRONMENT` no es `test`. Corre antes las capas de
+`check` y no sigue si alguna falla.
+
+```sh
+npx facturas issue --sales-point 3 --issuer monotributo
+```
+
+```
+✓ factura C 0003-00000007   CAE 74123456789012   vence 2026-09-16   ARS 1,00
+
+Esta es la llamada que hizo el CLI. Pegala en tu aplicación:
+
+  const factura = await arca.issue({
+    issuer: "monotributo",
+    salesPoint: 3,
+    to: { condition: "consumidor_final" },
+    items: [{ amount: 100 }],
+  });
+```
+
+Acepta los flags de `check`, incluidos `--dir` y `--no-cache`, más `--issuer`, con las
+cuatro condiciones de emisor: `monotributo`, `responsable_inscripto`, `exento` y `no_alcanzado`. En
+una terminal pregunta el punto de venta y el emisor si no los pasaste.
+
+Emite sin `store` y sin `idempotencyKey`: es el inicio rápido en un comando. En
+tu aplicación real, configurá los dos, como explica
+[Inicio rápido](./inicio-rapido.md#6-hacé-seguros-los-reintentos).
+
+Los otros tres resultados salen con código 1: `rejected` lista los errores de
+ARCA uno por línea, e `indeterminate` y `conflict` muestran el número y la
+evidencia con el consejo de
+[Inicio rápido](./inicio-rapido.md#5-tratá-todos-los-resultados).
+
+Si ARCA se cae después de que pasaron las capas, la emisión falla como una capa
+más —`✗ emisión` y el mensaje seguro del SDK— y también sale con código 1.
+Nunca sale una traza ni un PEM.
+
+## Códigos de salida
+
+| Código | Significado |
+| --- | --- |
+| `0` | Todo bien. Las advertencias no lo cambian. |
+| `1` | Falló una capa, o el comprobante no quedó autorizado. |
+| `2` | Error de uso: comando u opción desconocida, o falta un valor obligatorio sin terminal. |
+
+## Colores
+
+El CLI usa ANSI solo cuando la salida es una terminal. Se apaga con
+`--no-color` o con la variable `NO_COLOR`, y se enciende sin terminal con
+`FORCE_COLOR` (`FORCE_COLOR=0` lo apaga). En los reportes el color va
+únicamente en las marcas `✓`, `✗` y `!`; en la ayuda, en los títulos de sección
+(atenuados), los nombres de comando (negrita) y los ejemplos (cian, con el `$`
+atenuado). Sin color, el texto es exactamente el mismo menos los escapes.

@@ -8,6 +8,8 @@ los términos de ARCA quedan como están en el código.
   de crédito.
 - [Habilitación en ARCA](./habilitacion-arca.md): CUIT, certificado, punto de
   venta y referencias oficiales.
+- [CLI](./cli.md): `npx facturas init`, `check` e `issue`, con la tabla de
+  diagnósticos y los códigos de salida.
 - [Facturas](./facturas.md): `issue()`, `preview()`, `recover()`, datos de la
   factura —familias, tributos, FCE, desgloses revisados— y contrato fiscal de
   la fachada.

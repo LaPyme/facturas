@@ -8,6 +8,8 @@ SDK de Node.js para ARCA / AFIP: facturas, notas de crédito y Padrón, con
 integración directa a WSFE y WSMTXCA.
 
 - **Solo ESM**, Node.js **>= 20**
+- **CLI incluido**: `npx facturas init` genera la clave y el CSR, y
+  `npx facturas check` nombra la capa de ARCA que falla
 - **Integración directa con ARCA**, sin proxy ni dependencia alojada
 - **Login WSAA resuelto**: caché de tickets en memoria, stores de sesión
   durables opcionales, deduplicación de logins en vuelo y recuperación de
@@ -26,9 +28,7 @@ La documentación está en castellano, en [docs/](./docs/README.md).
 
 ```bash
 pnpm add facturas
-```
-
-```bash
+# o
 npm install facturas
 ```
 
@@ -111,6 +111,7 @@ WSMTXCA](./docs/wsmtxca.md) y `recover()`, que concilia sin emitir.
   nota de crédito.
 - [Habilitación en ARCA](./docs/habilitacion-arca.md): CUIT, certificado, punto
   de venta y referencias oficiales.
+- [CLI](./docs/cli.md): `init`, `check` e `issue`, con la tabla de diagnósticos.
 - [Facturas](./docs/facturas.md): `issue()`, `preview()`, datos de la factura y
   contrato fiscal de la fachada.
 - [Notas de crédito](./docs/notas-de-credito.md): `issueCreditNote()`, modo

@@ -2,7 +2,7 @@ import { createArcaClient } from "facturas";
 import { ARCA_VOUCHER_TYPES } from "facturas/constants";
 
 const client = createArcaClient({
-  taxId: "20123456789",
+  taxId: "20123456786",
   certificatePem:
     "-----BEGIN CERTIFICATE-----\nREPLACE_WITH_YOUR_CERTIFICATE\n-----END CERTIFICATE-----",
   privateKeyPem:
