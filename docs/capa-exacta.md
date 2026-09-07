@@ -187,6 +187,8 @@ cualquier otro intento de recuperación de autenticación.
 La ausencia en las consultas exactas depende de la operación:
 
 - WSFE `FECompConsultar` código 602 devuelve `not_found`.
+- WSFE `FEParamGetPtosVenta` código 602 devuelve una lista vacía: ARCA responde así
+  cuando el contribuyente no tiene puntos de venta para web services.
 - WSMTXCA `consultarComprobante` código 1503 devuelve `not_found`.
 - WSMTXCA `consultarUltimoComprobanteAutorizado` código 1502 devuelve el número
   de comprobante `0`.

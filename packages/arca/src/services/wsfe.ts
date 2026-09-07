@@ -646,13 +646,31 @@ export function createWsfeService(
       return getNextVoucherNumber(input);
     },
     async getSalesPoints({ representedTaxId, forceRefresh }) {
-      const result = await executeWsfeAuthenticatedOperation(
-        "FEParamGetPtosVenta",
-        {
-          representedTaxId,
-          forceRefresh,
-        }
-      );
+      const operation = "FEParamGetPtosVenta";
+      const result = await executeWithAuthenticationRecovery({
+        service: "wsfe",
+        operation,
+        forceRefresh,
+        async execute(attemptForceRefresh) {
+          const raw = await executeWsfeAuthenticatedRawOperation(
+            operation,
+            { representedTaxId, forceRefresh: attemptForceRefresh },
+            {}
+          );
+          // A taxpayer with no sales point for web services gets WSFE error
+          // 602 (Sin Resultados) instead of an empty list. That is an answer,
+          // not a failure, so it becomes the empty list it means.
+          const errors = extractWsfeGlobalIssues(raw, operation);
+          if (
+            errors.length > 0 &&
+            errors.every((issue) => issue.code === "602")
+          ) {
+            return {};
+          }
+          throwForWsfeOperationErrors(operation, raw);
+          return raw;
+        },
+      });
       const rawPoints = (
         result.ResultGet as Record<string, unknown> | undefined
       )?.PtoVenta;
