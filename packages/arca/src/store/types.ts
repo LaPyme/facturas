@@ -35,18 +35,29 @@ export type ArcaAttemptRecord = {
 
 /**
  * Settled outcome of a reservation, created once with `add` and never
- * rewritten. Only conflicts are recorded: ARCA remains the source of truth for
- * an authorization, and a rejection may be fixed under a new key. A later
+ * rewritten. A `conflict` records the stranger found at the reserved number. A
+ * `superseded` record says the sequence moved past this reservation: the
+ * barrier proved the number was empty and handed it to `by`, so this key can
+ * never write. Authorizations are not recorded, because ARCA is their source of
+ * truth, and rejections are not, because the input is fixed under a new key. A
  * reader that does not know a future `kind` refuses the record instead of
  * guessing.
  */
-export type ArcaSettledRecord = {
-  v: 1;
-  kind: "conflict";
-  number: number;
-  found: import("../services/wsfe-identity").VoucherSummary;
-  settledAt: string;
-};
+export type ArcaSettledRecord =
+  | {
+      v: 1;
+      kind: "conflict";
+      number: number;
+      found: import("../services/wsfe-identity").VoucherSummary;
+      settledAt: string;
+    }
+  | {
+      v: 1;
+      kind: "superseded";
+      number: number;
+      by: string;
+      settledAt: string;
+    };
 
 export function attemptKey(
   environment: ArcaEnvironment,

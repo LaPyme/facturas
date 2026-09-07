@@ -27,10 +27,14 @@ y un 10016 se resuelve como conflicto.
 
 Antes de tomar un número, la llamada revisa la última reserva reclamada en esa
 secuencia. Si nadie registró su desenlace, la consulta sin escribir: una
-autorización, un rechazo, un conflicto o un número vacío la dan por resuelta.
-Si la consulta no puede contestar, el resultado es `indeterminate` con
-`lookup: { kind: "blocked", by: <clave> }` y no se reserva ni se escribe nada:
-resolvé esa clave con `recover()` y repetí. El lease del lock dura lo que dure
+autorización o un conflicto la dan por resuelta. Si la consulta no encuentra
+nada, además compara el próximo número de ARCA con el reclamado: solo cuando
+son iguales el número está realmente libre, y entonces la clave vieja queda
+anotada como `superseded` —nunca va a poder escribir— y la nueva se lleva el
+número. Si ARCA ya avanzó, hay una escritura que la consulta no ve y no se
+supersede nada. Si la consulta no puede contestar, el resultado es
+`indeterminate` con `lookup: { kind: "blocked", by: <clave> }` y no se reserva
+ni se escribe nada: resolvé esa clave con `recover()` y repetí. El lease del lock dura lo que dure
 el trabajo, se renueva mientras el proceso vive y vence solo cuando el proceso
 se cae; no es configurable. Un lease vencido libera el lock, nunca la barrera:
 la reserva sin resolver sigue frenando el próximo reclamo.
@@ -131,13 +135,17 @@ el input exacto enviado. Contienen datos fiscales y de clientes: restringí el
 acceso y protegé los backups.
 
 `arca:v1:settled:{environment}:{taxId}:{idempotencyKey}` guarda un resultado
-que tiene que sobrevivir al reintento. Hoy se escribe uno solo, la forma
-`{ v: 1, kind: "conflict", number, found, settledAt }`: cuando otro comprobante
-ocupa el número reservado, el `conflict` queda anotado con `add` antes de
-responder, y una repetición con esa clave o un `recover()` lo devuelven sin
-consultar al proveedor. Las autorizaciones no se anotan porque ARCA es la
-fuente de verdad y cada repetición la consulta; los rechazos tampoco, porque el
-input se corrige bajo una clave nueva. Si el store falla al anotar el conflicto,
+que tiene que sobrevivir al reintento, y se escribe una sola vez con `add`. Con
+`{ v: 1, kind: "conflict", number, found, settledAt }`, otro comprobante ocupa
+el número reservado: una repetición con esa clave o un `recover()` devuelven el
+mismo `conflict` sin consultar al proveedor. Con
+`{ v: 1, kind: "superseded", number, by, settledAt }`, la barrera probó que el
+número estaba vacío y se lo dio a la clave `by`: la clave vieja consulta el
+número una vez y nunca reenvía, así que devuelve `conflict` si ahí hay un
+comprobante o `indeterminate` con `lookup: { kind: "superseded", by }` si sigue
+vacío. En los dos casos emitís bajo una clave nueva. Las autorizaciones no se
+anotan porque ARCA es la fuente de verdad y cada repetición la consulta; los
+rechazos tampoco, porque el input se corrige bajo una clave nueva. Si el store falla al anotar el conflicto,
 la llamada lanza `ArcaConfigurationError` en vez de devolver un conflicto que
 un reintento podría no volver a ver.
 

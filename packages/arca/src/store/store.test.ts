@@ -1,4 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -150,6 +151,32 @@ for (const [name, factory] of lockable) {
 it("shares the file lock between independent store instances", async () => {
   const path = await mkdtemp(join(tmpdir(), "arca-store-"));
   directories.push(path);
+  let running = 0;
+  let concurrent = 0;
+  const hold = async () => {
+    running += 1;
+    concurrent = Math.max(concurrent, running);
+    await Promise.resolve();
+    running -= 1;
+  };
+  await Promise.all([
+    createFileStore(path).withLock?.("sequence", hold),
+    createFileStore(path).withLock?.("sequence", hold),
+  ]);
+  expect(concurrent).toBe(1);
+});
+it("lets only one contender steal a stale file lock", async () => {
+  const path = await mkdtemp(join(tmpdir(), "arca-store-"));
+  directories.push(path);
+  const lock = join(
+    path,
+    `${createHash("sha256").update("sequence").digest("hex")}.lock`
+  );
+  await mkdir(lock, { recursive: true });
+  await writeFile(
+    join(lock, "holder"),
+    JSON.stringify({ owner: "dead", expiresAt: new Date(0).toISOString() })
+  );
   let running = 0;
   let concurrent = 0;
   const hold = async () => {

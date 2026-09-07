@@ -9,7 +9,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { join } from "node:path";
-import { ARCA_LEASE_MS, withLease } from "./lock";
+import { ARCA_LEASE_MS, type ArcaLeaseDriver, withLease } from "./lock";
 import { type ArcaStore, storeCall } from "./types";
 
 type Holder = { owner: string; expiresAt: string };
@@ -65,74 +65,84 @@ export function createFileStore(directory: string): ArcaStore {
           }
         }
       }),
-    withLock: (key, fn) => {
+    withLock: (key, fn) =>
       // A lock directory: mkdir is the atomic claim on every POSIX filesystem
       // and on Windows, and the holder file inside carries the lease.
-      const directory = `${path(key)}.lock`;
-      const holder = join(directory, "holder");
-      const claim = (owner: string): Holder => ({
-        owner,
-        expiresAt: new Date(Date.now() + ARCA_LEASE_MS).toISOString(),
-      });
-      const readHolder = async (): Promise<Holder | null> => {
-        try {
-          return JSON.parse(await readFile(holder, "utf8")) as Holder;
-        } catch {
-          return null;
-        }
-      };
-      const create = async () => {
-        try {
-          await mkdir(directory);
-          return true;
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      withLease(key, fileLease(`${path(key)}.lock`, ensure), fn),
+  };
+}
+
+function fileLease(
+  directory: string,
+  ensure: () => Promise<unknown>
+): ArcaLeaseDriver {
+  const holder = join(directory, "holder");
+  const claim = (owner: string) =>
+    JSON.stringify({
+      owner,
+      expiresAt: new Date(Date.now() + ARCA_LEASE_MS).toISOString(),
+    } satisfies Holder);
+  const read = async (): Promise<Holder | null> => {
+    try {
+      return JSON.parse(await readFile(holder, "utf8")) as Holder;
+    } catch {
+      return null;
+    }
+  };
+  return {
+    acquire: (owner) =>
+      storeCall(async () => {
+        await ensure();
+        if (!(await createDirectory(directory))) {
+          if (await stillHeld(directory, await read())) {
             return false;
           }
-          throw error;
+          await rm(directory, { recursive: true, force: true });
+          if (!(await createDirectory(directory))) {
+            return false;
+          }
         }
-      };
-      return withLease(
-        key,
-        {
-          acquire: (owner) =>
-            storeCall(async () => {
-              await ensure();
-              if (!(await create())) {
-                if (await stillHeld(directory, await readHolder())) {
-                  return false;
-                }
-                await rm(directory, { recursive: true, force: true });
-                if (!(await create())) {
-                  return false;
-                }
-              }
-              await writeFile(holder, JSON.stringify(claim(owner)), {
-                mode: 0o600,
-              });
-              // Two processes can free the same stale lock; the holder file
-              // decides which one of them actually took it.
-              return (await readHolder())?.owner === owner;
-            }),
-          renew: (owner) =>
-            storeCall(async () => {
-              if ((await readHolder())?.owner === owner) {
-                await writeFile(holder, JSON.stringify(claim(owner)), {
-                  mode: 0o600,
-                });
-              }
-            }),
-          release: (owner) =>
-            storeCall(async () => {
-              if ((await readHolder())?.owner === owner) {
-                await rm(directory, { recursive: true, force: true });
-              }
-            }),
-        },
-        fn
-      );
-    },
+        // Exclusive: two processes can free the same stale lock, and the
+        // holder file is what decides which one of them took it.
+        return await writeHolder(holder, claim(owner));
+      }),
+    renew: (owner) =>
+      storeCall(async () => {
+        if ((await read())?.owner === owner) {
+          await writeFile(holder, claim(owner), { mode: 0o600 });
+        }
+      }),
+    release: (owner) =>
+      storeCall(async () => {
+        if ((await read())?.owner === owner) {
+          await rm(directory, { recursive: true, force: true });
+        }
+      }),
   };
+}
+
+async function createDirectory(directory: string): Promise<boolean> {
+  try {
+    await mkdir(directory);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function writeHolder(holder: string, value: string): Promise<boolean> {
+  try {
+    await writeFile(holder, value, { mode: 0o600, flag: "wx" });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /** A directory with no readable holder is still fresh for one lease. */

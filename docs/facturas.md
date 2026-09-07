@@ -230,9 +230,12 @@ responder; una repetición con esa clave, o un `recover()`, devuelve el mismo
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
 Un `indeterminate` informa en `lookup` por qué quedó abierto: `not_found`,
-`incomplete`, `failed`, `aborted` cuando venció tu `signal`, y `blocked` cuando
-otra reserva sin resolver todavía frena la secuencia. En `blocked` no se
-reservó ningún número: `by` nombra la clave a conciliar con `recover()`.
+`incomplete`, `failed`, `aborted` cuando venció tu `signal`, `blocked` cuando
+otra reserva sin resolver todavía frena la secuencia y `superseded` cuando la
+secuencia siguió sin esta clave. En `blocked` no se reservó ningún número:
+`by` nombra la clave a conciliar con `recover()`. En `superseded` la clave
+`by` se llevó el número: esta clave nunca va a escribir, así que emití bajo una
+clave nueva.
 
 El segundo argumento acepta `idempotencyKey`, `signal`, `representedTaxId`,
 `forceRefresh`, `service`, `number` e

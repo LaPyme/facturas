@@ -113,7 +113,9 @@ export type IssueOutcome<O extends IssueOptions = { include?: never }> =
         /** The caller's deadline fired; the reservation stays for recover(). */
         | { kind: "aborted" }
         /** An unresolved claim holds this sequence; resolve `by` and retry. */
-        | { kind: "blocked"; by: string };
+        | { kind: "blocked"; by: string }
+        /** The sequence moved past this key: it can never write. Use a new one. */
+        | { kind: "superseded"; by: string };
     }
   | {
       kind: "conflict";

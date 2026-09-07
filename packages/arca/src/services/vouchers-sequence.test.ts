@@ -11,6 +11,7 @@ import {
   attemptKey,
   sequenceKey,
   sequenceLockKey,
+  settledKey,
 } from "../store/types";
 import { createVouchersService } from "./vouchers";
 import {
@@ -72,6 +73,8 @@ afterEach(async () => {
 /** One ARCA sequence: it authorizes only the number that follows the last one. */
 function provider() {
   const issued = new Map<number, WsfeVoucherInput>();
+  const writes = { concurrent: 0 };
+  let running = 0;
   let last = 76;
   const found = (number: number): WsfeVoucherLookupResult => {
     const data = issued.get(number) as WsfeVoucherInput;
@@ -95,10 +98,14 @@ function provider() {
   };
   const wsfe = {
     getNextVoucherNumber: vi.fn(() => Promise.resolve(last + 1)),
-    issue: vi.fn(({ data, voucherNumber }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(async ({ data, voucherNumber }: WsfeAuthorizeVoucherInput) => {
       normalizeWsfeVoucherInput(data);
+      running += 1;
+      writes.concurrent = Math.max(writes.concurrent, running);
+      await Promise.resolve();
+      running -= 1;
       if (voucherNumber !== last + 1) {
-        return Promise.resolve(rejected10016);
+        return rejected10016;
       }
       issued.set(voucherNumber, structuredClone(data));
       last = voucherNumber;
@@ -111,7 +118,7 @@ function provider() {
         caeExpiry: "20260914",
         voucherNumber,
       };
-      return Promise.resolve(outcome);
+      return outcome;
     }),
     lookupVoucher: vi.fn(({ number }: { number: number }) =>
       Promise.resolve(issued.has(number) ? found(number) : absent)
@@ -122,7 +129,7 @@ function provider() {
     issued.set(number, structuredClone(data));
     last = number;
   };
-  return { wsfe, land };
+  return { wsfe, land, writes };
 }
 function service(store: ArcaStore, wsfe: ReturnType<typeof provider>["wsfe"]) {
   return createVouchersService(wsfe, {
@@ -265,6 +272,109 @@ describe("sequence coordination", () => {
       )) ?? "null"
     ) as ArcaSequenceRecord;
     expect(claimed.resolvedAt).toBeDefined();
+  });
+});
+
+describe("superseded claims", () => {
+  const stranded = () =>
+    Promise.resolve({
+      ...base,
+      kind: "indeterminate" as const,
+      reason: "transport_error" as const,
+    });
+  async function strand(
+    arca: ReturnType<typeof service>,
+    wsfe: ReturnType<typeof provider>["wsfe"]
+  ) {
+    // The claim never reached ARCA and its consultation could not answer.
+    wsfe.issue.mockImplementationOnce(stranded);
+    wsfe.lookupVoucher.mockRejectedValueOnce(new Error("offline"));
+    expect((await arca.issue(input, { idempotencyKey: "key1" })).kind).toBe(
+      "indeterminate"
+    );
+  }
+
+  it("never gives a superseded key the CAE of the key that replaced it", async () => {
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const arca = service(store, wsfe);
+    await strand(arca, wsfe);
+    // The next claim proves the number is free and takes it with the same
+    // fiscal data: two consumidor final sales for the same amount.
+    expect(await arca.issue(input, { idempotencyKey: "key2" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77, cae: "cae-77" },
+    });
+    expect(
+      JSON.parse(
+        (await store.get(settledKey("test", "20123456789", "key1"))) ?? "null"
+      )
+    ).toMatchObject({ v: 1, kind: "superseded", number: 77, by: "key2" });
+    const writes = wsfe.issue.mock.calls.length;
+    expect(await arca.issue(input, { idempotencyKey: "key1" })).toMatchObject({
+      kind: "conflict",
+      attempted: { number: 77 },
+      found: { number: 77 },
+    });
+    expect(await arca.recover("key1")).toMatchObject({
+      kind: "conflict",
+      found: { number: 77 },
+    });
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
+  });
+  it("never resends a stranded number while another key claims the sequence", async () => {
+    const { wsfe, writes } = provider();
+    const arca = service(createMemoryStore(), wsfe);
+    await strand(arca, wsfe);
+    const outcomes = await Promise.all([
+      arca.issue(input, { idempotencyKey: "key1" }),
+      arca.issue(input, { idempotencyKey: "key2" }),
+    ]);
+    expect(writes.concurrent).toBe(1);
+    const numbers = outcomes.flatMap((outcome) =>
+      outcome.kind === "authorized" ? [outcome.voucher.number] : []
+    );
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(numbers).not.toHaveLength(0);
+  });
+  it("does not supersede a claim when the sequence already moved", async () => {
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const arca = service(store, wsfe);
+    await strand(arca, wsfe);
+    // ARCA advanced past the number through a writer the consultation cannot
+    // see, so nothing may be declared free.
+    wsfe.getNextVoucherNumber.mockResolvedValue(78);
+    const writes = wsfe.issue.mock.calls.length;
+    expect(await arca.issue(input, { idempotencyKey: "key2" })).toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "blocked", by: "key1" },
+    });
+    expect(
+      await store.get(settledKey("test", "20123456789", "key1"))
+    ).toBeNull();
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
+  });
+  it("reports a superseded key whose number stayed empty", async () => {
+    const { wsfe } = provider();
+    const arca = service(createMemoryStore(), wsfe);
+    await strand(arca, wsfe);
+    // The key that superseded it was rejected, so the number is still empty.
+    wsfe.issue.mockImplementationOnce(() => Promise.resolve(rejected10016));
+    expect((await arca.issue(input, { idempotencyKey: "key2" })).kind).toBe(
+      "rejected"
+    );
+    const writes = wsfe.issue.mock.calls.length;
+    for (const outcome of [
+      await arca.issue(input, { idempotencyKey: "key1" }),
+      await arca.recover("key1"),
+    ]) {
+      expect(outcome).toMatchObject({
+        kind: "indeterminate",
+        lookup: { kind: "superseded", by: "key2" },
+      });
+    }
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
   });
 });
 

@@ -405,7 +405,7 @@ async function runOperation(
       sequence.coordinates.voucherType
     ),
     async () => {
-      const blocked = await runSequenceBarrier({
+      const barrier = await runSequenceBarrier({
         store,
         environment,
         taxId,
@@ -413,13 +413,20 @@ async function runOperation(
         coordinates: sequence.coordinates,
         select: select ?? (() => wsfe),
         options,
+        supersededBy: idempotencyKey,
+        readNext: () => nextNumber(wsfe, prepared.data, options),
       });
-      return blocked ?? (await claim());
+      return "blocked" in barrier
+        ? barrier.blocked
+        : await claim(barrier.reserved);
     }
   );
 
-  async function claim() {
-    const number = await nextNumber(wsfe, prepared.data, options);
+  async function claim(reserved?: number) {
+    const number =
+      options.number ??
+      reserved ??
+      (await nextNumber(wsfe, prepared.data, options));
     // A WSMTXCA or detailed reservation is a v2 record: 0.10 accepts any v1
     // record and would replay it through WSFE, so it must not read this one.
     const service = options.service ?? "wsfe";
@@ -470,10 +477,11 @@ async function runOperation(
         "ARCA reservation disappeared after atomic creation lost."
       );
     }
-    return await replay(winner);
+    // Already inside the sequence lock: the winner's replay must not retake it.
+    return await replay(winner, true);
   }
 
-  async function replay(json: string) {
+  async function replay(json: string, locked = false) {
     const stored = readRecord(json);
     if (
       (stored.service ?? "wsfe") !== (options.service ?? "wsfe") ||
@@ -489,21 +497,44 @@ async function runOperation(
         }
       );
     }
-    const recorded = await storeCall(() => store.get(settled));
-    if (recorded !== null) {
-      return settledConflict(readSettledRecord(recorded), stored);
+    // The settled record is read under the lock: a barrier running right now
+    // may be superseding this very reservation.
+    const consult = async () => {
+      const recorded = await storeCall(() => store.get(settled));
+      if (recorded !== null) {
+        return await settledOutcome(
+          select ?? (() => wsfe),
+          stored,
+          readSettledRecord(recorded),
+          options
+        );
+      }
+      return await settle(
+        runAuthorization(
+          wsfe,
+          {
+            ...preparedFromRecord(stored),
+            ...(replayAmounts ? { amounts: replayAmounts } : {}),
+          },
+          options,
+          stored.number,
+          true
+        )
+      );
+    };
+    if (locked || !store.withLock) {
+      return await consult();
     }
-    return await settle(
-      runAuthorization(
-        wsfe,
-        {
-          ...preparedFromRecord(stored),
-          ...(replayAmounts ? { amounts: replayAmounts } : {}),
-        },
-        options,
-        stored.number,
-        true
-      )
+    // A replay may resend the reserved number, so it belongs to the sequence
+    // it reserved. It never runs the barrier: it is the claim being consulted.
+    return await store.withLock(
+      sequenceLockKey(
+        environment,
+        stored.representedTaxId ?? taxId,
+        stored.salesPoint,
+        stored.voucherType
+      ),
+      consult
     );
   }
   /** Every conflict becomes durable before it reaches the caller. */
@@ -544,10 +575,10 @@ function readSettledRecord(json: string): ArcaSettledRecord {
     if (
       !record ||
       record.v !== 1 ||
-      record.kind !== "conflict" ||
-      !record.found ||
-      typeof record.found !== "object" ||
-      !Number.isSafeInteger(record.number)
+      !Number.isSafeInteger(record.number) ||
+      (record.kind === "conflict"
+        ? !record.found || typeof record.found !== "object"
+        : record.kind !== "superseded" || typeof record.by !== "string")
     ) {
       throw new Error("Invalid settled structure");
     }
@@ -560,8 +591,39 @@ function readSettledRecord(json: string): ArcaSettledRecord {
   }
 }
 
-function settledConflict(
+/**
+ * Answers a key whose outcome is already recorded. A conflict repeats with no
+ * provider call. A superseded key consults its number once and never resends:
+ * a voucher there belongs to whoever took the sequence, and an empty number
+ * means this key will never write.
+ */
+async function settledOutcome(
+  select: SelectService,
+  reservation: ArcaAttemptRecord,
   settled: ArcaSettledRecord,
+  options: RecoveryOptions
+): Promise<IssueOutcome<IssueOptions>> {
+  if (settled.kind === "conflict") {
+    return settledConflict(settled, reservation);
+  }
+  const outcome = await consultReservation(select, reservation, options, true);
+  if (outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found") {
+    return {
+      kind: "indeterminate",
+      attempted: {
+        salesPoint: reservation.salesPoint,
+        voucherType: reservation.voucherType,
+        number: settled.number,
+      },
+      attempt: replayEvidence(reservation.service),
+      lookup: { kind: "superseded", by: settled.by },
+    };
+  }
+  return outcome;
+}
+
+function settledConflict(
+  settled: Extract<ArcaSettledRecord, { kind: "conflict" }>,
   reservation: ArcaAttemptRecord
 ): IssueOutcome<IssueOptions> {
   return {
@@ -1345,7 +1407,12 @@ async function recoverOperation(
   }
   const recorded = await storeCall(() => store.get(settled));
   if (recorded !== null) {
-    return settledConflict(readSettledRecord(recorded), record);
+    return await settledOutcome(
+      select,
+      record,
+      readSettledRecord(recorded),
+      options
+    );
   }
   return await recordConflict(
     store,
@@ -1362,7 +1429,8 @@ async function recoverOperation(
 function consultReservation(
   select: SelectService,
   record: ArcaAttemptRecord,
-  options: RecoveryOptions
+  options: RecoveryOptions,
+  strangerAtNumber = false
 ): Promise<IssueOutcome<IssueOptions>> {
   const storedOptions = {
     ...options,
@@ -1380,6 +1448,7 @@ function consultReservation(
     service: storedOptions.service,
     auth: storedOptions,
     data: prepared.data,
+    strangerAtNumber,
     attempted,
     attempt: replayEvidence(storedOptions.service),
     includeRaw: options.include?.raw === true,
@@ -1408,12 +1477,20 @@ type SequenceBarrier = {
   coordinates: Omit<VoucherCoordinates, "number">;
   select: SelectService;
   options: IssueOptions;
+  supersededBy: string;
+  readNext: () => Promise<number>;
 };
+/** Either the sequence is free, with the number already read, or it is held. */
+type BarrierResult =
+  | { blocked: IssueOutcome<IssueOptions> }
+  | { reserved?: number };
 
 /**
  * Holds the sequence while the last claim on it is unresolved. A claim ARCA
- * already reported, a recorded conflict and a clean consultation all clear it;
- * a lookup that cannot answer keeps the number unread and writes nothing.
+ * already reported and a recorded conflict clear it. An empty number clears it
+ * only once the sequence proves it never moved: then the old key is recorded
+ * as superseded, so its own retry can never take the number this call is about
+ * to write. A lookup that cannot answer writes nothing at all.
  */
 async function runSequenceBarrier({
   store,
@@ -1423,25 +1500,35 @@ async function runSequenceBarrier({
   coordinates,
   select,
   options,
-}: SequenceBarrier): Promise<IssueOutcome<IssueOptions> | undefined> {
+  supersededBy,
+  readNext,
+}: SequenceBarrier): Promise<BarrierResult> {
   const json = await storeCall(() => store.get(sequence));
   if (json === null) {
-    return undefined;
+    return {};
   }
   const claimed = readSequenceRecord(json);
   if (claimed.resolvedAt !== undefined) {
-    return undefined;
+    return {};
   }
   const settled = settledKey(environment, taxId, claimed.key);
   if ((await storeCall(() => store.get(settled))) !== null) {
-    return undefined;
+    return {};
   }
   const reservation = await storeCall(() =>
     store.get(attemptKey(environment, taxId, claimed.key))
   );
   if (reservation === null) {
-    return undefined;
+    return {};
   }
+  const blocked: BarrierResult = {
+    blocked: {
+      kind: "indeterminate",
+      attempted: { ...coordinates, number: claimed.number },
+      attempt: replayEvidence(options.service),
+      lookup: { kind: "blocked", by: claimed.key },
+    },
+  };
   const outcome = await recordConflict(
     store,
     settled,
@@ -1450,19 +1537,32 @@ async function runSequenceBarrier({
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
   );
-  if (
-    outcome.kind === "authorized" ||
-    outcome.kind === "conflict" ||
-    (outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found")
-  ) {
-    return undefined;
+  if (outcome.kind === "authorized" || outcome.kind === "conflict") {
+    return {};
   }
-  return {
-    kind: "indeterminate",
-    attempted: { ...coordinates, number: claimed.number },
-    attempt: replayEvidence(options.service),
-    lookup: { kind: "blocked", by: claimed.key },
-  };
+  if (outcome.kind !== "indeterminate" || outcome.lookup.kind !== "not_found") {
+    return blocked;
+  }
+  // The consultation saw nothing. Only the sequence itself proves the number is
+  // free: if ARCA already moved past it, a write this lookup could not see is
+  // out there and nothing may be superseded.
+  const next = await readNext();
+  if (next !== claimed.number) {
+    return blocked;
+  }
+  await storeCall(() =>
+    store.add(
+      settled,
+      JSON.stringify({
+        v: 1,
+        kind: "superseded",
+        number: claimed.number,
+        by: supersededBy,
+        settledAt: new Date().toISOString(),
+      } satisfies ArcaSettledRecord)
+    )
+  );
+  return { reserved: next };
 }
 
 function readSequenceRecord(json: string): ArcaSequenceRecord {

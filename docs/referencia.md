@@ -60,8 +60,11 @@ los módulos `wsfe`, `wsmtxca` y `padron`.
 Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
 `signal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
 consultas de esa llamada; un corte posterior al envío devuelve `indeterminate`
-con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Está
-documentado en [Facturas](./facturas.md#reintentos-seguros-con-clave-de-idempotencia).
+con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
+de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
+resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
+esta clave y hay que emitir bajo una clave nueva. Está documentado en
+[Facturas](./facturas.md#reintentos-seguros-con-clave-de-idempotencia).
 
 Tipos exportados de la fachada, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
