@@ -1,5 +1,19 @@
 # facturas
 
+## 0.11.0
+
+### Minor Changes
+
+- c22a730: Complete high-level WSFE and WSMTXCA issuance for invoices, debit notes and credit notes. Add tributes, reviewed fiscal breakdowns, A con leyenda and FCE families, extended receiver identities, mixed concepts, foreign currency payment, detailed WSMTXCA items, period notes, note previews and read-only recovery. Support externally reserved numbers and preserve provider-aware keyed reservations across retries. Extend consultation identity checks to associations and fiscal extensions. Existing ordinary WSFE calls and stored reservations remain supported. Reservations that carry a WSMTXCA provider or detailed items are written as version-2 records, which 0.10 refuses to read instead of replaying them through WSFE; plain WSFE reservations stay version 1.
+- 1a291ae: Add the `facturas` CLI: `init` generates the key and CSR and tells you where to save the certificate, `check` diagnoses each ARCA layer, and `issue` emits one homologation invoice. `check` and `issue` resolve their inputs from flags, then environment variables, then the `arca-<entorno>.crt` and `.key` files in the directory, taking the CUIT from the certificate, so the first run after `init` needs no configuration at all.
+
+### Patch Changes
+
+- ff46daf: `init` now suggests an alphanumeric alias (`facturasTest`, `facturasProduction`), because ARCA's alias fields reject hyphens; anything else in `--name` is dropped from the alias while the CSR common name keeps it.
+- f795dc1: Hand the CSR and the certificate over inside the terminal. `init` now copies the CSR to the system clipboard in homologación, with the tool the platform already ships and no shell, and prints the request inline when there is none, so step 3 in ARCA is one paste either way. It then asks for the certificate right there, verifies that it belongs to the key it just wrote and to the CUIT it was given before writing `arca-<entorno>.crt`, and reports its expiry; `--no-clipboard`, `--no-paste`, Ctrl-C and a run without a terminal all keep the previous instructions. The new `npx facturas cert` command takes that same paste on its own, for the certificate you saved for later.
+- c325fe6: `npx facturas issue` now reports the result as `Factura C emitida - 00001-00000009   CAE …   Vto. CAE …   ARS 1,00`, so it reads as an issued voucher and not a dry run, and the sales point is padded to five digits like ARCA prints it.
+- 69c6a07: `wsfe.getSalesPoints()` returns an empty list when WSFE answers error 602 (Sin Resultados), which is how ARCA reports a taxpayer with no sales point for web services. Previously it threw `ArcaServiceError`, which made `npx facturas check` fail its WSFE layer on a fresh homologación CUIT. Other errors still throw.
+
 ## 0.10.0
 
 ### Minor Changes
