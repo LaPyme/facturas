@@ -56,6 +56,37 @@ export function attemptKey(
   return `arca:v1:attempt:${environment}:${taxId}:${key}`;
 }
 
+/**
+ * The last reservation claimed on one sequence through this store, written
+ * with `set` under the sequence lock. `resolvedAt` marks a claim whose fate
+ * ARCA already reported, so the next claim needs no consultation.
+ */
+export type ArcaSequenceRecord = {
+  v: 1;
+  key: string;
+  number: number;
+  claimedAt: string;
+  resolvedAt?: string;
+};
+
+export function sequenceKey(
+  environment: ArcaEnvironment,
+  taxId: string,
+  salesPoint: number,
+  voucherType: number
+): string {
+  return `arca:v1:sequence:${environment}:${taxId}:${salesPoint}:${voucherType}`;
+}
+
+export function sequenceLockKey(
+  environment: ArcaEnvironment,
+  taxId: string,
+  salesPoint: number,
+  voucherType: number
+): string {
+  return `arca:v1:lock:sequence:${environment}:${taxId}:${salesPoint}:${voucherType}`;
+}
+
 export function settledKey(
   environment: ArcaEnvironment,
   taxId: string,

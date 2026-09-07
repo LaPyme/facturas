@@ -57,6 +57,12 @@ Métodos del cliente cubiertos por semver: `issue`, `preview`, `recover`,
 `issueCreditNote`, `issueDebitNote`, `previewCreditNote`, `previewDebitNote`, y
 los módulos `wsfe`, `wsmtxca` y `padron`.
 
+Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
+`signal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
+consultas de esa llamada; un corte posterior al envío devuelve `indeterminate`
+con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Está
+documentado en [Facturas](./facturas.md#reintentos-seguros-con-clave-de-idempotencia).
+
 Tipos exportados de la fachada, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
 `DebitNoteInput`, `PeriodNoteInput`, `PreviewOptions`, `RecoveryOptions`,

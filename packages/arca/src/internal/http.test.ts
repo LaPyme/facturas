@@ -330,6 +330,51 @@ describe("postXml", () => {
     });
   });
 
+  it("aborts an in-flight request with the caller's deadline", async () => {
+    const destroyed: (Error | undefined)[] = [];
+    vi.spyOn(https, "request").mockImplementation(
+      createMockRequest({
+        statusCode: 200,
+        responseBody: "",
+        hangs: true,
+        captureDestroy: destroyed,
+      })
+    );
+
+    const controller = new AbortController();
+    const pending = postXml({
+      url: "https://example.com/ws",
+      body: "<request />",
+      contentType: 'text/xml; charset="utf-8"',
+      retries: 3,
+      signal: controller.signal,
+    });
+    controller.abort();
+
+    await expect(pending).rejects.toMatchObject({
+      name: "ArcaTransportError",
+      message: "ARCA HTTP request was aborted",
+    });
+    expect(destroyed).toHaveLength(1);
+  });
+
+  it("never opens a request for an already aborted deadline", async () => {
+    const request = vi.spyOn(https, "request");
+
+    await expect(
+      postXml({
+        url: "https://example.com/ws",
+        body: "<request />",
+        contentType: 'text/xml; charset="utf-8"',
+        signal: AbortSignal.abort(),
+      })
+    ).rejects.toMatchObject({
+      name: "ArcaTransportError",
+      message: "ARCA HTTP request was aborted",
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it("rejects when the request fails before a response arrives", async () => {
     vi.spyOn(https, "request").mockImplementation(
       createMockRequest({
@@ -387,8 +432,10 @@ function createMockRequest(options: {
   failWithRequestError?: Error;
   failWithResponseError?: Error;
   abortResponse?: boolean;
+  hangs?: boolean;
   triggerTimeout?: boolean;
   captureTimeoutMs?: number[];
+  captureDestroy?: (Error | undefined)[];
 }): typeof https.request {
   return ((
     requestOptions: https.RequestOptions,
@@ -406,6 +453,7 @@ function createMockRequest(options: {
 
     request.write = () => undefined;
     request.destroy = (error?: Error) => {
+      options.captureDestroy?.push(error);
       if (error) {
         process.nextTick(() => request.emit("error", error));
       }
@@ -419,6 +467,10 @@ function createMockRequest(options: {
         process.nextTick(() =>
           request.emit("error", options.failWithRequestError)
         );
+        return;
+      }
+
+      if (options.hangs) {
         return;
       }
 

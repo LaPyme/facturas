@@ -74,6 +74,7 @@ export function createSoapTransport(
           logger: options.logger,
           service: request.service,
           operation: request.operation,
+          signal: request.signal,
         });
 
         options.logger?.debug("Received ARCA SOAP response", {

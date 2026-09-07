@@ -16,6 +16,13 @@ export type IssueOptions = {
   representedTaxId?: number | string;
   forceRefresh?: boolean;
   include?: { raw?: boolean; exactInput?: boolean };
+  /**
+   * The caller's deadline. It aborts the WSAA login, the submission and every
+   * consultation of this call. An abort after the write was sent answers
+   * `indeterminate` with `lookup.kind === "aborted"`: the reservation stays and
+   * `recover()` settles it.
+   */
+  signal?: AbortSignal;
 };
 
 export type IssuedVoucher = VoucherCoordinates & {
@@ -102,7 +109,11 @@ export type IssueOutcome<O extends IssueOptions = { include?: never }> =
       lookup:
         | WithRaw<{ kind: "not_found" }, O>
         | WithRaw<{ kind: "incomplete"; reason: string }, O>
-        | { kind: "failed"; error: ArcaSafeErrorMetadata };
+        | { kind: "failed"; error: ArcaSafeErrorMetadata }
+        /** The caller's deadline fired; the reservation stays for recover(). */
+        | { kind: "aborted" }
+        /** An unresolved claim holds this sequence; resolve `by` and retry. */
+        | { kind: "blocked"; by: string };
     }
   | {
       kind: "conflict";
