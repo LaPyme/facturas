@@ -15,7 +15,7 @@ import { ask, isInteractive } from "./prompt";
 /** One peso, in minor units. The smoke test never issues more than this. */
 const SMOKE_TEST_MINOR_UNITS = 100;
 const SMOKE_TEST_VAT_RATE = 21;
-const SALES_POINT_DIGITS = 4;
+const SALES_POINT_DIGITS = 5;
 const VOUCHER_NUMBER_DIGITS = 8;
 
 const ISSUER_CONDITIONS = [
@@ -217,7 +217,9 @@ function writeOutcome(
   }
 
   if (outcome.kind === "rejected") {
-    writer.fail(`factura rechazada ${describeCoordinates(outcome.attempted)}`);
+    writer.fail(
+      `Factura rechazada - ${describeCoordinates(outcome.attempted)}`
+    );
     for (const issue of outcome.issues) {
       writer.note(
         issue.code === undefined
@@ -247,9 +249,9 @@ function writeOutcome(
 
 function describeVoucher(voucher: IssuedVoucher): string {
   return [
-    `factura ${voucher.voucherClass} ${describeCoordinates(voucher)}`,
+    `Factura ${voucher.voucherClass} emitida - ${describeCoordinates(voucher)}`,
     `CAE ${voucher.cae}`,
-    `vence ${formatArcaDate(voucher.caeExpiry)}`,
+    `Vto. CAE ${formatArcaDate(voucher.caeExpiry)}`,
     `ARS ${formatMinorUnits(voucher.amounts.sentTotal)}`,
   ].join("   ");
 }

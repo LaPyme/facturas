@@ -286,7 +286,7 @@ describe("runIssue", () => {
     await run(context, { salesPoint: 3, issuer: "responsable_inscripto" });
 
     expect(stripCheck(context.stdout())).toMatchInlineSnapshot(`
-      "✓ factura B 0003-00000007   CAE 74123456789012   vence 2026-09-16   ARS 1,00
+      "✓ Factura B emitida - 00003-00000007   CAE 74123456789012   Vto. CAE 2026-09-16   ARS 1,00
 
       Esta es la llamada que hizo el CLI. Pegala en tu aplicación:
 
@@ -307,7 +307,7 @@ describe("runIssue", () => {
       0
     );
     expect(context.issue).toHaveBeenCalledTimes(1);
-    expect(context.stdout()).toContain("✓ factura B 0003-00000007");
+    expect(context.stdout()).toContain("✓ Factura B emitida - 00003-00000007");
   });
 
   it("prints the class C call for a monotributista", async () => {
@@ -336,7 +336,7 @@ describe("runIssue", () => {
       1
     );
     expect(stripCheck(context.stdout())).toMatchInlineSnapshot(`
-      "✗ factura rechazada 0003-00000007
+      "✗ Factura rechazada - 00003-00000007
         10016 El numero de comprobante no es correcto
         Sin código
       "
@@ -357,7 +357,7 @@ describe("runIssue", () => {
       1
     );
     expect(stripCheck(context.stdout())).toMatchInlineSnapshot(`
-      "✗ indeterminado 0003-00000007
+      "✗ indeterminado 00003-00000007
         transport_error, consulta not_found
         Conservá el número y la evidencia; conciliá o repetí el mismo input con su clave.
       "
@@ -379,7 +379,7 @@ describe("runIssue", () => {
       1
     );
     expect(stripCheck(context.stdout())).toMatchInlineSnapshot(`
-      "✗ conflicto en 0003-00000007
+      "✗ conflicto en 00003-00000007
         totalAmount difiere
         Hay otro comprobante en ese número; detené el flujo e investigá.
       "
