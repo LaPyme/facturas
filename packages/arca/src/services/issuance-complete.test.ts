@@ -572,11 +572,12 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
   });
-  it("consults the same reserved WSMTXCA number after a concurrent rejection", async () => {
+  it("reports a stranger on a freshly reserved WSMTXCA number as a conflict", async () => {
     const { client, soap, vouchers, calls } = transportFixture();
     soap.execute.mockImplementationOnce(async ({ body }) => {
       await Promise.resolve();
-      // Another worker authorized this exact reservation before our response.
+      // Somebody else took the number this call reserved: identical fiscal
+      // data proves consistency, never authorship.
       vouchers.set(1, structuredClone(body.comprobanteCAERequest));
       return {
         result: {
@@ -593,11 +594,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
         idempotencyKey: "race",
         number: 9,
       })
-    ).toMatchObject({
-      kind: "authorized",
-      recoveredByMatch: true,
-      voucher: { number: 9 },
-    });
+    ).toMatchObject({ kind: "conflict", found: { number: 9 } });
     expect(soap.execute).toHaveBeenCalledTimes(2);
     expect(calls).toEqual(["consultarComprobante"]);
   });

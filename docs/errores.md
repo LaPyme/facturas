@@ -73,7 +73,10 @@ crudos del proveedor ni los valores de las credenciales.
 - WSFE `10016`: el número de comprobante enviado en `CbteDesde` no es el
   siguiente válido para ese punto de venta y ese tipo de comprobante. Llamá a
   `getNextVoucherNumber()` inmediatamente antes de autorizar cuando tu
-  numeración se pueda haber movido.
+  numeración se pueda haber movido. Con clave de idempotencia, `issue()`
+  consulta el número reservado: si ya lo ocupa otro comprobante el resultado es
+  `conflict` y queda anotado en el store, y si el número está vacío sigue
+  siendo `rejected`.
 
 Cuando un error no es claro, revisá esto en orden:
 

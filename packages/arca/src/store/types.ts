@@ -33,12 +33,35 @@ export type ArcaAttemptRecord = {
   createdAt: string;
 };
 
+/**
+ * Settled outcome of a reservation, created once with `add` and never
+ * rewritten. Only conflicts are recorded: ARCA remains the source of truth for
+ * an authorization, and a rejection may be fixed under a new key. A later
+ * reader that does not know a future `kind` refuses the record instead of
+ * guessing.
+ */
+export type ArcaSettledRecord = {
+  v: 1;
+  kind: "conflict";
+  number: number;
+  found: import("../services/wsfe-identity").VoucherSummary;
+  settledAt: string;
+};
+
 export function attemptKey(
   environment: ArcaEnvironment,
   taxId: string,
   key: string
 ): string {
   return `arca:v1:attempt:${environment}:${taxId}:${key}`;
+}
+
+export function settledKey(
+  environment: ArcaEnvironment,
+  taxId: string,
+  key: string
+): string {
+  return `arca:v1:settled:${environment}:${taxId}:${key}`;
 }
 
 export function canonicalHash(input: unknown): string {
