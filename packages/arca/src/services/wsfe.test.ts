@@ -1134,6 +1134,45 @@ describe("createWsfeService", () => {
       })
     ).resolves.toEqual([{ number: 1 }, { number: 2 }]);
 
+    const noPointsOptions = createBaseOptions();
+    noPointsOptions.soap.execute.mockResolvedValueOnce({
+      result: {
+        FEParamGetPtosVentaResponse: {
+          FEParamGetPtosVentaResult: {
+            Errors: {
+              Err: {
+                Code: 602,
+                Msg: "Sin Resultados: - Metodo FEParamGetPtosVenta.",
+              },
+            },
+          },
+        },
+      },
+    });
+    await expect(
+      createWsfeService(noPointsOptions).getSalesPoints({})
+    ).resolves.toEqual([]);
+
+    const otherErrorOptions = createBaseOptions();
+    otherErrorOptions.soap.execute.mockResolvedValueOnce({
+      result: {
+        FEParamGetPtosVentaResponse: {
+          FEParamGetPtosVentaResult: {
+            Errors: {
+              Err: [
+                { Code: 602, Msg: "Sin Resultados" },
+                { Code: 1005, Msg: "Punto de venta inválido" },
+              ],
+            },
+          },
+        },
+      },
+    });
+    await expect(
+      createWsfeService(otherErrorOptions).getSalesPoints({})
+    ).rejects.toMatchObject({ name: "ArcaServiceError", serviceCode: "602" });
+    expect(otherErrorOptions.soap.execute).toHaveBeenCalledOnce();
+
     const singlePointOptions = createBaseOptions();
     singlePointOptions.soap.execute.mockResolvedValueOnce({
       result: {
