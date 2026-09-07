@@ -1,5 +1,15 @@
 # facturas
 
+## 0.12.0
+
+### Minor Changes
+
+- 969d854: Coordinate the sales point sequence through the store and add a deadline to the facade. `createPostgresStore()`, `createRedisStore()` and `createFileStore()` now provide `withLock` with no new dependency: a lease row with a conditional `UPDATE` on Postgres, which survives a transaction-mode pooler; `SET NX PX` with a verified release on Redis, where a client without `del` keeps no lock; a lock directory with staleness on files. When the configured store provides `withLock`, `issue()`, `issueCreditNote()` and `issueDebitNote()` take the sequence lock, clear the barrier left by the last claim, read the next number, reserve it, submit and resolve before releasing. Two concurrent calls on one sales point and voucher type now take consecutive numbers and write once each. A claim nobody resolved holds the sequence: the next call answers `indeterminate` with `lookup: { kind: "blocked", by: <key> }` and writes nothing until `recover()` settles that key. When the barrier proves the number is free — the consultation finds nothing and ARCA's next number is still that one — it records the old key as `superseded` and hands the number over, so a late retry of that key consults once, never resends, and answers `conflict` or `indeterminate` with `lookup: { kind: "superseded", by }`. A replay holds the same sequence lock as a claim. Without a store, or with a custom store that provides no `withLock`, behavior is unchanged. The facade options take `signal`, any `AbortSignal`, threaded through the WSAA login, the submission and every consultation; an abort after the write was sent answers `indeterminate` with `lookup: { kind: "aborted" }`, keeps the reservation and leaves it for `recover()`. No `timeoutMs` was added.
+
+### Patch Changes
+
+- 5822ade: A WSFE 10016 rejection on a number the same call reserved is never resolved by comparing fiscal fields: the consultation returns `conflict` when another voucher occupies the number and `rejected` when the number is empty. Two sales with identical fiscal data, the common retail case, matched on every field and the loser was reported `authorized` with the winner's CAE. Identity matching stays for a pre-existing reservation, the only case where the number can be this key's own earlier write. Every `conflict` is now recorded once with `add` under `arca:v1:settled:{environment}:{taxId}:{idempotencyKey}`, so a keyed retry and `recover()` repeat it with zero provider calls. Reservation records are untouched.
+
 ## 0.11.0
 
 ### Minor Changes
