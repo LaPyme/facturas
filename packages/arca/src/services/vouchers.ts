@@ -8,9 +8,11 @@ import { normalizeArcaAmountToMinorUnits } from "../internal/decimal";
 import type { ArcaEnvironment } from "../internal/types";
 import {
   type ArcaAttemptRecord,
+  type ArcaSettledRecord,
   type ArcaStore,
   attemptKey,
   canonicalHash,
+  settledKey,
   storeCall,
 } from "../store/types";
 import type { ArcaAuthorizationOutcome } from "./fiscal-evidence";
@@ -53,6 +55,7 @@ import {
   matchWsfeVoucherIdentity,
   toVoucherSummary,
   type VoucherCoordinates,
+  type VoucherSummary,
 } from "./wsfe-identity";
 import type { WsmtxcaService } from "./wsmtxca";
 
@@ -341,10 +344,10 @@ async function runOperation(
   context?: StoreContext,
   replayAmounts?: Prepared["amounts"]
 ): Promise<IssueOutcome<IssueOptions>> {
-  const store = context?.store;
-  if (options.idempotencyKey === undefined || !store || !context) {
+  if (options.idempotencyKey === undefined || !context?.store) {
     return runAuthorization(wsfe, await prepare(), options);
   }
+  const store: ArcaStore = context.store;
   const key = attemptKey(
     context.environment,
     context.taxId,
@@ -360,9 +363,14 @@ async function runOperation(
     ...(options.service === "wsmtxca" ? { service: "wsmtxca" } : {}),
     ...(options.number === undefined ? {} : { number: options.number }),
   });
+  const settled = settledKey(
+    context.environment,
+    context.taxId,
+    options.idempotencyKey
+  );
   const existing = await storeCall(() => store.get(key));
   if (existing !== null) {
-    return replay(existing);
+    return await replay(existing);
   }
   const prepared = await prepare();
   const number = await nextNumber(wsfe, prepared.data, options);
@@ -384,7 +392,7 @@ async function runOperation(
     createdAt: new Date().toISOString(),
   };
   if (await storeCall(() => store.add(key, JSON.stringify(record)))) {
-    return runAuthorization(wsfe, prepared, options, number);
+    return await settle(runAuthorization(wsfe, prepared, options, number));
   }
   const winner = await storeCall(() => store.get(key));
   if (winner === null) {
@@ -392,9 +400,9 @@ async function runOperation(
       "ARCA reservation disappeared after atomic creation lost."
     );
   }
-  return replay(winner);
+  return await replay(winner);
 
-  function replay(json: string) {
+  async function replay(json: string) {
     const stored = readRecord(json);
     if (
       (stored.service ?? "wsfe") !== (options.service ?? "wsfe") ||
@@ -410,17 +418,93 @@ async function runOperation(
         }
       );
     }
-    return runAuthorization(
-      wsfe,
-      {
-        ...preparedFromRecord(stored),
-        ...(replayAmounts ? { amounts: replayAmounts } : {}),
-      },
-      options,
-      stored.number,
-      true
+    const recorded = await storeCall(() => store.get(settled));
+    if (recorded !== null) {
+      return settledConflict(readSettledRecord(recorded), stored);
+    }
+    return await settle(
+      runAuthorization(
+        wsfe,
+        {
+          ...preparedFromRecord(stored),
+          ...(replayAmounts ? { amounts: replayAmounts } : {}),
+        },
+        options,
+        stored.number,
+        true
+      )
     );
   }
+  /** Every conflict becomes durable before it reaches the caller. */
+  async function settle(running: Promise<IssueOutcome<IssueOptions>>) {
+    return await recordConflict(store, settled, await running);
+  }
+}
+
+/**
+ * Records a conflict once, so a retry answers from the store instead of
+ * consulting a number a stranger already holds. Losing the atomic creation
+ * means another call recorded the same conflict first.
+ */
+async function recordConflict(
+  store: ArcaStore,
+  key: string,
+  outcome: IssueOutcome<IssueOptions>
+): Promise<IssueOutcome<IssueOptions>> {
+  if (outcome.kind !== "conflict") {
+    return outcome;
+  }
+  const record: ArcaSettledRecord = {
+    v: 1,
+    kind: "conflict",
+    number: outcome.attempted.number,
+    found: Object.fromEntries(
+      Object.entries(outcome.found).filter(([field]) => field !== "raw")
+    ) as VoucherSummary,
+    settledAt: new Date().toISOString(),
+  };
+  await storeCall(() => store.add(key, JSON.stringify(record)));
+  return outcome;
+}
+
+function readSettledRecord(json: string): ArcaSettledRecord {
+  try {
+    const record = JSON.parse(json) as ArcaSettledRecord;
+    if (
+      !record ||
+      record.v !== 1 ||
+      record.kind !== "conflict" ||
+      !record.found ||
+      typeof record.found !== "object" ||
+      !Number.isSafeInteger(record.number)
+    ) {
+      throw new Error("Invalid settled structure");
+    }
+    return record;
+  } catch (cause) {
+    throw new ArcaConfigurationError(
+      "Invalid ARCA settled record; preserve it for reconciliation.",
+      { cause }
+    );
+  }
+}
+
+function settledConflict(
+  settled: ArcaSettledRecord,
+  reservation: ArcaAttemptRecord
+): IssueOutcome<IssueOptions> {
+  return {
+    kind: "conflict",
+    attempted: {
+      salesPoint: reservation.salesPoint,
+      voucherType: reservation.voucherType,
+      number: settled.number,
+    },
+    attempt: replayEvidence(reservation.service),
+    found: settled.found,
+    reason:
+      "This key already recorded another voucher at the reserved number. Reconcile before issuing under a new key.",
+  };
 }
 
 function validateKeyStore(options: IssueOptions, context?: StoreContext) {
@@ -614,6 +698,10 @@ async function runAuthorization(
           },
           includeRaw
         ),
+        // A number this call reserved and ARCA refused can only hold somebody
+        // else's voucher, and identical fiscal data is not authorship. Only a
+        // pre-existing reservation may recover its own lost write by identity.
+        strangerAtNumber: !replay,
       });
       // A stranger at the reserved number is a conflict; a failed or empty
       // lookup keeps the provider rejection as the answer.
@@ -670,6 +758,8 @@ type RecoveryInput = {
   includeRaw: boolean;
   exact: { sent?: ExactIssueInput<IssuanceService> };
   voucher: (cae: string, caeExpiry: string) => IssuedVoucher;
+  /** The reserved number was claimed in this call: any voucher on it is foreign. */
+  strangerAtNumber?: boolean;
 };
 async function recoverInvoice({
   wsfe,
@@ -682,6 +772,7 @@ async function recoverInvoice({
   voucher,
   lookup: suppliedLookup,
   service,
+  strangerAtNumber = false,
 }: RecoveryInput): Promise<IssueOutcome<IssueOptions>> {
   let lookup: Awaited<ReturnType<IssueWsfeService["lookupVoucher"]>>;
   try {
@@ -702,6 +793,16 @@ async function recoverInvoice({
       attempted,
       attempt,
       lookup: { kind: "not_found", ...raw },
+    };
+  }
+  if (strangerAtNumber) {
+    return {
+      kind: "conflict",
+      attempted,
+      attempt,
+      found: { ...toVoucherSummary(lookup.voucher), ...raw },
+      reason:
+        "ARCA refused the number this call reserved and another voucher occupies it",
     };
   }
   const detailsMatch =
@@ -1100,6 +1201,12 @@ async function recoverOperation(
     });
   }
   const record = readRecord(json);
+  const store = (context as StoreContext & { store: ArcaStore }).store;
+  const settled = settledKey(
+    (context as StoreContext).environment,
+    (context as StoreContext).taxId,
+    key
+  );
   if (
     options.representedTaxId !== undefined &&
     String(options.representedTaxId) !==
@@ -1110,39 +1217,47 @@ async function recoverOperation(
       { code: "ARCA_INPUT_IDEMPOTENCY_MISMATCH" }
     );
   }
+  const recorded = await storeCall(() => store.get(settled));
+  if (recorded !== null) {
+    return settledConflict(readSettledRecord(recorded), record);
+  }
   const storedOptions = {
     ...options,
     service: record.service ?? ("wsfe" as const),
     representedTaxId: record.representedTaxId,
   };
   const prepared = preparedFromRecord(record);
-  return recoverInvoice({
-    wsfe: select(storedOptions),
-    service: storedOptions.service,
-    auth: storedOptions,
-    data: prepared.data,
-    attempted: {
-      salesPoint: record.salesPoint,
-      voucherType: record.voucherType,
-      number: record.number,
-    },
-    attempt: replayEvidence(storedOptions.service),
-    includeRaw: options.include?.raw === true,
-    exact: exactEvidence(
-      prepared.data,
-      record.number,
-      storedOptions,
-      options.include?.exactInput === true
-    ),
-    voucher: (cae, caeExpiry) => ({
-      salesPoint: record.salesPoint,
-      voucherType: record.voucherType,
-      number: record.number,
-      voucherClass: prepared.voucherClass,
-      date: prepared.data.voucherDate,
-      amounts: prepared.amounts,
-      cae,
-      caeExpiry,
-    }),
-  });
+  return await recordConflict(
+    store,
+    settled,
+    await recoverInvoice({
+      wsfe: select(storedOptions),
+      service: storedOptions.service,
+      auth: storedOptions,
+      data: prepared.data,
+      attempted: {
+        salesPoint: record.salesPoint,
+        voucherType: record.voucherType,
+        number: record.number,
+      },
+      attempt: replayEvidence(storedOptions.service),
+      includeRaw: options.include?.raw === true,
+      exact: exactEvidence(
+        prepared.data,
+        record.number,
+        storedOptions,
+        options.include?.exactInput === true
+      ),
+      voucher: (cae, caeExpiry) => ({
+        salesPoint: record.salesPoint,
+        voucherType: record.voucherType,
+        number: record.number,
+        voucherClass: prepared.voucherClass,
+        date: prepared.data.voucherDate,
+        amounts: prepared.amounts,
+        cae,
+        caeExpiry,
+      }),
+    })
+  );
 }

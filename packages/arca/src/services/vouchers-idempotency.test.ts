@@ -222,12 +222,12 @@ describe("keyed issue", () => {
     expect(wsfe.issue).toHaveBeenCalledTimes(1);
     expect(await store.get(key)).toBe(json);
   });
-  it.each([true, false])("checks 10016 once; matching=%s", async (match) => {
+  it.each([true, false])("checks 10016 once; occupied=%s", async (occupied) => {
     const { wsfe, service } = fake();
     wsfe.issue.mockResolvedValue(rejected);
-    wsfe.lookupVoucher.mockResolvedValue(match ? found() : absent);
+    wsfe.lookupVoucher.mockResolvedValue(occupied ? found() : absent);
     expect((await service.issue(input, { idempotencyKey: "sale" })).kind).toBe(
-      match ? "authorized" : "rejected"
+      occupied ? "conflict" : "rejected"
     );
     expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(1);
     expect(wsfe.issue).toHaveBeenCalledTimes(1);

@@ -195,9 +195,19 @@ comportamiento de la v0.8. Una primera llamada con clave reserva ese número
 antes de escribir. Una repetición con clave consulta la reserva: solo
 `not_found` habilita una autorización del número guardado. Un comprobante
 encontrado nunca se reenvía. Las escrituras indeterminadas y los rechazos 10016
-con clave pueden agregar una consulta; un 10016 sin coincidencia completa sigue
-siendo rechazo. `issueCreditNote()` agrega la consulta del original solo cuando
-crea una reserva nueva.
+con clave pueden agregar una consulta. `issueCreditNote()` agrega la consulta
+del original solo cuando crea una reserva nueva.
+
+Un 10016 sobre un número que esta misma llamada reservó no se resuelve por
+coincidencia de campos: si la consulta encuentra un comprobante el resultado es
+`conflict`, y si no encuentra nada sigue siendo `rejected`. Dos ventas con
+datos fiscales idénticos —dos consumidor final por el mismo importe el mismo
+día— coinciden en todos los campos, así que la coincidencia probaría
+consistencia y nunca autoría. La comparación de identidad queda para una
+reserva que ya existía, el único caso en el que el número puede ser una
+escritura propia anterior. Todo `conflict` se anota en el store antes de
+responder; una repetición con esa clave, o un `recover()`, devuelve el mismo
+`conflict` sin ninguna llamada al proveedor.
 
 | Resultado | Significado y acción del llamador |
 | --- | --- |

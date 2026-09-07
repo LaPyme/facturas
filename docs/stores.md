@@ -88,6 +88,17 @@ reserva contienen el hash del input, la operación, las coordenadas reservadas y
 el input exacto enviado. Contienen datos fiscales y de clientes: restringí el
 acceso y protegé los backups.
 
+`arca:v1:settled:{environment}:{taxId}:{idempotencyKey}` guarda un resultado
+que tiene que sobrevivir al reintento. Hoy se escribe uno solo, la forma
+`{ v: 1, kind: "conflict", number, found, settledAt }`: cuando otro comprobante
+ocupa el número reservado, el `conflict` queda anotado con `add` antes de
+responder, y una repetición con esa clave o un `recover()` lo devuelven sin
+consultar al proveedor. Las autorizaciones no se anotan porque ARCA es la
+fuente de verdad y cada repetición la consulta; los rechazos tampoco, porque el
+input se corrige bajo una clave nueva. Si el store falla al anotar el conflicto,
+la llamada lanza `ArcaConfigurationError` en vez de devolver un conflicto que
+un reintento podría no volver a ver.
+
 Cada registro lleva su versión. `v: 1` es una reserva de WSFE sin detalle y la
 lee cualquier versión desde la 0.9. `v: 2` es una reserva de WSMTXCA o con
 detalle de ítems: siempre nombra su proveedor, y la 0.10 no puede reproducirla,
