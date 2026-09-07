@@ -83,7 +83,7 @@ misma validación corre en `--tax-id` y en `ARCA_TAX_ID` para `check` e
 | --- | --- | --- |
 | `--cuit <cuit>` | pregunta | CUIT de 11 dígitos, con o sin guiones |
 | `--env <test\|production>` | pregunta | Entorno de destino |
-| `--name <alias>` | `facturas` | Common name del CSR |
+| `--name <alias>` | `facturas` | Common name del CSR. El alias en ARCA es el nombre sin guiones ni puntos más `Test` o `Production`, porque ARCA solo acepta letras y números |
 | `--org <razón social>` | el CUIT | Organización del CSR |
 | `--dir <directorio>` | el actual | Dónde escribir los archivos |
 | `--force` | — | Sobrescribe los archivos existentes |
@@ -125,14 +125,14 @@ Listo. Ahora en ARCA, para homologación:
      → ARCA → Servicios Interactivos → WSASS, y volvé a entrar. Va con tu
      clave fiscal de persona física, nivel 2 o superior: no es delegable.
   3. En el menú, "Nuevo Certificado":
-       Nombre simbólico del DN:    facturas-test
+       Nombre simbólico del DN:    facturasTest
        Solicitud de certificado:   pegá (ya está en tu portapapeles)
      Apretá "Crear DN y Obtener Certificado".
   4. El certificado sale en el cuadro de resultado, de
      -----BEGIN CERTIFICATE----- a -----END CERTIFICATE-----.
      Copialo entero y pegalo acá abajo.
   5. En el menú, "Crear autorización a servicio":
-       Nombre simbólico del DN a autorizar:   facturas-test
+       Nombre simbólico del DN a autorizar:   facturasTest
        CUIT representado:                     20123456786
        Servicio al que desea acceder:         wsfe - Facturación Electrónica
      Apretá "Crear Autorización de Acceso".
@@ -150,7 +150,7 @@ ahí mismo, para copiarlo de la terminal:
 
 ```
   3. En el menú, "Nuevo Certificado":
-       Nombre simbólico del DN:    facturas-test
+       Nombre simbólico del DN:    facturasTest
        Solicitud de certificado:   copiá esto entero:
        -----BEGIN CERTIFICATE REQUEST-----
        MIICkzCCAXsCAQAwTjELMAkGA1UEBhMCQVIxFDASBgNVBAoMCzIwMTIzNDU2Nzg2
@@ -212,7 +212,7 @@ Listo. Ahora en ARCA, para producción:
      → BUSCAR → Servicios Interactivos → Administración de Certificados
      Digitales → Confirmar, y volvé a entrar.
   3. Apretá "Agregar alias":
-       Alias:                 facturas-production
+       Alias:                 facturasProduction
        Seleccionar archivo:   arca-production.csr
      Apretá "Agregar alias" para subirlo.
   4. En la lista, entrá con "Ver" y usá el icono "Descargar"
@@ -220,7 +220,7 @@ Listo. Ahora en ARCA, para producción:
      Guardalo acá como arca-production.crt, o abrilo y pegalo abajo.
   5. Volvé a Administrador de Relaciones, "Nueva Relación":
        Servicio:        BUSCAR → Webservices → Facturación Electrónica
-       Representante:   BUSCAR → el computador fiscal facturas-production
+       Representante:   BUSCAR → el computador fiscal facturasProduction
      Apretá "Confirmar", revisá y volvé a apretar "Confirmar".
 
 Cuando tengas el certificado (paso 4), pegalo acá. Termina solo al ver

@@ -53,7 +53,11 @@ export async function runInit(
     ? (flags.dir as string)
     : resolve(io.cwd, flags.dir ?? ".");
   const commonName = flags.name?.trim() || "facturas";
-  const alias = `${commonName}-${environment}`;
+  // ARCA's alias fields accept letters and digits only, so the alias is the
+  // common name with everything else dropped, plus the environment.
+  const alias = `${commonName.replace(/[^A-Za-z0-9]/g, "")}${
+    environment === "test" ? "Test" : "Production"
+  }`;
   const keyName = `arca-${environment}.key`;
   const csrName = `arca-${environment}.csr`;
   const certificateName = `arca-${environment}.crt`;
