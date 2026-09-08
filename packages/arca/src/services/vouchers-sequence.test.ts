@@ -462,7 +462,8 @@ describe("claim durability", () => {
       voucher: { number: 77 },
     });
     await expect(arca.recover("a")).rejects.toMatchObject({
-      code: "ARCA_INPUT_INVALID_VALUE",
+      code: "ARCA_INPUT_RESERVATION_NOT_FOUND",
+      field: "idempotencyKey",
     });
     expect(await arca.issue(input, { idempotencyKey: "a" })).toMatchObject({
       kind: "authorized",
@@ -494,7 +495,8 @@ describe("claim durability", () => {
     });
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
     await expect(arca.recover("a")).rejects.toMatchObject({
-      code: "ARCA_INPUT_INVALID_VALUE",
+      code: "ARCA_INPUT_RESERVATION_NOT_FOUND",
+      field: "idempotencyKey",
     });
     expect(await arca.issue(input, { idempotencyKey: "a" })).toMatchObject({
       kind: "authorized",

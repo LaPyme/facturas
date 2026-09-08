@@ -300,11 +300,15 @@ describe("complete WSFE issuance", () => {
   });
   it("creates period-associated notes without consulting an invented original", async () => {
     const { client, wsfe } = fixture();
+    const period = {
+      ...invoice,
+      associatedPeriod: { from: "20260801" as const, to: "20260831" as const },
+    };
+    expect(await client.previewCreditNote(period)).not.toHaveProperty(
+      "original"
+    );
     expect(
-      await client.issueCreditNote(
-        { ...invoice, associatedPeriod: { from: "20260801", to: "20260831" } },
-        { include: { exactInput: true } }
-      )
+      await client.issueCreditNote(period, { include: { exactInput: true } })
     ).toMatchObject({
       kind: "authorized",
       sent: {
@@ -644,6 +648,21 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     const options = { service: "wsmtxca" as const };
     await client.issue({ ...detailed, taxes: [tax] }, options);
     const target = { salesPoint: 1, voucherType: 1, number: 9 };
+    expect(
+      await client.previewCreditNote(
+        { for: target, all: true, date: "20260906" },
+        options
+      )
+    ).toMatchObject({
+      service: "wsmtxca",
+      original: {
+        number: 9,
+        salesPoint: 1,
+        voucherType: 1,
+        totalAmount: 124,
+        cae: "12345678901234",
+      },
+    });
     expect(
       await client.issueCreditNote(
         { for: target, all: true, date: "20260906" },

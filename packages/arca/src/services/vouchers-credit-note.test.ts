@@ -159,6 +159,26 @@ describe("credit note orchestration", () => {
     });
     expect(wsfe.issue.mock.calls[0][0].data.totalAmount).toBe(0.4);
   });
+  it("returns the normalized original from linked note previews", async () => {
+    const { service, calls } = fake();
+    const credit = await service.previewCreditNote(partial);
+    expect(calls).toEqual(["lookup"]);
+    expect(credit.original).toMatchObject({
+      number: 1,
+      salesPoint: 1,
+      voucherType: 11,
+      date: "20260904",
+      totalAmount: 1,
+      cae: "123",
+      caeExpiry: "20260915",
+    });
+    expect(credit.original).not.toHaveProperty("raw");
+
+    calls.length = 0;
+    const debit = await service.previewDebitNote(partial);
+    expect(calls).toEqual(["lookup"]);
+    expect(debit.original).toEqual(credit.original);
+  });
   it.each([
     ["a fractional", 100.5],
     ["a non-finite", Number.NaN],
