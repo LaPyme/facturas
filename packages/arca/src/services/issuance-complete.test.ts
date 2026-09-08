@@ -530,6 +530,27 @@ const detailed: IssueInput = {
   ],
 };
 describe("WSMTXCA high-level API through the real transport adapter", () => {
+  it("omits the tribute amount together with its detail when there are no tributes", () => {
+    const { client } = transportFixture();
+    // ARCA rejects a zero importeOtrosTributos without arrayOtrosTributos
+    // with error 114, so neither field may travel alone.
+    const without = client.preview(detailed, { service: "wsmtxca" });
+    expect(without.request.comprobanteCAERequest).not.toHaveProperty(
+      "importeOtrosTributos"
+    );
+    expect(without.request.comprobanteCAERequest).not.toHaveProperty(
+      "arrayOtrosTributos"
+    );
+    expect(without.request.comprobanteCAERequest.importeTotal).toBe(121);
+    const withTax = client.preview(
+      { ...detailed, taxes: [tax] },
+      { service: "wsmtxca" }
+    );
+    expect(withTax.request.comprobanteCAERequest).toMatchObject({
+      importeOtrosTributos: 3,
+      arrayOtrosTributos: { otroTributo: [{ codigo: 2, importe: 3 }] },
+    });
+  });
   it("previews, issues and recovers complete item and tax evidence", async () => {
     const { client, calls, soap, vouchers } = transportFixture();
     const options = {
