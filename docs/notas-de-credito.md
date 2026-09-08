@@ -205,15 +205,22 @@ const nota = await arca.issueCreditNote(
 
 `previewCreditNote()` y `previewDebitNote()` derivan lo que enviaría la
 emisión. A diferencia de `preview()`, que no hace ninguna I/O, estas consultan
-el original: una lectura, sin escritura y sin reservar número. Una nota por
-período no tiene original, así que tampoco necesita esa consulta.
+el original: una lectura, sin escritura y sin reservar número. La respuesta de
+una nota vinculada incluye ese comprobante como `original`, un
+`VoucherSummary` normalizado y sin datos raw. Una nota por período no tiene
+original, así que tampoco necesita esa consulta ni devuelve esa propiedad.
 
 ```ts
 const previsualizacion = await arca.previewCreditNote({
   for: { salesPoint: 3, voucherType: 11, number: 41 },
   all: true,
 });
-console.log(previsualizacion.voucherType, previsualizacion.amounts);
+console.log(
+  previsualizacion.voucherType,
+  previsualizacion.amounts,
+  previsualizacion.original.cae,
+  previsualizacion.original.totalAmount,
+);
 ```
 
 ## Idempotencia y prueba en producción

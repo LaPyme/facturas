@@ -69,6 +69,7 @@ export type {
 export { createPadronService } from "./services/padron";
 export type {
   DebitNoteInput,
+  NotePreview,
   PeriodNoteInput,
   PreviewOptions,
   RecoveryOptions,

@@ -74,7 +74,10 @@ guardada, con el proveedor y el número que quedaron registrados: nunca autoriza
 ni reserva un número nuevo. Si ARCA confirma que el número está vacío, el
 resultado es `indeterminate` con `lookup.kind === "not_found"`, no una
 autorización; para emitir se llama `issue()` con la misma clave. Si no hay
-reserva para esa clave, lanza `ArcaInputError`. Acepta `representedTaxId`,
+reserva para esa clave, lanza `ArcaInputError` con
+`code === "ARCA_INPUT_RESERVATION_NOT_FOUND"`. Esa ausencia no es el
+`lookup.kind === "not_found"` de una reserva consultada y no prueba que otro
+proceso todavía no esté por guardarla. Acepta `representedTaxId`,
 `forceRefresh`, `include` y `signal`.
 
 ## Revisá antes de emitir

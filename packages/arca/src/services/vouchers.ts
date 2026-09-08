@@ -72,6 +72,11 @@ export type PeriodNoteInput = IssueInput & {
 export type DebitNoteInput =
   | (CreditNoteInput & { all?: never })
   | PeriodNoteInput;
+export type NotePreview<S extends IssuanceService = "wsfe"> =
+  IssuePreview<S> & {
+    /** Present for a note linked to a voucher; absent for a period note. */
+    original?: VoucherSummary;
+  };
 export type RecoveryOptions = Pick<
   IssueOptions,
   "representedTaxId" | "forceRefresh" | "include" | "signal"
@@ -94,17 +99,18 @@ export type VouchersService = {
   /**
    * Derives what issueCreditNote() would send. Unlike the zero-I/O preview(),
    * it consults the original once: one read, no write and no number reserved.
-   * A period note carries its own business input and needs no lookup.
+   * A linked note returns that raw-free original in `original`. A period note
+   * carries its own business input, needs no lookup and has no `original`.
    */
   previewCreditNote<O extends PreviewOptions = { service?: never }>(
     input: CreditNoteInput | PeriodNoteInput,
     options?: O
-  ): Promise<IssuePreview<ServiceFor<O>>>;
+  ): Promise<NotePreview<ServiceFor<O>>>;
   /** Same contract as previewCreditNote(), for issueDebitNote() input. */
   previewDebitNote<O extends PreviewOptions = { service?: never }>(
     input: DebitNoteInput,
     options?: O
-  ): Promise<IssuePreview<ServiceFor<O>>>;
+  ): Promise<NotePreview<ServiceFor<O>>>;
   /**
    * Issues a credit note against an authorized invoice or debit note of the
    * ordinary, retention-legend or FCE families, or against a period with
@@ -216,7 +222,7 @@ export function createVouchersService(
         options ?? {},
         context,
         "creditNote"
-      ) as Promise<IssuePreview<ServiceFor<O>>>,
+      ) as Promise<NotePreview<ServiceFor<O>>>,
     previewDebitNote: async <O extends PreviewOptions = { service?: never }>(
       input: DebitNoteInput,
       options?: O
@@ -227,7 +233,7 @@ export function createVouchersService(
         options ?? {},
         context,
         "debitNote"
-      ) as Promise<IssuePreview<ServiceFor<O>>>,
+      ) as Promise<NotePreview<ServiceFor<O>>>,
     issueCreditNote: async <O extends IssueOptions = { include?: never }>(
       input: CreditNoteInput | PeriodNoteInput,
       options?: O
@@ -1279,17 +1285,18 @@ async function previewNote(
   inputOptions: PreviewOptions,
   context: StoreContext | undefined,
   kind: "creditNote" | "debitNote"
-): Promise<IssuePreview<IssuanceService>> {
+): Promise<NotePreview<IssuanceService>> {
   const options = structuredClone(inputOptions);
   assertIssueKeys(
     options,
     ["representedTaxId", "service", "forceRefresh"],
     "options"
   );
-  return toPreview(
-    await prepareNote(wsfe, input, options, context, kind),
-    options
-  );
+  const prepared = await prepareNote(wsfe, input, options, context, kind);
+  return {
+    ...toPreview(prepared, options),
+    ...(prepared.original === undefined ? {} : { original: prepared.original }),
+  };
 }
 
 async function prepareNote(
@@ -1298,7 +1305,7 @@ async function prepareNote(
   options: IssueOptions,
   context: StoreContext | undefined,
   kind: "creditNote" | "debitNote"
-): Promise<Prepared> {
+): Promise<Prepared & { original?: VoucherSummary }> {
   validateOptions(options);
   assertIssueObject(input, "input");
   if ("associatedPeriod" in input && !("for" in input)) {
@@ -1356,7 +1363,7 @@ async function prepareNote(
     }
   }
   validatePrepared(prepared, options);
-  return prepared;
+  return { ...prepared, original: toVoucherSummary(original.voucher) };
 }
 
 function preparePeriodNote(
@@ -1436,7 +1443,7 @@ async function recoverOperation(
   );
   if (json === null) {
     throw new ArcaInputError("No reservation exists for this idempotency key", {
-      code: "ARCA_INPUT_INVALID_VALUE",
+      code: "ARCA_INPUT_RESERVATION_NOT_FOUND",
       field: "idempotencyKey",
     });
   }

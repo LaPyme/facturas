@@ -68,10 +68,10 @@ esta clave y hay que emitir bajo una clave nueva. Está documentado en
 
 Tipos exportados de la fachada, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
-`DebitNoteInput`, `PeriodNoteInput`, `PreviewOptions`, `RecoveryOptions`,
-`ExactIssueInput`, `IssuanceService`, `FceOptions`, `InvoiceFamily`,
-`IssuanceFields`, `Tribute`, `VoucherAmounts`, `VoucherItemDetail` y
-`WsmtxcaIssueRequest`.
+`DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
+`RecoveryOptions`, `ExactIssueInput`, `IssuanceService`, `FceOptions`,
+`InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
+`VoucherItemDetail` y `WsmtxcaIssueRequest`.
 
 Entradas documentadas:
 

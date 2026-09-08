@@ -1,11 +1,13 @@
 import {
   ArcaAuthenticationError,
   ArcaInputError,
+  type ArcaInputErrorCode,
   buildFacturaB,
   buildFacturaC,
   createArcaClient,
   type IssuePreview,
   isArcaAuthenticationError,
+  type NotePreview,
   type VouchersService,
   type WsfeAuthorizationOutcome,
   type WsfeAuthorizeVoucherInput,
@@ -59,6 +61,8 @@ const inputError = new ArcaInputError("invalid date", {
   code: "ARCA_INPUT_INVALID_DATE",
   field: "voucherDate",
 });
+const missingReservationCode: ArcaInputErrorCode =
+  "ARCA_INPUT_RESERVATION_NOT_FOUND";
 const authenticationError = new ArcaAuthenticationError(
   "authentication rejected",
   {
@@ -90,6 +94,7 @@ export const packageConsumerContract = {
   authorizationInput,
   subpathAuthorizationInput,
   inputError,
+  missingReservationCode,
   authenticationError,
   outcome,
   isArcaAuthenticationError,
@@ -214,6 +219,22 @@ export async function creditNoteConsumerContract(
   oldMock.issue satisfies VouchersService["issue"];
 
   const target = { salesPoint: 1, voucherType: 6, number: 1 };
+  const linkedPreviewInput = {
+    for: target,
+    items: [{ amount: 100 }],
+  } as const;
+  const linkedPreview: NotePreview =
+    await client.previewCreditNote(linkedPreviewInput);
+  linkedPreview.original?.cae satisfies string | undefined;
+  linkedPreview.original?.totalAmount satisfies number | undefined;
+  const periodPreview = await client.previewCreditNote({
+    issuer: "responsable_inscripto",
+    salesPoint: 1,
+    to: { condition: "responsable_inscripto", cuit: "20123456789" },
+    items: [{ net: 10_000, vat: 21 }],
+    associatedPeriod: { from: "20260901", to: "20260930" },
+  });
+  periodPreview.original satisfies object | undefined;
   // @ts-expect-error A credit note needs exactly one mode: items, amounts or all: true.
   await client.issueCreditNote({ for: target });
   await client.issueCreditNote({

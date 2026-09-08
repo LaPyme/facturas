@@ -44,7 +44,8 @@ reserva, así que no puede existir una reserva que la barrera no vea. Si el
 proceso o el store fallan entre las dos escrituras, queda un registro de
 secuencia que apunta a una clave sin reserva: esa clave nunca escribió, la
 barrera le da el número al próximo reclamo y `recover()` lanza
-`ArcaInputError` porque no hay reserva. Repetí la emisión con la misma clave.
+`ArcaInputError` con `code === "ARCA_INPUT_RESERVATION_NOT_FOUND"` porque no
+hay reserva. Repetí la emisión con la misma clave.
 Si fallan después de la reserva, la barrera la consulta como a cualquier
 reclamo sin desenlace: nunca deja que otra clave herede su identidad.
 

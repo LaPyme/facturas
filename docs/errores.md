@@ -8,7 +8,7 @@ string.
 | Clase | Cuándo |
 | --- | --- |
 | `ArcaConfigurationError` | Configuración del cliente inválida |
-| `ArcaInputError` | Input inválido del llamador, por ejemplo una fecha mal formada |
+| `ArcaInputError` | Input inválido del llamador o una clave que `recover()` no puede resolver |
 | `ArcaAuthenticationError` | Rechazo de autenticación explícito del proveedor |
 | `ArcaTransportError` | Falla de HTTP o de transporte |
 | `ArcaSoapFaultError` | SOAP fault devuelto por ARCA |
@@ -49,6 +49,10 @@ errores de autenticación exponen solamente el código estable
 `ARCA_AUTHENTICATION_ERROR`, un `reason` tipado, el servicio, la operación y un
 código de proveedor seguro cuando está disponible; no se adjuntan los cuerpos
 crudos del proveedor ni los valores de las credenciales.
+
+`recover()` usa `ARCA_INPUT_RESERVATION_NOT_FOUND` cuando la clave no tiene una
+reserva guardada. Ese código es distinto de `lookup.kind === "not_found"`, que
+significa que la reserva existe y ARCA confirmó que su número está vacío.
 
 ## Diagnóstico
 
