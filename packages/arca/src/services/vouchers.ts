@@ -522,7 +522,9 @@ async function runOperation(
           select ?? (() => wsfe),
           stored,
           readSettledRecord(recorded),
-          options
+          options,
+          (other) =>
+            storeCall(() => store.get(settledKey(environment, taxId, other)))
         );
       }
       return await settle(
@@ -610,32 +612,66 @@ function readSettledRecord(json: string): ArcaSettledRecord {
 /**
  * Answers a key whose outcome is already recorded. A conflict repeats with no
  * provider call. A superseded key consults its number once and never resends:
- * a voucher there belongs to whoever took the sequence, and an empty number
- * means this key will never write.
+ * an empty number means this key will never write, and a voucher there
+ * belongs to the key that took the sequence, unless that key, or one that took
+ * it from it in turn, met a stranger at the number. Only then does the voucher
+ * stay a conflict for a person to attribute.
  */
 async function settledOutcome(
   select: SelectService,
   reservation: ArcaAttemptRecord,
   settled: ArcaSettledRecord,
-  options: RecoveryOptions
+  options: RecoveryOptions,
+  settledFor: (key: string) => Promise<string | null>
 ): Promise<IssueOutcome<IssueOptions>> {
   if (settled.kind === "conflict") {
     return settledConflict(settled, reservation);
   }
   const outcome = await consultReservation(select, reservation, options, true);
-  if (outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found") {
-    return {
-      kind: "indeterminate",
-      attempted: {
-        salesPoint: reservation.salesPoint,
-        voucherType: reservation.voucherType,
-        number: settled.number,
-      },
-      attempt: replayEvidence(reservation.service),
-      lookup: { kind: "superseded", by: settled.by },
-    };
+  const empty =
+    outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found";
+  if (
+    !empty &&
+    (outcome.kind !== "conflict" ||
+      (await successionDisputed(settled.by, settledFor)))
+  ) {
+    return outcome;
   }
-  return outcome;
+  return {
+    kind: "indeterminate",
+    attempted: {
+      salesPoint: reservation.salesPoint,
+      voucherType: reservation.voucherType,
+      number: settled.number,
+    },
+    attempt: replayEvidence(reservation.service),
+    lookup: { kind: "superseded", by: settled.by },
+  };
+}
+
+/**
+ * Follows the keys that took one number from each other. A recorded conflict
+ * anywhere along that chain means a stranger reached the number; an
+ * unrecorded end means the last key wrote it or still owns the question. A
+ * chain too long to walk counts as disputed.
+ */
+async function successionDisputed(
+  key: string,
+  settledFor: (key: string) => Promise<string | null>
+): Promise<boolean> {
+  let next = key;
+  for (let hop = 0; hop < 16; hop += 1) {
+    const json = await settledFor(next);
+    if (json === null) {
+      return false;
+    }
+    const record = readSettledRecord(json);
+    if (record.kind === "conflict") {
+      return true;
+    }
+    next = record.by;
+  }
+  return true;
 }
 
 function settledConflict(
@@ -1427,7 +1463,17 @@ async function recoverOperation(
       select,
       record,
       readSettledRecord(recorded),
-      options
+      options,
+      (other) =>
+        storeCall(() =>
+          store.get(
+            settledKey(
+              (context as StoreContext).environment,
+              (context as StoreContext).taxId,
+              other
+            )
+          )
+        )
     );
   }
   return await recordConflict(

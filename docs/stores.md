@@ -150,9 +150,12 @@ el número reservado: una repetición con esa clave o un `recover()` devuelven e
 mismo `conflict` sin consultar al proveedor. Con
 `{ v: 1, kind: "superseded", number, by, settledAt }`, la barrera probó que el
 número estaba vacío y se lo dio a la clave `by`: la clave vieja consulta el
-número una vez y nunca reenvía, así que devuelve `conflict` si ahí hay un
-comprobante o `indeterminate` con `lookup: { kind: "superseded", by }` si sigue
-vacío. En los dos casos emitís bajo una clave nueva. Las autorizaciones no se
+número una vez y nunca reenvía. Devuelve `indeterminate` con
+`lookup: { kind: "superseded", by }` si el número sigue vacío o si el
+comprobante que hay ahí es de `by` o de una clave que a su vez se lo quitó a
+`by`: emitís bajo una clave nueva. Devuelve `conflict` solo si alguna clave de
+esa cadena anotó un conflicto en ese número, porque entonces un desconocido
+llegó al número y el comprobante se atribuye a mano. Las autorizaciones no se
 anotan porque ARCA es la fuente de verdad y cada repetición la consulta; los
 rechazos tampoco, porque el input se corrige bajo una clave nueva. Si el store falla al anotar el conflicto,
 la llamada lanza `ArcaConfigurationError` en vez de devolver un conflicto que

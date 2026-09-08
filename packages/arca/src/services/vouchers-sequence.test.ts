@@ -311,14 +311,74 @@ describe("superseded claims", () => {
       )
     ).toMatchObject({ v: 1, kind: "superseded", number: 77, by: "key2" });
     const writes = wsfe.issue.mock.calls.length;
-    expect(await arca.issue(input, { idempotencyKey: "key1" })).toMatchObject({
+    // The voucher at 77 is key2's: key1 learns it was superseded and issues
+    // under a new key, with no CAE and no conflict to reconcile by hand.
+    for (const outcome of [
+      await arca.issue(input, { idempotencyKey: "key1" }),
+      await arca.recover("key1"),
+    ]) {
+      expect(outcome).toMatchObject({
+        kind: "indeterminate",
+        attempted: { number: 77 },
+        lookup: { kind: "superseded", by: "key2" },
+      });
+      expect(outcome).not.toHaveProperty("voucher");
+    }
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
+  });
+  it("keeps a superseded key in conflict when its successor met a stranger", async () => {
+    const { wsfe, land } = provider();
+    const arca = service(createMemoryStore(), wsfe);
+    await strand(arca, wsfe);
+    // A writer outside the store takes 77 between key2's barrier and its
+    // write, so key2 records a conflict. The voucher there could be anyone's,
+    // including a late write of key1's own, and stays for a person to settle.
+    wsfe.issue.mockImplementationOnce(({ data }) => {
+      land(77, data);
+      return Promise.resolve(rejected10016);
+    });
+    expect(await arca.issue(input, { idempotencyKey: "key2" })).toMatchObject({
       kind: "conflict",
-      attempted: { number: 77 },
       found: { number: 77 },
     });
+    const writes = wsfe.issue.mock.calls.length;
+    for (const outcome of [
+      await arca.issue(input, { idempotencyKey: "key1" }),
+      await arca.recover("key1"),
+    ]) {
+      expect(outcome).toMatchObject({
+        kind: "conflict",
+        attempted: { number: 77 },
+        found: { number: 77 },
+      });
+    }
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
+  });
+  it("follows the keys that took the number from each other", async () => {
+    const { wsfe } = provider();
+    const arca = service(createMemoryStore(), wsfe);
+    await strand(arca, wsfe);
+    // key2 takes 77 from key1 and is stranded the same way, once the barrier's
+    // own consultation has answered.
+    wsfe.issue.mockImplementationOnce(() => {
+      wsfe.lookupVoucher.mockRejectedValueOnce(new Error("offline"));
+      return stranded();
+    });
+    expect((await arca.issue(input, { idempotencyKey: "key2" })).kind).toBe(
+      "indeterminate"
+    );
+    expect(await arca.issue(input, { idempotencyKey: "key3" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    const writes = wsfe.issue.mock.calls.length;
     expect(await arca.recover("key1")).toMatchObject({
-      kind: "conflict",
-      found: { number: 77 },
+      kind: "indeterminate",
+      lookup: { kind: "superseded", by: "key2" },
+    });
+    expect(await arca.recover("key2")).toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "superseded", by: "key3" },
     });
     expect(wsfe.issue).toHaveBeenCalledTimes(writes);
   });
@@ -456,15 +516,18 @@ describe("claim durability", () => {
       recoveredByMatch: false,
       voucher: { number: 77 },
     });
+    // The voucher at 77 is b's: a is told it was superseded, gets no CAE and
+    // issues again under a new key.
     for (const outcome of [
       await arca.recover("a"),
       await arca.issue(input, { idempotencyKey: "a" }),
     ]) {
       expect(outcome).toMatchObject({
-        kind: "conflict",
+        kind: "indeterminate",
         attempted: { number: 77 },
-        found: { number: 77 },
+        lookup: { kind: "superseded", by: "b" },
       });
+      expect(outcome).not.toHaveProperty("voucher");
     }
     expect(wsfe.issue).toHaveBeenCalledTimes(2);
   });
