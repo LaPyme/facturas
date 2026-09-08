@@ -108,6 +108,15 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
       "Item totals must equal the voucher total excluding tributes"
     );
   }
+  // WSMTXCA error 114: the tribute amount and its detail travel together or
+  // not at all. A zero amount with no detail is still an amount to ARCA.
+  const tributes = data.taxes?.length ? data.taxes : undefined;
+  if (
+    tributes === undefined &&
+    normalizeArcaAmountToMinorUnits(data.taxAmount, "taxes") !== 0n
+  ) {
+    invalid("taxes", "Tribute amount requires tribute details");
+  }
   return {
     comprobanteCAERequest: {
       codigoTipoComprobante: data.voucherType,
@@ -126,7 +135,9 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
             normalizeArcaAmountToMinorUnits(data.nonTaxableAmount, "untaxed") +
             normalizeArcaAmountToMinorUnits(data.exemptAmount, "exempt")
         ) / 100,
-      importeOtrosTributos: data.taxAmount,
+      ...(tributes === undefined
+        ? {}
+        : { importeOtrosTributos: data.taxAmount }),
       importeTotal: data.totalAmount,
       codigoMoneda: data.currencyId,
       cotizacionMoneda: data.exchangeRate,
@@ -166,16 +177,18 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
             })),
           }
         : undefined,
-      arrayOtrosTributos: data.taxes?.length
+      ...(tributes
         ? {
-            otroTributo: data.taxes.map((t) => ({
-              codigo: t.id,
-              descripcion: t.description,
-              baseImponible: t.baseAmount,
-              importe: t.amount,
-            })),
+            arrayOtrosTributos: {
+              otroTributo: tributes.map((t) => ({
+                codigo: t.id,
+                descripcion: t.description,
+                baseImponible: t.baseAmount,
+                importe: t.amount,
+              })),
+            },
           }
-        : undefined,
+        : {}),
       arrayItems: { item: items },
       arraySubtotalesIVA: data.vatRates?.length
         ? {

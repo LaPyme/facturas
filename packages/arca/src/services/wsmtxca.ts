@@ -903,10 +903,13 @@ function mapWsmtxcaVoucherInfo(
     "exemptAmount",
     parseOptionalNumber(raw.importeExento)
   );
+  // A voucher issued without tributes carries neither the amount nor the
+  // detail, and its tribute amount is zero.
   assignWsmtxcaValue(
     voucher,
     "taxAmount",
-    parseOptionalNumber(raw.importeOtrosTributos)
+    parseOptionalNumber(raw.importeOtrosTributos) ??
+      (raw.arrayOtrosTributos === undefined ? 0 : undefined)
   );
   assignWsmtxcaValue(voucher, "vatAmount", vatAmount);
   assignWsmtxcaValue(
