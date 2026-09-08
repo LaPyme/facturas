@@ -69,8 +69,10 @@ export function attemptKey(
 
 /**
  * The last reservation claimed on one sequence through this store, written
- * with `set` under the sequence lock. `resolvedAt` marks a claim whose fate
- * ARCA already reported, so the next claim needs no consultation.
+ * with `set` under the sequence lock and before the reservation it names, so
+ * no reservation can exist that the barrier does not see. `resolvedAt` marks a
+ * claim whose fate ARCA already reported, so the next claim needs no
+ * consultation.
  */
 export type ArcaSequenceRecord = {
   v: 1;

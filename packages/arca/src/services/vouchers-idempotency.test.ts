@@ -223,8 +223,21 @@ describe("keyed issue", () => {
     expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
     expect(wsfe.issue).not.toHaveBeenCalled();
   });
-  it("losing add reads the winner and never reads another number", async () => {
+  it("re-reads the key under the lock and never reads a number for a winner", async () => {
     const { store, wsfe, service } = fake();
+    await service.issue(input, { idempotencyKey: "sale" });
+    const json = await store.get(key);
+    // The first read raced ahead of the winner; the read under the lock does not.
+    vi.spyOn(store, "get").mockResolvedValueOnce(null);
+    expect((await service.issue(input, { idempotencyKey: "sale" })).kind).toBe(
+      "authorized"
+    );
+    expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
+    expect(wsfe.issue).toHaveBeenCalledTimes(1);
+    expect(await store.get(key)).toBe(json);
+  });
+  it("losing add without withLock reads the winner and never reads another number", async () => {
+    const { store, wsfe, service } = fake({ coordinated: false });
     await service.issue(input, { idempotencyKey: "sale" });
     const json = await store.get(key);
     vi.spyOn(store, "get").mockResolvedValueOnce(null);

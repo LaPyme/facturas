@@ -422,17 +422,15 @@ async function runOperation(
     }
   );
 
-  async function claim(reserved?: number) {
-    const number =
-      options.number ??
-      reserved ??
-      (await nextNumber(wsfe, prepared.data, options));
-    // A WSMTXCA or detailed reservation is a v2 record: 0.10 accepts any v1
-    // record and would replay it through WSFE, so it must not read this one.
+  /**
+   * A WSMTXCA or detailed reservation is a v2 record: 0.10 accepts any v1
+   * record and would replay it through WSFE, so it must not read this one.
+   */
+  function reservation(number: number): ArcaAttemptRecord {
     const service = options.service ?? "wsfe";
     const versioned =
       service === "wsmtxca" || prepared.data.details !== undefined;
-    const record: ArcaAttemptRecord = {
+    return {
       v: versioned ? 2 : 1,
       operation,
       ...(versioned ? { service } : {}),
@@ -444,19 +442,37 @@ async function runOperation(
       sent: prepared.data,
       createdAt: new Date().toISOString(),
     };
+  }
+
+  async function claim(reserved?: number) {
+    const coordinated = store.withLock !== undefined;
+    // Under the lock now: a call with this same key may have claimed while
+    // this one waited for the lease. Its reservation is the one to consult,
+    // and the marker below must keep pointing at it.
+    const prior = coordinated ? await storeCall(() => store.get(key)) : null;
+    if (prior !== null) {
+      return await replay(prior, true);
+    }
+    const number =
+      options.number ??
+      reserved ??
+      (await nextNumber(wsfe, prepared.data, options));
+    const record = reservation(number);
+    const claimed: ArcaSequenceRecord = {
+      v: 1,
+      key: idempotencyKey,
+      number,
+      claimedAt: new Date().toISOString(),
+    };
+    if (coordinated) {
+      // The marker goes first. A reservation the barrier cannot see is a
+      // number the next claim takes, and recovering it would find that
+      // stranger and match it by fiscal fields. A marker whose reservation
+      // never followed is harmless: that key never submitted, so the barrier
+      // hands the number over.
+      await storeCall(() => store.set(sequenceRecord, JSON.stringify(claimed)));
+    }
     if (await storeCall(() => store.add(key, JSON.stringify(record)))) {
-      const claimed: ArcaSequenceRecord = {
-        v: 1,
-        key: idempotencyKey,
-        number,
-        claimedAt: new Date().toISOString(),
-      };
-      const coordinated = store.withLock !== undefined;
-      if (coordinated) {
-        await storeCall(() =>
-          store.set(sequenceRecord, JSON.stringify(claimed))
-        );
-      }
       const outcome = await settle(
         runAuthorization(wsfe, prepared, options, number)
       );
@@ -1519,12 +1535,17 @@ async function runSequenceBarrier({
     store.get(attemptKey(environment, taxId, claimed.key))
   );
   if (reservation === null) {
+    // The marker is written before the reservation: a key without one never
+    // put its number in a record, let alone submitted it.
     return {};
   }
+  // The reservation, not the marker, is the evidence: it names the number the
+  // consultation checks and a superseded record repeats.
+  const record = readRecord(reservation);
   const blocked: BarrierResult = {
     blocked: {
       kind: "indeterminate",
-      attempted: { ...coordinates, number: claimed.number },
+      attempted: { ...coordinates, number: record.number },
       attempt: replayEvidence(options.service),
       lookup: { kind: "blocked", by: claimed.key },
     },
@@ -1532,7 +1553,7 @@ async function runSequenceBarrier({
   const outcome = await recordConflict(
     store,
     settled,
-    await consultReservation(select, readRecord(reservation), {
+    await consultReservation(select, record, {
       forceRefresh: options.forceRefresh,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     })
@@ -1547,7 +1568,7 @@ async function runSequenceBarrier({
   // free: if ARCA already moved past it, a write this lookup could not see is
   // out there and nothing may be superseded.
   const next = await readNext();
-  if (next !== claimed.number) {
+  if (next !== record.number) {
     return blocked;
   }
   await storeCall(() =>
@@ -1556,7 +1577,7 @@ async function runSequenceBarrier({
       JSON.stringify({
         v: 1,
         kind: "superseded",
-        number: claimed.number,
+        number: record.number,
         by: supersededBy,
         settledAt: new Date().toISOString(),
       } satisfies ArcaSettledRecord)
