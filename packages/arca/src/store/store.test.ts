@@ -182,13 +182,14 @@ it("lets only one contender steal a stale file lock", async () => {
   const hold = async () => {
     running += 1;
     concurrent = Math.max(concurrent, running);
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 5));
     running -= 1;
   };
-  await Promise.all([
-    createFileStore(path).withLock?.("sequence", hold),
-    createFileStore(path).withLock?.("sequence", hold),
-  ]);
+  await Promise.all(
+    Array.from({ length: 20 }, () =>
+      createFileStore(path).withLock?.("sequence", hold)
+    )
+  );
   expect(concurrent).toBe(1);
 });
 it("offers no Redis lock without a delete command", () => {
