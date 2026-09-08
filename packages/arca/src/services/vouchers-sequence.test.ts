@@ -378,6 +378,124 @@ describe("superseded claims", () => {
   });
 });
 
+describe("claim durability", () => {
+  const sequence = sequenceKey("test", "20123456789", 1, 11);
+  const attempt = (key: string) => attemptKey("test", "20123456789", key);
+  it("writes the sequence marker before the reservation", async () => {
+    const { wsfe } = provider();
+    const memory = createMemoryStore();
+    // The connection drops on the marker write: nothing else may be written.
+    const arca = service(
+      failing(memory, {
+        set: (key) => key.startsWith("arca:v1:sequence:"),
+      }),
+      wsfe
+    );
+    await expect(arca.issue(input, { idempotencyKey: "a" })).rejects.toThrow(
+      "ARCA store operation failed."
+    );
+    expect(wsfe.issue).not.toHaveBeenCalled();
+    expect(await memory.get(attempt("a"))).toBeNull();
+    expect(await memory.get(sequence)).toBeNull();
+    expect(await arca.issue(input, { idempotencyKey: "b" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    await expect(arca.recover("a")).rejects.toMatchObject({
+      code: "ARCA_INPUT_INVALID_VALUE",
+    });
+    expect(await arca.issue(input, { idempotencyKey: "a" })).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: false,
+      voucher: { number: 78 },
+    });
+  });
+  it("hands over a number whose marker has no reservation", async () => {
+    const { wsfe } = provider();
+    const memory = createMemoryStore();
+    // The connection drops between the marker and the reservation.
+    const arca = service(
+      failing(memory, { add: (key) => key.startsWith("arca:v1:attempt:") }),
+      wsfe
+    );
+    await expect(arca.issue(input, { idempotencyKey: "a" })).rejects.toThrow(
+      "ARCA store operation failed."
+    );
+    expect(wsfe.issue).not.toHaveBeenCalled();
+    expect(JSON.parse((await memory.get(sequence)) ?? "null")).toMatchObject({
+      key: "a",
+      number: 77,
+    });
+    expect(await memory.get(attempt("a"))).toBeNull();
+    // That key never submitted: the barrier clears without consulting ARCA.
+    expect(await arca.issue(input, { idempotencyKey: "b" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+    await expect(arca.recover("a")).rejects.toMatchObject({
+      code: "ARCA_INPUT_INVALID_VALUE",
+    });
+    expect(await arca.issue(input, { idempotencyKey: "a" })).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: false,
+      voucher: { number: 78 },
+    });
+  });
+  it("never lets a reservation lost before its submission take the next key's CAE", async () => {
+    const { wsfe } = provider();
+    const arca = service(createMemoryStore(), wsfe);
+    // The process dies with the reservation written and the write never sent.
+    wsfe.issue.mockRejectedValueOnce(new Error("process lost"));
+    await expect(arca.issue(input, { idempotencyKey: "a" })).rejects.toThrow(
+      "process lost"
+    );
+    // Same fiscal data under the next key: the barrier proves 77 is free.
+    expect(await arca.issue(input, { idempotencyKey: "b" })).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: false,
+      voucher: { number: 77 },
+    });
+    for (const outcome of [
+      await arca.recover("a"),
+      await arca.issue(input, { idempotencyKey: "a" }),
+    ]) {
+      expect(outcome).toMatchObject({
+        kind: "conflict",
+        attempted: { number: 77 },
+        found: { number: 77 },
+      });
+    }
+    expect(wsfe.issue).toHaveBeenCalledTimes(2);
+  });
+  it("keeps the marker on the winner when a same-key call loses the race", async () => {
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const arca = service(store, wsfe);
+    const outcomes = await Promise.all([
+      arca.issue(input, { idempotencyKey: "sale" }),
+      arca.issue(input, { idempotencyKey: "sale" }),
+    ]);
+    expect(outcomes.map((outcome) => outcome.kind)).toEqual([
+      "authorized",
+      "authorized",
+    ]);
+    expect(wsfe.issue).toHaveBeenCalledTimes(1);
+    // The loser finds the reservation under the lock and never reads a
+    // number it could have written into the marker.
+    expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
+    expect(JSON.parse((await store.get(sequence)) ?? "null")).toMatchObject({
+      key: "sale",
+      number: 77,
+      resolvedAt: expect.any(String),
+    });
+    expect(await arca.issue(input, { idempotencyKey: "next" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 78 },
+    });
+  });
+});
+
 describe("deadline", () => {
   it("answers aborted after the write and settles it with recover", async () => {
     const { wsfe, land } = provider();
@@ -419,6 +537,25 @@ describe("deadline", () => {
     expect(wsfe.issue).not.toHaveBeenCalled();
   });
 });
+
+/** A store whose first matching write fails, as a dropped connection would. */
+function failing(
+  store: ArcaStore,
+  drop: { set?: (key: string) => boolean; add?: (key: string) => boolean }
+): ArcaStore {
+  let armed = true;
+  const lost = () => {
+    armed = false;
+    return Promise.reject(new Error("connection lost"));
+  };
+  return {
+    ...store,
+    set: (key, value) =>
+      armed && drop.set?.(key) ? lost() : store.set(key, value),
+    add: (key, value) =>
+      armed && drop.add?.(key) ? lost() : store.add(key, value),
+  };
+}
 
 /** Leaves the lock of the invoice sequence held by a lease that already expired. */
 async function staleLock(directory: string): Promise<string> {

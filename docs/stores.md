@@ -39,6 +39,15 @@ el trabajo, se renueva mientras el proceso vive y vence solo cuando el proceso
 se cae; no es configurable. Un lease vencido libera el lock, nunca la barrera:
 la reserva sin resolver sigue frenando el próximo reclamo.
 
+El reclamo escribe primero el registro de secuencia y recién después la
+reserva, así que no puede existir una reserva que la barrera no vea. Si el
+proceso o el store fallan entre las dos escrituras, queda un registro de
+secuencia que apunta a una clave sin reserva: esa clave nunca escribió, la
+barrera le da el número al próximo reclamo y `recover()` lanza
+`ArcaInputError` porque no hay reserva. Repetí la emisión con la misma clave.
+Si fallan después de la reserva, la barrera la consulta como a cualquier
+reclamo sin desenlace: nunca deja que otra clave herede su identidad.
+
 ## Postgres
 
 Usá el cliente que ya tiene tu aplicación. Neon, Supabase Postgres, Vercel
@@ -156,7 +165,8 @@ justamente para que un rollback no reenvíe por WSFE un comprobante que era de
 WSMTXCA. Preservá las dos versiones.
 
 `arca:v1:sequence:{environment}:{taxId}:{salesPoint}:{voucherType}` guarda la
-última reserva reclamada en esa secuencia y si ARCA ya informó su desenlace;
+última reserva reclamada en esa secuencia y si ARCA ya informó su desenlace, y
+se escribe antes que la reserva que nombra;
 `arca:v1:lock:sequence:...` es la clave del lock. Los dos son registros de
 coordinación, no evidencia fiscal: se reescriben en cada reclamo y se pueden
 borrar si hacen falta, siempre que ninguna reserva quede sin conciliar. Repetir una clave con otro input, otra
