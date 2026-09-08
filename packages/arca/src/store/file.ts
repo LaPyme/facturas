@@ -1,9 +1,12 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  type FileHandle,
+  link,
   mkdir,
+  open,
   readFile,
   rename,
-  rm,
+  rmdir,
   stat,
   unlink,
   writeFile,
@@ -13,6 +16,7 @@ import { ARCA_LEASE_MS, type ArcaLeaseDriver, withLease } from "./lock";
 import { type ArcaStore, storeCall } from "./types";
 
 type Holder = { owner: string; expiresAt: string };
+type HolderFile = { raw: string; value: Holder | null };
 
 /** Persistent store for a single server with a private durable volume. */
 export function createFileStore(directory: string): ArcaStore {
@@ -82,40 +86,33 @@ function fileLease(
       owner,
       expiresAt: new Date(Date.now() + ARCA_LEASE_MS).toISOString(),
     } satisfies Holder);
-  const read = async (): Promise<Holder | null> => {
-    try {
-      return JSON.parse(await readFile(holder, "utf8")) as Holder;
-    } catch {
-      return null;
-    }
-  };
   return {
     acquire: (owner) =>
       storeCall(async () => {
         await ensure();
         if (!(await createDirectory(directory))) {
-          if (await stillHeld(directory, await read())) {
+          const current = await readHolder(holder);
+          if (await stillHeld(directory, current?.value ?? null)) {
             return false;
           }
-          await rm(directory, { recursive: true, force: true });
-          if (!(await createDirectory(directory))) {
-            return false;
+          if (current) {
+            await retireHolder(directory, holder, current.raw);
+          } else {
+            await removeEmptyDirectory(directory);
           }
+          // Do not recreate the directory in the same attempt. Another
+          // contender may still be removing the stale path it also observed.
+          // The lease retry makes every contender claim it again with mkdir.
+          return false;
         }
-        // Exclusive: two processes can free the same stale lock, and the
-        // holder file is what decides which one of them took it.
         return await writeHolder(holder, claim(owner));
       }),
-    renew: (owner) =>
-      storeCall(async () => {
-        if ((await read())?.owner === owner) {
-          await writeFile(holder, claim(owner), { mode: 0o600 });
-        }
-      }),
+    renew: (owner) => storeCall(() => renewHolder(holder, owner, claim(owner))),
     release: (owner) =>
       storeCall(async () => {
-        if ((await read())?.owner === owner) {
-          await rm(directory, { recursive: true, force: true });
+        const current = await readHolder(holder);
+        if (current?.value?.owner === owner) {
+          await retireHolder(directory, holder, current.raw);
         }
       }),
   };
@@ -138,11 +135,122 @@ async function writeHolder(holder: string, value: string): Promise<boolean> {
     await writeFile(holder, value, { mode: 0o600, flag: "wx" });
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+    if (
+      (error as NodeJS.ErrnoException).code === "EEXIST" ||
+      (error as NodeJS.ErrnoException).code === "ENOENT"
+    ) {
       return false;
     }
     throw error;
   }
+}
+
+async function readHolder(holder: string): Promise<HolderFile | null> {
+  let raw: string;
+  try {
+    raw = await readFile(holder, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return null;
+    }
+    throw error;
+  }
+  try {
+    return { raw, value: JSON.parse(raw) as Holder };
+  } catch {
+    return { raw, value: null };
+  }
+}
+
+async function renewHolder(
+  holder: string,
+  owner: string,
+  value: string
+): Promise<void> {
+  let file: FileHandle;
+  try {
+    file = await open(holder, "r+");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  try {
+    let current: Holder | null = null;
+    try {
+      current = JSON.parse(await file.readFile("utf8")) as Holder;
+    } catch {
+      // An invalid claim is not ours to renew.
+    }
+    if (current?.owner === owner) {
+      await file.truncate(0);
+      await file.write(value, 0, "utf8");
+    }
+  } finally {
+    await file.close();
+  }
+}
+
+async function retireHolder(
+  directory: string,
+  holder: string,
+  expected: string
+): Promise<void> {
+  const retired = `${directory}.${randomUUID()}.stale`;
+  try {
+    await rename(holder, retired);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+  let removed = false;
+  try {
+    if ((await readFile(retired, "utf8")) !== expected) {
+      return;
+    }
+    try {
+      await rmdir(directory);
+      removed = true;
+    } catch (error) {
+      if (!isDirectoryContention(error)) {
+        throw error;
+      }
+    }
+  } finally {
+    if (!removed) {
+      await restoreHolder(retired, holder);
+    }
+    await unlink(retired).catch(() => undefined);
+  }
+}
+
+async function restoreHolder(retired: string, holder: string): Promise<void> {
+  try {
+    await link(retired, holder);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code !== "EEXIST" && code !== "ENOENT") {
+      throw error;
+    }
+  }
+}
+
+async function removeEmptyDirectory(directory: string): Promise<void> {
+  try {
+    await rmdir(directory);
+  } catch (error) {
+    if (!isDirectoryContention(error)) {
+      throw error;
+    }
+  }
+}
+
+function isDirectoryContention(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "ENOENT" || code === "ENOTEMPTY" || code === "EEXIST";
 }
 
 /** A directory with no readable holder is still fresh for one lease. */
