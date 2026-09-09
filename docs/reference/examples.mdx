@@ -1,0 +1,46 @@
+---
+title: "Ejemplos"
+description: "Encontrá ejemplos completos para facturas, notas, consultas, vistas previas y la API exacta."
+keywords: ["ejemplos", "TypeScript", "facturas", "notas de crédito"]
+---
+
+Los ejemplos viven en el directorio [examples/](https://github.com/LaPyme/facturas/tree/main/examples) del repositorio. Tienen valores fijos y legibles para que puedas adaptarlos a tu integración.
+
+<Warning>
+  Los ejemplos de emisión usan fechas determinísticas para que compilen. Reemplazalas por una fecha actual permitida por ARCA antes de probarlos en homologación.
+</Warning>
+
+## API de alto nivel
+
+<Columns cols={2}>
+  <Card title="Primera factura" icon="receipt" href="https://github.com/LaPyme/facturas/blob/main/examples/primera-factura.ts">
+    Emisión mínima, sin store ni clave de idempotencia.
+  </Card>
+  <Card title="Reintentos seguros" icon="shield-check" href="https://github.com/LaPyme/facturas/blob/main/examples/issue-invoice.ts">
+    Factura con store y clave de idempotencia.
+  </Card>
+  <Card title="Vista previa" icon="scan-eye" href="https://github.com/LaPyme/facturas/blob/main/examples/preview.ts">
+    Revisá el request y los importes sin llamar a ARCA.
+  </Card>
+  <Card title="Nota parcial" icon="file-minus" href="https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-parcial.ts">
+    Acreditá solo las líneas que elegís.
+  </Card>
+  <Card title="Nota total" icon="file-x" href="https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-total.ts">
+    Acreditá el comprobante original completo.
+  </Card>
+  <Card title="Emisión completa" icon="blocks" href="https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts">
+    Tributos, FCE, WSMTXCA y notas en un solo recorrido.
+  </Card>
+</Columns>
+
+## API exacta
+
+- [factura-b-consumidor-final.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-b-consumidor-final.ts)
+- [factura-a-responsable-inscripto.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-a-responsable-inscripto.ts)
+- [nota-de-credito-asociada.ts](https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-asociada.ts)
+- [factura-servicios-con-periodo.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-servicios-con-periodo.ts)
+
+## Consultas
+
+- [consultar-comprobante.ts](https://github.com/LaPyme/facturas/blob/main/examples/consultar-comprobante.ts)
+- [consultar-contribuyente.ts](https://github.com/LaPyme/facturas/blob/main/examples/consultar-contribuyente.ts)

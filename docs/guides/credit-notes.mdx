@@ -1,4 +1,8 @@
-# Notas de crédito
+---
+title: "Notas de crédito y débito"
+description: "Emití notas parciales, totales, por período y FCE con asociaciones fiscales correctas."
+keywords: ["nota de crédito", "nota de débito", "FCE", "ARCA"]
+---
 
 ARCA no anula comprobantes. Una corrección es una nota de crédito, y todos los
 modos de `issueCreditNote()` escriben un documento fiscal real que queda en los
@@ -12,7 +16,7 @@ ajusta. `issueDebitNote()` emite notas de débito con el mismo contrato.
 Lo habitual es la nota parcial: una devolución o una corrección de precio que
 acredita las líneas que elegís en vez de la factura entera.
 
-Este bloque es [examples/nota-de-credito-parcial.ts](../examples/nota-de-credito-parcial.ts):
+Este bloque es [examples/nota-de-credito-parcial.ts](https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-parcial.ts):
 
 ```ts
 import { createArcaClient, createFileStore } from "facturas";
@@ -58,7 +62,7 @@ switch (nota.kind) {
 `all: true` acredita el original completo: espeja sus importes y sus alícuotas
 de IVA línea por línea.
 
-Este bloque es [examples/nota-de-credito-total.ts](../examples/nota-de-credito-total.ts):
+Este bloque es [examples/nota-de-credito-total.ts](https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-total.ts):
 
 ```ts
 import { createArcaClient, createFileStore } from "facturas";
@@ -145,8 +149,8 @@ de la aplicación. Los campos opcionales propios de la nota los aportás vos: no
 se copian del original.
 
 Una nota a otro receptor o en otra moneda es un documento distinto y pertenece
-a la [capa exacta](./capa-exacta.md). Para emitir la nota con detalle de ítems,
-mirá [WSMTXCA](./wsmtxca.md).
+a la [API exacta](/reference/exact-api). Para emitir la nota con detalle de ítems,
+mirá [WSMTXCA](/guides/wsmtxca).
 
 ## Notas de débito
 

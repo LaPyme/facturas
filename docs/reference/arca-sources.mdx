@@ -1,4 +1,8 @@
-# ARCA WSFE reference
+---
+title: "Fuentes y reglas de ARCA"
+description: "Registro para mantenedores de las reglas del manual de ARCA que implementa el SDK."
+keywords: ["ARCA", "WSFE", "manual", "reglas fiscales", "mantenedores"]
+---
 
 The SDK's WSFE validation rules follow the official ARCA developer manual.
 This note records which artifact was reviewed so the rules the SDK encodes
@@ -64,12 +68,11 @@ and 10197 were re-read against the same pinned file on 2026-09-06.
 
 ## 10061 and the FCE family (2026-09-07)
 
-Re-read against the same pinned v4.7 file. The rule text is: "La suma de los
-campos <BaseImp> en <AlicIva> debe ser igual al valor ingresado en ImpNeto.
-Esta validacion no debera ser tenida en cuenta, cuando el <CbteTipo> sea 02,
-03, 07, 08, para comprobantes tipo C (11, 12, 13, 15) y para Comprobantes tipo
-M (52, 53)". The enumeration predates the FCE (MiPyME) types and was never
-extended, so the SDK exempts 202, 203, 207 and 208 as the notes of the FCE
+Re-read against the same pinned v4.7 file. Rule 10061 requires the sum of
+`BaseImp` in `AlicIva` to equal `ImpNeto`, except for voucher types 02, 03, 07,
+08, class C types 11, 12, 13, 15, and class M types 52 and 53. The enumeration
+predates the FCE (MiPyME) types and was never extended, so the SDK exempts 202,
+203, 207 and 208 as the notes of the FCE
 family - the same document role as 02, 03, 07 and 08 - and 211, 212 and 213 as
 class C vouchers, which carry no VAT breakdown at all under 10047. The
 exemption is a local pre-flight allowance only: ARCA remains authoritative, and

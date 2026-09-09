@@ -1,7 +1,12 @@
-# Habilitación en ARCA
+---
+title: "Habilitación en ARCA"
+description: "Prepará el CUIT, certificado, servicios y punto de venta para homologación o producción."
+keywords: ["ARCA", "certificado", "WSAA", "punto de venta", "homologación"]
+---
 
-Este paquete **no** te da de alta las credenciales de ARCA. La configuración
-oficial de certificados y servicios la seguís haciendo fuera del SDK.
+<Info>
+  Este paquete no da de alta tus credenciales de ARCA. La configuración oficial de certificados y servicios se hace fuera del SDK.
+</Info>
 
 ## Antes de usar el SDK
 
@@ -26,7 +31,7 @@ el certificado: lo pegás ahí y lo guarda como `arca-test.crt` o
 Si lo dejaste para más tarde, `npx facturas cert` hace lo mismo suelto.
 `npx facturas check` encuentra el par solo: prueba cada capa y nombra la que
 falta habilitar, sin que tengas que exportar nada. Ninguno de los tres escribe
-en ARCA. Están en [CLI](./cli.md).
+en ARCA. Están en [CLI](/getting-started/cli).
 
 ### Homologación, paso a paso
 
@@ -105,4 +110,4 @@ lo pide: `npx facturas check` te informa cuáles tenés habilitados.
 - [Manual del desarrollador de WSFE](https://www.afip.gob.ar/ws/documentacion/manuales/manual-desarrollador-ARCA-COMPG.pdf)
 
 Las reglas del manual que el SDK codifica están anotadas, en inglés y para
-mantenedores, en [docs/external/README.md](./external/README.md).
+mantenedores, en [Fuentes y reglas de ARCA](/reference/arca-sources).

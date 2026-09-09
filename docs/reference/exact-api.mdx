@@ -1,13 +1,17 @@
-# Capa exacta
+---
+title: "API exacta"
+description: "Controlá el input, la numeración y la evidencia de WSFE, WSMTXCA y Padrón sin derivación de negocio."
+keywords: ["API exacta", "WSFE", "WSMTXCA", "Padrón", "numeración"]
+---
 
-La fachada deriva el comprobante por vos. La capa exacta te deja armar el
+La API de alto nivel deriva el comprobante por vos. La API exacta te deja armar el
 `WsfeVoucherInput` completo, dueño de tu propia numeración, y te devuelve la
 evidencia del proveedor tal como llegó.
 
 ## Control exacto
 
 Este bloque es
-[examples/factura-b-consumidor-final.ts](../examples/factura-b-consumidor-final.ts):
+[examples/factura-b-consumidor-final.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-b-consumidor-final.ts):
 
 ```ts
 import { buildFacturaB, createArcaClient } from "facturas";
@@ -93,7 +97,7 @@ Facturación electrónica WSFE. Los inputs usan nombres al estilo JS y el SDK lo
 mapea internamente a los campos SOAP de AFIP / ARCA.
 
 - Los campos de fecha aceptan `YYYY-MM-DD` o `YYYYMMDD`.
-- Armá facturas A/B/C desde afirmaciones explícitas con la fachada de arriba.
+- Armá facturas A/B/C desde afirmaciones explícitas con la API de alto nivel.
 - Emití facturas y notas de crédito con los métodos exactos de WSFE.
 - `issue({ voucherNumber, data })` manda una autorización exacta y devuelve
   evidencia `authorized`, `rejected` o `indeterminate`.
@@ -127,8 +131,8 @@ códigos.
 - Los métodos autenticados aceptan `forceRefresh: true` para renovar el TA WSAA
   de WSMTXCA antes de la llamada.
 
-La fachada también emite por WSMTXCA, con detalle de ítems, cuando pasás
-`{ service: "wsmtxca" }`: ver [WSMTXCA](./wsmtxca.md). Esta capa exacta sigue
+La API de alto nivel también emite por WSMTXCA, con detalle de ítems, cuando pasás
+`{ service: "wsmtxca" }`: ver [WSMTXCA](/guides/wsmtxca). Esta API exacta sigue
 disponible para armar el request completo vos mismo. Si necesitás `issue`,
 `getLastAuthorizedVoucher`, `lookupVoucher`, `getVoucher` o `getSalesPoints`, la
 API de runtime está disponible, es pública y está cubierta por tests.
@@ -138,8 +142,8 @@ API de runtime está disponible, es pública y está cubierta por tests.
 `client.issue()` deriva el request de WSFE, reserva el número y recupera
 después de una caída por vos. Cuando necesitás algo que no deriva (una nota en
 otra moneda o a otro receptor, o cualquier campo fuera de la
-[superficie de la fachada](./facturas.md#datos-de-la-factura)) o la
-numeración es de tu aplicación, usá la capa exacta: `client.wsfe.issue(...)`
+[superficie de alto nivel](/guides/invoices#datos-de-la-factura)) o la
+numeración es de tu aplicación, usá la API exacta: `client.wsfe.issue(...)`
 manda un FECAESolicitar para un número de comprobante que reservaste vos de
 forma durable, y te dice si ese intento exacto quedó autorizado, rechazado o
 indeterminado. Preserva cada error y observación estructurados con su servicio,
@@ -199,7 +203,7 @@ El SDK normaliza solamente la evidencia de protocolo del proveedor. Tu
 aplicación sigue siendo responsable de persistir el request exacto, de ser
 dueña de su secuencia o carril, y de decidir cuándo un reintento es seguro.
 
-Para los campos fiscales que la fachada no expone, usá la salida de emergencia
+Para los campos fiscales que la API de alto nivel no expone, usá la salida de emergencia
 `WsfeVoucherInput`. También sigue soportando exenciones, importes no gravados y
 varias alícuotas de IVA. Los importes exactos siguen siendo números en unidades
 mayores, se validan localmente y se serializan como strings canónicos de dos
@@ -237,7 +241,7 @@ const exactData: WsfeVoucherInput = {
 ```
 
 Los inputs exactos y las respuestas de catálogo en vivo usan identificadores de
-protocolo de ARCA como `PES` y `DOL`; la fachada y los builders de alto nivel
+protocolo de ARCA como `PES` y `DOL`; la API y los builders de alto nivel
 aceptan las ISO `ARS` y `USD`.
 
 ## Migrar importes y monedas
