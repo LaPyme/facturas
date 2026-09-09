@@ -1,4 +1,8 @@
-# CLI
+---
+title: "CLI"
+description: "Usá el CLI de facturas para preparar credenciales, diagnosticar ARCA y emitir una prueba controlada."
+keywords: ["CLI", "facturas init", "facturas check", "facturas issue"]
+---
 
 El paquete trae un comando, `facturas`, para la parte más difícil del primer
 comprobante: las habilitaciones de ARCA. Genera la clave y el CSR, prueba cada
@@ -69,7 +73,7 @@ de módulo 11, el mismo que usa ARCA. Podés escribirlo con guiones o con
 espacios, `20-12345678-6` o `20 12345678 6`; el CSR lleva solo los dígitos. Un
 CUIT equivocado se nombra como equivocado, con lo que recibió y por qué:
 
-```
+```text
 CUIT inválido: 2043809618 tiene 10 dígitos y necesita 11.
 CUIT inválido: 20123456789 no pasa el dígito verificador.
 ```
@@ -107,11 +111,11 @@ Después imprime los pasos exactos en ARCA, en una sola lista para el entorno
 que elegiste: `init` ya sabe si es homologación o producción, así que no
 imprime los dos caminos. Los nombres de página, campo y botón están
 verificados contra las referencias oficiales que lista
-[Habilitación en ARCA](./habilitacion-arca.md).
+[Habilitación en ARCA](/getting-started/arca-setup).
 
 Para `--env test`:
 
-```
+```text
 ✓ arca-test.key          clave privada RSA 2048, permisos 0600
 ✓ arca-test.csr          CSR para ARCA, CN=facturas
 ✓ portapapeles           arca-test.csr copiado, pegalo en el paso 3
@@ -148,7 +152,7 @@ Si no hay portapapeles —una sesión SSH, un servidor sin entorno gráfico, un
 Linux sin `xclip` ni `xsel`— la línea del paso 3 cambia y el CSR sale impreso
 ahí mismo, para copiarlo de la terminal:
 
-```
+```text
   3. En el menú, "Nuevo Certificado":
        Nombre simbólico del DN:    facturasTest
        Solicitud de certificado:   copiá esto entero:
@@ -167,7 +171,7 @@ resultado del propio WSASS, en PEM. Por eso `init` lo pide ahí mismo, mientras
 la pestaña sigue abierta. Pegás el bloque entero y termina solo al ver la línea
 `-----END CERTIFICATE-----`:
 
-```
+```text
 > -----BEGIN CERTIFICATE-----
 ...
 -----END CERTIFICATE-----
@@ -181,7 +185,7 @@ Falta el paso 5 (la autorización a wsfe). Cuando esté:
 Antes de escribir nada verifica dos cosas, y si alguna falla no guarda el
 archivo y sale con código 1:
 
-```
+```text
 El certificado es de otro CUIT: 20111111112.
 El certificado no corresponde a arca-test.key. ¿Subiste otro CSR?
 ```
@@ -190,7 +194,7 @@ Si lo que pegaste no es un certificado PEM te lo dice y vuelve a preguntar,
 hasta tres veces. Con `Ctrl-C`, con `--no-paste` o sin terminal (CI, scripts)
 no pregunta nada y te deja la instrucción de siempre, con código 0:
 
-```
+```text
 Cuando tengas el certificado, guardalo acá como arca-test.crt,
 o pegalo con npx facturas cert, y corré:
 
@@ -202,7 +206,7 @@ El campo del CSR es el que el manual llama
 
 Para `--env production`:
 
-```
+```text
 Listo. Ahora en ARCA, para producción:
 
   1. Entrá con clave fiscal en
@@ -255,7 +259,7 @@ aplicativo y Web Services` para responsable inscripto, y las opciones
 
 No hay ningún `export` que copiar: `check` encuentra el par de archivos en el
 directorio. Las variables de entorno son para tu aplicación, no para el CLI, y
-están en [Inicio rápido](./inicio-rapido.md#3-configurá-el-cliente).
+están en [Inicio rápido](/getting-started/quickstart#3-configurá-el-cliente).
 
 ## `cert`
 
@@ -267,7 +271,7 @@ para después, saliste con `Ctrl-C` o corriste `init --no-paste`.
 npx facturas cert
 ```
 
-```
+```text
 Pegá el certificado que te dio ARCA. Termina solo al ver
 -----END CERTIFICATE-----. Ctrl-C para salir.
 
@@ -296,7 +300,7 @@ qué comparar y esa verificación se saltea.
 Verifica, antes de escribir, que el certificado sea de esa clave —el mismo
 módulo RSA— y de ese CUIT. Si no, no guarda nada:
 
-```
+```text
 El certificado es de otro CUIT: 20111111112.
 El certificado no corresponde a arca-test.key. ¿Subiste otro CSR?
 ```
@@ -319,7 +323,7 @@ con el certificado guardado al lado de la clave, no necesita nada más:
 npx facturas check
 ```
 
-```
+```text
 ✓ configuración          arca-test.crt en este directorio, CUIT 20123456786 del certificado
 ✓ certificado y clave    coinciden, vence 2027-09-05
 ✓ WSAA                   ticket obtenido
@@ -339,7 +343,7 @@ export ARCA_PRIVATE_KEY_PEM="$(cat arca-test.key)"
 npx facturas check
 ```
 
-```
+```text
 ✓ configuración          ARCA_TAX_ID, ARCA_ENVIRONMENT=test
 ```
 
@@ -370,7 +374,7 @@ uses. La búsqueda es en el directorio actual, o en `--dir`. Reglas:
 
 Esto es una comodidad del CLI y nada más. `createArcaClient()` no mira el
 disco: sigue leyendo variables de entorno, como explica
-[Configuración](./configuracion.md).
+[Configuración](/reference/configuration).
 
 | Flag | Qué hace |
 | --- | --- |
@@ -438,7 +442,7 @@ completa:
 | puntos de venta | está pero bloqueado | El punto de venta `<n>` está bloqueado. | Revisalo en ARCA. |
 
 Cualquier otro error sale con el mensaje seguro del SDK y su código estable.
-Las clases de error están en [Errores](./errores.md).
+Las clases de error están en [Errores](/reference/errors).
 
 ### `--json`
 
@@ -491,7 +495,7 @@ completo. Se niega si `ARCA_ENVIRONMENT` no es `test`. Corre antes las capas de
 npx facturas issue --sales-point 3 --issuer monotributo
 ```
 
-```
+```text
 ✓ Factura C emitida - 00003-00000007   CAE 74123456789012   Vto. CAE 2026-09-16   ARS 1,00
 
 Esta es la llamada que hizo el CLI. Pegala en tu aplicación:
@@ -510,12 +514,12 @@ una terminal pregunta el punto de venta y el emisor si no los pasaste.
 
 Emite sin `store` y sin `idempotencyKey`: es el inicio rápido en un comando. En
 tu aplicación real, configurá los dos, como explica
-[Inicio rápido](./inicio-rapido.md#6-hacé-seguros-los-reintentos).
+[Inicio rápido](/getting-started/quickstart#6-hacé-seguros-los-reintentos).
 
 Los otros tres resultados salen con código 1: `rejected` lista los errores de
 ARCA uno por línea, e `indeterminate` y `conflict` muestran el número y la
 evidencia con el consejo de
-[Inicio rápido](./inicio-rapido.md#5-tratá-todos-los-resultados).
+[Inicio rápido](/getting-started/quickstart#5-tratá-todos-los-resultados).
 
 Si ARCA se cae después de que pasaron las capas, la emisión falla como una capa
 más —`✗ emisión` y el mensaje seguro del SDK— y también sale con código 1.

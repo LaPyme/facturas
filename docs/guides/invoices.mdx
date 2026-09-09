@@ -1,14 +1,18 @@
-# Facturas
+---
+title: "Facturas"
+description: "Emití y previsualizá facturas con la API de alto nivel y manejá resultados fiscales seguros."
+keywords: ["facturas", "issue", "preview", "idempotencia", "WSFE"]
+---
 
-`issue()` es la fachada: derivá el comprobante desde datos de negocio, reservá
+`issue()` es la API de alto nivel: derivá el comprobante desde datos de negocio, reservá
 el número y recuperá los reintentos. Para los campos que no deriva, usá la
-[capa exacta](./capa-exacta.md).
+[API exacta](/reference/exact-api).
 
 ## Emitir
 
-Definí las [variables de entorno](./configuracion.md#variables-de-entorno).
+Definí las [variables de entorno](/reference/configuration#variables-de-entorno).
 No hace falta store ni ningún servicio externo. Este bloque es
-[examples/primera-factura.ts](../examples/primera-factura.ts):
+[examples/primera-factura.ts](https://github.com/LaPyme/facturas/blob/main/examples/primera-factura.ts):
 
 ```ts
 import { createArcaClient } from "facturas";
@@ -30,7 +34,7 @@ Recomendado en toda aplicación real, opcional para empezar. Sin
 dos veces. Configurá un `store` y pasá el ID estable de la venta como clave:
 el reintento consulta el número reservado y nunca vuelve a emitir. El ejemplo
 asume que `venta` es tu venta y que la tabla del
-[store](./stores.md#postgres) existe.
+[store](/guides/idempotency-stores#postgres) existe.
 
 ```ts
 import { createArcaClient, createPostgresStore } from "facturas";
@@ -57,7 +61,7 @@ tuyo—, las llamadas con clave sobre el mismo punto de venta y tipo de
 comprobante se serializan: cada una toma el número siguiente y escribe una sola
 vez. La coordinación alcanza a los procesos que comparten ese store, no a otros
 escritores del mismo punto de venta. El detalle, con la tabla de garantías por
-adaptador, está en [Stores](./stores.md#qué-garantiza-cada-store).
+adaptador, está en [Stores](/guides/idempotency-stores#qué-garantiza-cada-store).
 
 `signal` es tu deadline, un `AbortSignal` cualquiera, por ejemplo
 `AbortSignal.timeout(20_000)`. Aborta el login WSAA, la escritura y las
@@ -67,7 +71,7 @@ resultado es `indeterminate` con `lookup.kind === "aborted"`: la reserva queda y
 con el que ya tenga tu aplicación.
 
 El ejemplo completo, con el tratamiento de los cuatro resultados, está en
-[examples/issue-invoice.ts](../examples/issue-invoice.ts).
+[examples/issue-invoice.ts](https://github.com/LaPyme/facturas/blob/main/examples/issue-invoice.ts).
 
 `recover(clave, opciones)` concilia sin emitir. Solo consulta la reserva
 guardada, con el proveedor y el número que quedaron registrados: nunca autoriza
@@ -87,7 +91,7 @@ store, sin WSAA, sin SOAP y sin lectura del próximo número. Lanza los mismos
 errores de input que lanza `issue()` antes de su primera llamada, así que un
 input que previsualiza limpio no genera ningún error local nuevo al emitir.
 
-Este bloque es [examples/preview.ts](../examples/preview.ts):
+Este bloque es [examples/preview.ts](https://github.com/LaPyme/facturas/blob/main/examples/preview.ts):
 
 ```ts
 import { createArcaClient, createMemoryStore, type IssueInput } from "facturas";
@@ -130,7 +134,7 @@ request de WSMTXCA si pasás `{ service: "wsmtxca" }`. El número de comprobante
 no aparece porque recién se conoce cuando se reserva el número al emitir.
 Previsualizar una nota sí necesita el original, así que `previewCreditNote()` y
 `previewDebitNote()` son asincrónicas y hacen esa consulta; están en
-[Notas de crédito](./notas-de-credito.md#vista-previa-de-notas).
+[Notas de crédito](/guides/credit-notes#vista-previa-de-notas).
 
 ## Datos de la factura
 
@@ -199,11 +203,11 @@ catálogo de ARCA, con `cuit`, `dni` o `document: { type, number }`. Los campos
 `optionalFields`, `buyers` y `activities` pasan tal cual a WSFE y a WSMTXCA; no
 dupliques ahí lo que ya informa `fce`.
 
-Para el detalle de ítems de WSMTXCA, mirá [WSMTXCA](./wsmtxca.md). El ejemplo
+Para el detalle de ítems de WSMTXCA, mirá [WSMTXCA](/guides/wsmtxca). El ejemplo
 compilado de todo esto es
-[examples/emision-completa.ts](../examples/emision-completa.ts).
+[examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts).
 
-## Contrato fiscal de la fachada
+## Contrato fiscal de la API de alto nivel
 
 Sin clave, una llamada lee un próximo número y autoriza una vez, con a lo sumo
 una consulta de identidad después de una respuesta indeterminada. Es el
@@ -254,7 +258,7 @@ de ítems. Nunca cambia solo. `number` es un número reservado por fuera: cuando
 lo pasás, la llamada no lee el próximo número, así que la aplicación sigue
 siendo dueña de la secuencia del punto de venta.
 
-La fachada cubre la emisión de CAE de facturas y notas. CAEA, exportación y
+La API de alto nivel cubre la emisión de CAE de facturas y notas. CAEA, exportación y
 los demás servicios de ARCA no están cubiertos por ella.
 
 El comparador de identidad compara coordenadas, fecha, concepto, receptor,

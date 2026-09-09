@@ -1,0 +1,92 @@
+---
+title: "facturas"
+description: "SDK de Node.js para emitir comprobantes electrónicos con ARCA mediante WSFE y WSMTXCA."
+keywords: ["ARCA", "AFIP", "facturación electrónica", "Node.js", "TypeScript"]
+mode: "wide"
+---
+
+# Facturación electrónica ARCA desde Node.js
+
+`facturas` es un SDK TypeScript para emitir facturas, notas de crédito y notas de débito, consultar el Padrón y trabajar directamente con WSFE y WSMTXCA.
+
+<Note>
+  El paquete es solo ESM, requiere Node.js 20 o posterior y se conecta directo a ARCA: no usa un proxy ni un servicio alojado.
+</Note>
+
+<Columns cols={2}>
+  <Card title="Emití tu primera factura" icon="rocket" href="/getting-started/quickstart">
+    Configurá las credenciales, validá el acceso y emití un comprobante de prueba.
+  </Card>
+  <Card title="Prepará ARCA" icon="landmark" href="/getting-started/arca-setup">
+    Creá el certificado, asociá los servicios y elegí un punto de venta.
+  </Card>
+  <Card title="Usá el CLI" icon="terminal" href="/getting-started/cli">
+    Generá la clave y el CSR, diagnosticá cada capa y ejecutá una prueba controlada.
+  </Card>
+  <Card title="Hacé seguros los reintentos" icon="shield-check" href="/guides/idempotency-stores">
+    Conservá la numeración y evitá comprobantes duplicados con un store durable.
+  </Card>
+</Columns>
+
+## Instalación
+
+<CodeGroup>
+
+```bash pnpm
+pnpm add facturas
+```
+
+```bash npm
+npm install facturas
+```
+
+</CodeGroup>
+
+## Ejemplo mínimo
+
+```typescript
+import { createArcaClient } from "facturas";
+
+const arca = createArcaClient();
+
+const resultado = await arca.issue({
+  issuer: "monotributo",
+  salesPoint: 3,
+  to: { condition: "consumidor_final" },
+  items: [{ amount: 150_000 }], // ARS 1.500,00 en centavos
+});
+
+if (resultado.kind === "authorized") {
+  console.log(resultado.cae, resultado.voucherNumber);
+}
+```
+
+El cliente descubre `ARCA_TAX_ID`, `ARCA_CERTIFICATE` y `ARCA_PRIVATE_KEY` desde el entorno. Antes de producción, seguí el [inicio rápido](/getting-started/quickstart) completo y tratá los cuatro resultados fiscales posibles.
+
+## Contrato de resultados
+
+| Resultado | Qué significa | Qué tenés que hacer |
+| --- | --- | --- |
+| `authorized` | ARCA autorizó el comprobante. | Guardá el número, el CAE y su vencimiento. |
+| `rejected` | ARCA rechazó el pedido de forma definitiva. | Revisá `issues`; no cambies el input ligado a la clave. |
+| `indeterminate` | No se puede demostrar todavía si ARCA lo autorizó. | Conservá la evidencia y conciliá antes de reintentar. |
+| `conflict` | El número reservado pertenece a otro comprobante. | Detené el flujo e investigá. |
+
+<Warning>
+  Sin `idempotencyKey` y un store durable, repetir una emisión después de una caída puede generar un segundo comprobante real.
+</Warning>
+
+## Elegí el nivel de API
+
+<Columns cols={2}>
+  <Card title="API de alto nivel" icon="wand-sparkles" href="/guides/invoices">
+    Deriva clase, importes, IVA y campos de ARCA desde datos de negocio.
+  </Card>
+  <Card title="API exacta" icon="braces" href="/reference/exact-api">
+    Te da control explícito sobre la numeración y el input completo de WSFE o WSMTXCA.
+  </Card>
+</Columns>
+
+<Info>
+  `facturas` está antes de la versión 1.0. Fijá la versión exacta y revisá el [changelog](https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md) antes de actualizar.
+</Info>

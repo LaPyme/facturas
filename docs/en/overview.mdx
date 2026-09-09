@@ -1,9 +1,13 @@
-# facturas (English summary)
+---
+title: "English overview"
+description: "English summary of the facturas Node.js SDK for ARCA electronic invoicing."
+keywords: ["ARCA", "AFIP", "Node.js", "electronic invoicing", "Argentina"]
+---
 
 Node.js SDK for ARCA / AFIP: invoices, credit notes and Padrón, with direct
 WSFE and WSMTXCA integration. ESM-only, Node.js >= 20.
 
-**The full documentation is in Spanish**, in [docs/](../README.md). This page
+**The full documentation is in Spanish**, in [docs/](/). This page
 is a summary, not a translation.
 
 ## Install
@@ -18,7 +22,7 @@ pnpm add facturas
 then prints the exact pages and buttons. Save the certificate ARCA gives you
 next to the key, with the name `init` tells you, and `npx facturas check`
 finds it on its own: it tests every layer and names the one that fails.
-Neither writes to ARCA. See [cli.md](../cli.md).
+Neither writes to ARCA. See the [CLI guide](/getting-started/cli).
 
 ## Issue an invoice
 
@@ -41,7 +45,7 @@ const factura = await arca.issue({
 
 **Safe retries** are strongly recommended and optional: pass a `store` and the
 sale's stable ID as `idempotencyKey`, and a retry after a crash consults the
-reserved number instead of issuing again. See [stores.md](../stores.md).
+reserved number instead of issuing again. See [idempotency and stores](/guides/idempotency-stores).
 
 ## Issue a credit note
 
@@ -59,12 +63,12 @@ const nota = await arca.issueCreditNote(
 );
 ```
 
-The same facade also covers debit notes, period notes, tributes, reviewed
+The same high-level API also covers debit notes, period notes, tributes, reviewed
 fiscal breakdowns, the A con leyenda and FCE families, detailed WSMTXCA
 issuance through `{ service: "wsmtxca" }`, and `recover()`, which only consults
 a stored reservation and never authorizes. See
-[notas-de-credito.md](../notas-de-credito.md) and
-[wsmtxca.md](../wsmtxca.md).
+[credit and debit notes](/guides/credit-notes) and
+[WSMTXCA](/guides/wsmtxca).
 
 ## Outcomes
 
@@ -79,16 +83,16 @@ a stored reservation and never authorizes. See
 
 | Page | Topic |
 | --- | --- |
-| [inicio-rapido.md](../inicio-rapido.md) | Quick start |
-| [cli.md](../cli.md) | The `facturas` CLI: `init`, `check` and `issue` |
-| [facturas.md](../facturas.md) | `issue()`, `preview()`, invoice inputs, facade contract |
-| [notas-de-credito.md](../notas-de-credito.md) | `issueCreditNote()`, `issueDebitNote()` |
-| [wsmtxca.md](../wsmtxca.md) | Detailed WSMTXCA issuance through the facade |
-| [stores.md](../stores.md) | Postgres, Redis, files, memory, custom store |
-| [configuracion.md](../configuracion.md) | Environment variables and client options |
-| [capa-exacta.md](../capa-exacta.md) | Exact WSFE / WSMTXCA layer and service surface |
-| [errores.md](../errores.md) | Error classes and troubleshooting |
-| [referencia.md](../referencia.md) | Constants, public API, security |
-| [ejemplos.md](../ejemplos.md) | Index of [examples/](../../examples) |
+| [Quickstart](/getting-started/quickstart) | First invoice from setup through results |
+| [CLI](/getting-started/cli) | The `facturas` CLI: `init`, `check` and `issue` |
+| [Invoices](/guides/invoices) | `issue()`, `preview()`, invoice inputs, high-level API contract |
+| [Credit and debit notes](/guides/credit-notes) | `issueCreditNote()`, `issueDebitNote()` |
+| [WSMTXCA](/guides/wsmtxca) | Detailed WSMTXCA issuance through the high-level API |
+| [Idempotency and stores](/guides/idempotency-stores) | Postgres, Redis, files, memory, custom store |
+| [Configuration](/reference/configuration) | Environment variables and client options |
+| [Exact API](/reference/exact-api) | Exact WSFE / WSMTXCA layer and service surface |
+| [Errors](/reference/errors) | Error classes and troubleshooting |
+| [Public API](/reference/public-api) | Constants, public API, security |
+| [Examples](/reference/examples) | Index of the [examples directory](https://github.com/LaPyme/facturas/tree/main/examples) |
 
-[CONTRIBUTING.md](../../CONTRIBUTING.md) is in English.
+[CONTRIBUTING.md](https://github.com/LaPyme/facturas/blob/main/CONTRIBUTING.md) is in English.

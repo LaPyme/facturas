@@ -20,8 +20,8 @@ integración directa a WSFE y WSMTXCA.
 - **Ejemplos copiables**, escritos para que los lean personas y agentes de
   código
 
-La documentación está en castellano, en [docs/](./docs/README.md).
-[English summary](./docs/en/README.md).
+La documentación está en castellano, en el [sitio de documentación](https://facturas.mintlify.site)
+y en su [fuente Mintlify](./docs/index.mdx). [English summary](./docs/en/overview.mdx).
 
 ## Instalación
 
@@ -33,7 +33,7 @@ npm install facturas
 
 ## Emití tu primera factura
 
-Definí las [variables de entorno](./docs/configuracion.md#variables-de-entorno)
+Definí las [variables de entorno](./docs/reference/configuration.mdx#variables-de-entorno)
 con tu CUIT, certificado y clave. No hace falta nada más: ni base de datos, ni
 tabla, ni servicio externo.
 
@@ -59,8 +59,8 @@ Tratá siempre los cuatro resultados:
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
-El paso a paso está en [Inicio rápido](./docs/inicio-rapido.md); el detalle, en
-[Facturas](./docs/facturas.md).
+El paso a paso está en [Inicio rápido](./docs/getting-started/quickstart.mdx); el detalle, en
+[Facturas](./docs/guides/invoices.mdx).
 
 ## Reintentos seguros
 
@@ -82,7 +82,7 @@ const factura = await arca.issue(input, { idempotencyKey: venta.id });
 
 Hay adaptadores para Postgres, Redis, archivos y memoria, y podés escribir el
 tuyo; con ellos, dos emisiones simultáneas sobre el mismo punto de venta se
-serializan y cada una escribe su número. Ver [Stores](./docs/stores.md).
+serializan y cada una escribe su número. Ver [Stores](./docs/guides/idempotency-stores.mdx).
 
 ## Nota de crédito
 
@@ -101,31 +101,31 @@ const nota = await arca.issueCreditNote(
 ```
 
 Con `all: true` acreditás el original completo. El modo es explícito y
-obligatorio. La misma fachada emite [notas de débito y por
-período](./docs/notas-de-credito.md), tributos, FCE, [detalle de ítems por
-WSMTXCA](./docs/wsmtxca.md) y `recover()`, que concilia sin emitir.
+obligatorio. La misma API de alto nivel emite [notas de débito y por
+período](./docs/guides/credit-notes.mdx), tributos, FCE, [detalle de ítems por
+WSMTXCA](./docs/guides/wsmtxca.mdx) y `recover()`, que concilia sin emitir.
 
 ## Documentación
 
-- [Inicio rápido](./docs/inicio-rapido.md): de cero a la primera factura y su
+- [Inicio rápido](./docs/getting-started/quickstart.mdx): de cero a la primera factura y su
   nota de crédito.
-- [Habilitación en ARCA](./docs/habilitacion-arca.md): CUIT, certificado, punto
+- [Habilitación en ARCA](./docs/getting-started/arca-setup.mdx): CUIT, certificado, punto
   de venta y referencias oficiales.
-- [CLI](./docs/cli.md): `init`, `check` e `issue`, con la tabla de diagnósticos.
-- [Facturas](./docs/facturas.md): `issue()`, `preview()`, datos de la factura y
-  contrato fiscal de la fachada.
-- [Notas de crédito](./docs/notas-de-credito.md): `issueCreditNote()`, modo
+- [CLI](./docs/getting-started/cli.mdx): `init`, `check` e `issue`, con la tabla de diagnósticos.
+- [Facturas](./docs/guides/invoices.mdx): `issue()`, `preview()`, datos de la factura y
+  contrato fiscal de la API de alto nivel.
+- [Notas de crédito](./docs/guides/credit-notes.mdx): `issueCreditNote()`, modo
   parcial y modo total.
-- [Stores](./docs/stores.md): Postgres, Redis, archivos, memoria, store propio
+- [Stores](./docs/guides/idempotency-stores.mdx): Postgres, Redis, archivos, memoria, store propio
   y vida de los registros.
-- [Configuración](./docs/configuracion.md): variables de entorno, opciones del
+- [Configuración](./docs/reference/configuration.mdx): variables de entorno, opciones del
   cliente, sesiones WSAA, logging, reintentos y timeouts.
-- [Capa exacta](./docs/capa-exacta.md): builders, superficie de servicios,
+- [API exacta](./docs/reference/exact-api.mdx): builders, superficie de servicios,
   emisión exacta y evidencia de recuperación.
-- [Errores](./docs/errores.md): clases de error y diagnóstico.
-- [Referencia](./docs/referencia.md): constantes, API pública con semver y
+- [Errores](./docs/reference/errors.mdx): clases de error y diagnóstico.
+- [Referencia](./docs/reference/public-api.mdx): constantes, API pública con semver y
   seguridad.
-- [Ejemplos](./docs/ejemplos.md): índice de [examples/](./examples).
+- [Ejemplos](./docs/reference/examples.mdx): índice de [examples/](./examples).
 
 ## Estado del proyecto
 

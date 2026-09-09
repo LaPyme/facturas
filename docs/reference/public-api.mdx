@@ -1,4 +1,8 @@
-# Referencia
+---
+title: "API pública y constantes"
+description: "Consultá las constantes exportadas, la política de API pública, semver y las prácticas de seguridad."
+keywords: ["API pública", "constantes", "semver", "seguridad"]
+---
 
 ## Datos de referencia
 
@@ -64,9 +68,9 @@ con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
 de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
 resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
 esta clave y hay que emitir bajo una clave nueva. Está documentado en
-[Facturas](./facturas.md#reintentos-seguros-con-clave-de-idempotencia).
+[Facturas](/guides/invoices#reintentos-seguros-con-clave-de-idempotencia).
 
-Tipos exportados de la fachada, además de `IssueInput`, `IssueOptions`,
+Tipos exportados de la API de alto nivel, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
 `RecoveryOptions`, `ExactIssueInput`, `IssuanceService`, `FceOptions`,
