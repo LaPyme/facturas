@@ -1,8 +1,4 @@
----
-title: "Fuentes y reglas de ARCA"
-description: "Registro para mantenedores de las reglas del manual de ARCA que implementa el SDK."
-keywords: ["ARCA", "WSFE", "manual", "reglas fiscales", "mantenedores"]
----
+# ARCA sources and rules
 
 The SDK's WSFE validation rules follow the official ARCA developer manual.
 This note records which artifact was reviewed so the rules the SDK encodes

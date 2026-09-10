@@ -43,13 +43,9 @@
           "reference/configuration",
           "reference/exact-api",
           "reference/errors",
-          "reference/public-api"
+          "reference/public-api",
+          "reference/examples"
         ]
-      },
-      {
-        "group": "Recursos",
-        "icon": "library",
-        "pages": ["reference/examples", "reference/arca-sources", "en/overview"]
       }
     ]
   },
@@ -106,28 +102,5 @@
   },
   "seo": {
     "indexing": "navigable"
-  },
-  "redirects": [
-    { "source": "/README", "destination": "/" },
-    {
-      "source": "/inicio-rapido",
-      "destination": "/getting-started/quickstart"
-    },
-    {
-      "source": "/habilitacion-arca",
-      "destination": "/getting-started/arca-setup"
-    },
-    { "source": "/cli", "destination": "/getting-started/cli" },
-    { "source": "/facturas", "destination": "/guides/invoices" },
-    { "source": "/notas-de-credito", "destination": "/guides/credit-notes" },
-    { "source": "/wsmtxca", "destination": "/guides/wsmtxca" },
-    { "source": "/stores", "destination": "/guides/idempotency-stores" },
-    { "source": "/configuracion", "destination": "/reference/configuration" },
-    { "source": "/capa-exacta", "destination": "/reference/exact-api" },
-    { "source": "/errores", "destination": "/reference/errors" },
-    { "source": "/referencia", "destination": "/reference/public-api" },
-    { "source": "/ejemplos", "destination": "/reference/examples" },
-    { "source": "/external/README", "destination": "/reference/arca-sources" },
-    { "source": "/en/README", "destination": "/en/overview" }
-  ]
+  }
 }
