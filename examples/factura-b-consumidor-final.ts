@@ -5,13 +5,16 @@ import {
   ARCA_RECEIVER_VAT_CONDITIONS,
 } from "facturas/constants";
 
+const environment = process.env.ARCA_ENVIRONMENT;
+if (environment !== "test" && environment !== "production") {
+  throw new Error("ARCA_ENVIRONMENT debe ser test o production");
+}
+
 const client = createArcaClient({
-  taxId: "20123456786",
-  certificatePem:
-    "-----BEGIN CERTIFICATE-----\nREPLACE_WITH_YOUR_CERTIFICATE\n-----END CERTIFICATE-----",
-  privateKeyPem:
-    "-----BEGIN PRIVATE KEY-----\nREPLACE_WITH_YOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----",
-  environment: "test",
+  taxId: process.env.ARCA_TAX_ID,
+  certificatePem: process.env.ARCA_CERTIFICATE_PEM,
+  privateKeyPem: process.env.ARCA_PRIVATE_KEY_PEM,
+  environment,
 });
 
 async function main() {
@@ -26,7 +29,7 @@ async function main() {
     vatRate: 21,
   });
 
-  // Exact layer: reserve the number yourself, then issue it exactly once.
+  // Reservá el número y emitilo una sola vez.
   const voucherNumber = await client.wsfe.getNextVoucherNumber({
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,

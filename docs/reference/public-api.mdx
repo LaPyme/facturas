@@ -1,4 +1,8 @@
-# Referencia
+---
+title: "API pública y constantes"
+description: "Consultá las constantes exportadas, la política de API pública, semver y las prácticas de seguridad."
+keywords: ["API pública", "constantes", "semver", "seguridad"]
+---
 
 ## Datos de referencia
 
@@ -9,7 +13,6 @@ El paquete exporta un conjunto chico y estable de códigos comunes de ARCA desde
 import {
   ARCA_CONCEPT_TYPES,
   ARCA_CURRENCY_IDS,
-  ARCA_CURRENCIES,
   ARCA_DOCUMENT_TYPES,
   ARCA_RECEIVER_VAT_CONDITIONS,
   ARCA_VAT_RATES,
@@ -28,8 +31,6 @@ ARCA_CONCEPT_TYPES.SERVICIOS; // 2
 ARCA_VAT_RATES.IVA_21; // 5
 ISO_CURRENCIES.ARS; // "ARS"
 ARCA_CURRENCY_IDS.USD; // "DOL"
-ARCA_CURRENCIES.PES; // "PES"
-ARCA_CURRENCIES.DOL; // "DOL"
 ```
 
 Las constantes cubren los valores más comunes que usan la documentación y los
@@ -42,12 +43,11 @@ ejemplos:
   comprobante y de catálogo en vivo
 - tipos de concepto para productos, servicios y productos + servicios
 - alícuotas de IVA `0`, `2.5`, `5`, `10.5`, `21` y `27`
-- monedas ISO de los builders, `ARS` y `USD`, con sus mapeos explícitos a `PES`
+- monedas ISO de `buildFacturaB()` y `buildFacturaC()`, `ARS` y `USD`, con sus mapeos explícitos a `PES`
   y `DOL` en ARCA
 
-`ARCA_CURRENCIES` sigue siendo un alias de compatibilidad deprecado con sus
-valores `PES` y `DOL`. Si necesitás catálogos más amplios en tiempo de
-ejecución, siguen disponibles los métodos de WSFE como `getVoucherTypes()`,
+Si necesitás catálogos más amplios en tiempo de ejecución, están disponibles
+los métodos de WSFE como `getVoucherTypes()`,
 `getDocumentTypes()`, `getCurrencyTypes()` y `getVatRates()`.
 `getCurrencyTypes()` devuelve identificadores en vivo de ARCA, no códigos ISO.
 
@@ -59,14 +59,14 @@ los módulos `wsfe`, `wsmtxca` y `padron`.
 
 Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
 `signal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
-consultas de esa llamada; un corte posterior al envío devuelve `indeterminate`
+consultas de esa llamada. Un corte posterior al envío devuelve `indeterminate`
 con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
 de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
 resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
 esta clave y hay que emitir bajo una clave nueva. Está documentado en
-[Facturas](./facturas.md#reintentos-seguros-con-clave-de-idempotencia).
+[Facturas](/guides/invoices#evitar-duplicados-al-reintentar).
 
-Tipos exportados de la fachada, además de `IssueInput`, `IssueOptions`,
+Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
 `RecoveryOptions`, `ExactIssueInput`, `IssuanceService`, `FceOptions`,
@@ -97,9 +97,9 @@ import { ArcaServiceError } from "facturas/errors";
 ## Seguridad
 
 - Tratá los certificados y las claves privadas como secretos.
-- Por defecto, los tickets WSAA se cachean solo en memoria.
+- Por defecto, los tickets WSAA se guardan solo en memoria.
 - El SDK persiste los tickets WSAA cuando le pasás `store` o
-  `wsaaSessionStore`. Mantené privado su almacenamiento; los adaptadores
+  `wsaaSessionStore`. Mantené privado su almacenamiento. Los adaptadores
   incluidos nunca guardan la configuración de certificado ni de clave privada.
 - Las implementaciones de `wsaaSessionStore` en producción tendrían que cifrar
-  las credenciales en reposo o usar un backend que provea cifrado en reposo.
+  las credenciales en reposo o usar un almacenamiento que ya las cifre.

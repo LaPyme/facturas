@@ -1,7 +1,12 @@
-# Habilitación en ARCA
+---
+title: "Habilitación en ARCA"
+description: "Prepará el CUIT, certificado, servicios y punto de venta para homologación o producción."
+keywords: ["ARCA", "certificado", "WSAA", "punto de venta", "homologación"]
+---
 
-Este paquete **no** te da de alta las credenciales de ARCA. La configuración
-oficial de certificados y servicios la seguís haciendo fuera del SDK.
+<Info>
+  Este paquete no da de alta tus credenciales de ARCA. La configuración oficial de certificados y servicios se hace fuera del SDK.
+</Info>
 
 ## Antes de usar el SDK
 
@@ -26,7 +31,7 @@ el certificado: lo pegás ahí y lo guarda como `arca-test.crt` o
 Si lo dejaste para más tarde, `npx facturas cert` hace lo mismo suelto.
 `npx facturas check` encuentra el par solo: prueba cada capa y nombra la que
 falta habilitar, sin que tengas que exportar nada. Ninguno de los tres escribe
-en ARCA. Están en [CLI](./cli.md).
+en ARCA. Están en [CLI](/getting-started/cli).
 
 ### Homologación, paso a paso
 
@@ -38,7 +43,7 @@ superior.
    [auth.afip.gob.ar](https://auth.afip.gob.ar/contribuyente_/login.xhtml).
 2. Abrí `WSASS - Autogestión Certificados Homologación` en Mis Servicios. Si no
    está, agregalo desde `Administrador de Relaciones` → `Adherir Servicio` →
-   ARCA → `Servicios Interactivos` → WSASS; después cerrá la sesión y volvé a
+   ARCA → `Servicios Interactivos` → WSASS. Después cerrá la sesión y volvé a
    entrar, que recién ahí aparece.
 3. En el menú del WSASS, `Nuevo Certificado`. Es el formulario "Crear DN y
    certificado", con tres campos: `Nombre simbólico del DN` (el alias),
@@ -49,7 +54,7 @@ superior.
    resultado de esa misma página, de `-----BEGIN CERTIFICATE-----` a
    `-----END CERTIFICATE-----`. Copialo entero y pegalo en el prompt de
    `npx facturas init` o `npx facturas cert`, que lo guardan como
-   `arca-test.crt`; si preferís, guardalo vos en un archivo de texto con ese
+   `arca-test.crt`. Si preferís, guardalo vos en un archivo de texto con ese
    mismo nombre.
 5. En el menú, `Crear autorización a servicio`:
    `Nombre simbólico del DN a autorizar` (el alias del paso 3),
@@ -67,7 +72,7 @@ los completa el sistema y no se editan.
 2. Abrí `Administración de Certificados Digitales` en Mis Servicios. Si no
    está, habilitalo desde `Administrador de Relaciones` → `Nueva Relación` →
    `BUSCAR` → `Servicios Interactivos` → el mismo
-   `Administración de Certificados Digitales` → `Confirmar`; después cerrá la
+   `Administración de Certificados Digitales` → `Confirmar`. Después cerrá la
    sesión y volvé a entrar.
 3. Apretá `Agregar alias`. El formulario pide el `Alias` (el nombre del
    computador fiscal) y el archivo CSR, con `Seleccionar archivo`. Confirmá con
@@ -103,6 +108,3 @@ lo pide: `npx facturas check` te informa cuáles tenés habilitados.
 - [Generación de certificados para producción](https://www.afip.gob.ar/ws/WSAA/WSAA.ObtenerCertificado.pdf)
 - [Delegación de webservices con el Administrador de Relaciones](https://www.afip.gob.ar/ws/WSAA/ADMINREL.DelegarWS.pdf)
 - [Manual del desarrollador de WSFE](https://www.afip.gob.ar/ws/documentacion/manuales/manual-desarrollador-ARCA-COMPG.pdf)
-
-Las reglas del manual que el SDK codifica están anotadas, en inglés y para
-mantenedores, en [docs/external/README.md](./external/README.md).

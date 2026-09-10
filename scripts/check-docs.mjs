@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Documentation checker. Dependency-free Node, run by `pnpm check:docs`.
 //
-// It enforces three things:
+// It enforces four things:
 //   1. `packages/arca/README.md` is a byte-identical copy of `README.md`.
 //      `pnpm docs:sync` produces it.
-//   2. Every relative link in `README.md`, `docs/**/*.md` and
-//      `packages/arca/README.md` resolves to an existing file or directory,
-//      and every heading anchor resolves to a real heading.
+//   2. Every repository link in README files and every Mintlify route in
+//      `docs/**/*.mdx` resolves, including heading anchors.
 //   3. Every `examples/*.ts` file is linked from at least one document.
+//   4. Public prose follows the repository punctuation and API-positioning
+//      rules. Fenced code is excluded.
 //
 // `packages/arca/README.md` is a copy of the root README, so its relative
 // links are resolved from the repository root: that is where npm resolves
@@ -20,7 +21,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT_README = "README.md";
 const PACKAGE_README = "packages/arca/README.md";
+const DOCS_DIR = "docs";
 const EXAMPLES_DIR = "examples";
+const EXAMPLE_BLOB_PREFIX =
+  "https://github.com/LaPyme/facturas/blob/main/examples/";
 
 const problems = [];
 function fail(file, message) {
@@ -31,7 +35,7 @@ function toPosix(value) {
   return value.split(sep).join(posix.sep);
 }
 
-function listMarkdown(directory) {
+function listDocumentation(directory) {
   const found = [];
   const walk = (current) => {
     for (const entry of readdirSync(join(ROOT, current), {
@@ -40,7 +44,10 @@ function listMarkdown(directory) {
       const child = posix.join(current, entry.name);
       if (entry.isDirectory()) {
         walk(child);
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      } else if (
+        entry.isFile() &&
+        (entry.name.endsWith(".md") || entry.name.endsWith(".mdx"))
+      ) {
         found.push(child);
       }
     }
@@ -122,13 +129,28 @@ function linksOf(text) {
   return found;
 }
 
-const files = [ROOT_README, PACKAGE_README, ...listMarkdown("docs")];
+const files = [ROOT_README, PACKAGE_README, ...listDocumentation(DOCS_DIR)];
 const contents = new Map(
   files.map((file) => [file, readFileSync(join(ROOT, file), "utf8")])
 );
 const anchors = new Map(
   files.map((file) => [file, anchorsOf(contents.get(file))])
 );
+
+for (const file of files.filter(
+  (candidate) => candidate.endsWith(".mdx") || candidate.endsWith("README.md")
+)) {
+  const prose = stripCodeFences(contents.get(file));
+  if (prose.includes(";")) {
+    fail(file, "uses a semicolon in prose");
+  }
+  if (prose.includes("—")) {
+    fail(file, "uses an em dash in prose");
+  }
+  if (/API (?:de alto nivel|exacta)/i.test(prose)) {
+    fail(file, "presents the SDK as separate high-level and exact APIs");
+  }
+}
 
 if (contents.get(ROOT_README) !== contents.get(PACKAGE_README)) {
   fail(
@@ -144,6 +166,11 @@ for (const file of files) {
   // links from the repository root.
   const base = file === PACKAGE_README ? "" : posix.dirname(file);
   for (const link of linksOf(contents.get(file))) {
+    if (link.startsWith(EXAMPLE_BLOB_PREFIX)) {
+      const [example] = link.slice(EXAMPLE_BLOB_PREFIX.length).split("#");
+      linkedExamples.add(posix.join(EXAMPLES_DIR, example));
+      continue;
+    }
     if (/^[a-z][a-z\d+.-]*:/i.test(link) || link.startsWith("//")) {
       continue;
     }
@@ -154,11 +181,16 @@ for (const file of files) {
       }
       continue;
     }
-    const target = toPosix(
-      relative(ROOT, resolve(ROOT, base === "" ? "." : base, rawPath))
-    );
-    if (target.startsWith("..") || !exists(target)) {
-      fail(file, `link "${link}" points to a missing path "${target}"`);
+    const target = link.startsWith("/")
+      ? resolveMintlifyRoute(rawPath)
+      : toPosix(
+          relative(ROOT, resolve(ROOT, base === "" ? "." : base, rawPath))
+        );
+    if (!target || target.startsWith("..") || !exists(target)) {
+      fail(
+        file,
+        `link "${link}" points to a missing path "${target ?? rawPath}"`
+      );
       continue;
     }
     if (target.startsWith(`${EXAMPLES_DIR}/`) && target.endsWith(".ts")) {
@@ -167,8 +199,8 @@ for (const file of files) {
     if (!anchor) {
       continue;
     }
-    if (!target.endsWith(".md")) {
-      fail(file, `link "${link}" uses an anchor on a non-Markdown file`);
+    if (!(target.endsWith(".md") || target.endsWith(".mdx"))) {
+      fail(file, `link "${link}" uses an anchor on a non-documentation file`);
       continue;
     }
     if (!contents.has(target)) {
@@ -179,6 +211,20 @@ for (const file of files) {
       fail(file, `link "${link}" points to a missing heading in "${target}"`);
     }
   }
+}
+
+function resolveMintlifyRoute(rawPath) {
+  const route = decodeURIComponent(rawPath).replace(/^\/+|\/+$/g, "");
+  const candidates =
+    route === ""
+      ? [posix.join(DOCS_DIR, "index.mdx")]
+      : [
+          posix.join(DOCS_DIR, `${route}.mdx`),
+          posix.join(DOCS_DIR, `${route}.md`),
+          posix.join(DOCS_DIR, route, "index.mdx"),
+          posix.join(DOCS_DIR, route, "index.md"),
+        ];
+  return candidates.find(exists);
 }
 
 for (const entry of readdirSync(join(ROOT, EXAMPLES_DIR)).sort()) {
