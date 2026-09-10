@@ -1,4 +1,8 @@
-# Errores
+---
+title: "Errores y diagnóstico"
+description: "Clasificá errores de configuración, autenticación, transporte, SOAP y respuestas de ARCA."
+keywords: ["errores", "diagnóstico", "SOAP", "WSAA", "ARCA"]
+---
 
 ## Manejo de errores
 
@@ -8,7 +12,7 @@ string.
 | Clase | Cuándo |
 | --- | --- |
 | `ArcaConfigurationError` | Configuración del cliente inválida |
-| `ArcaInputError` | Input inválido del llamador o una clave que `recover()` no puede resolver |
+| `ArcaInputError` | Input inválido de la aplicación o una clave que `recover()` no puede resolver |
 | `ArcaAuthenticationError` | Rechazo de autenticación explícito del proveedor |
 | `ArcaTransportError` | Falla de HTTP o de transporte |
 | `ArcaSoapFaultError` | SOAP fault devuelto por ARCA |
@@ -47,7 +51,7 @@ Importá las clases de error desde `facturas` o desde `facturas/errors`. Tambié
 se exporta `isArcaAuthenticationError(error)` para ruteo con predicados. Los
 errores de autenticación exponen solamente el código estable
 `ARCA_AUTHENTICATION_ERROR`, un `reason` tipado, el servicio, la operación y un
-código de proveedor seguro cuando está disponible; no se adjuntan los cuerpos
+código de proveedor seguro cuando está disponible. No se adjuntan los cuerpos
 crudos del proveedor ni los valores de las credenciales.
 
 `recover()` usa `ARCA_INPUT_RESERVATION_NOT_FOUND` cuando la clave no tiene una
@@ -57,12 +61,12 @@ significa que la reserva existe y ARCA confirmó que su número está vacío.
 ## Diagnóstico
 
 - `coe.alreadyAuthenticated`: el SDK deduplica los logins WSAA en vuelo y reusa
-  los tickets cacheados válidos. En serverless, en workers de cola o en
-  cualquier despliegue con varios procesos, configurá un `wsaaSessionStore`
-  durable para que un worker frío reuse el TA que obtuvo otro proceso. El caché
-  solo en memoria no puede recuperarse entre procesos.
-- `dh key too small`: los requests de producción de WSFE ya usan, donde hace
-  falta, un nivel de seguridad legacy de OpenSSL. Si igual lo ves, confirmá que
+  los tickets válidos guardados en caché. En funciones serverless, procesos de
+  cola o cualquier despliegue con varios procesos, configurá un
+  `wsaaSessionStore` persistente para que un proceso nuevo reuse el TA que obtuvo
+  otro. El caché en memoria no se comparte entre procesos.
+- `dh key too small`: los pedidos de producción de WSFE ya usan, donde hace
+  falta, el nivel de seguridad anterior de OpenSSL. Si igual lo ves, confirmá que
   no estés salteando el transporte del SDK ni terminando TLS en otra capa.
 - Certificado vencido: reemplazá el certificado PEM por uno renovado que
   cumpla las mismas expectativas de clave privada, y redesplegá o reiniciá el

@@ -11,7 +11,7 @@ integración directa a WSFE y WSMTXCA.
 - **CLI incluido**: `npx facturas init` genera la clave y el CSR, y
   `npx facturas check` nombra la capa de ARCA que falla
 - **Integración directa con ARCA**, sin proxy ni dependencia alojada
-- **Login WSAA resuelto**: caché en memoria, stores de sesión durables,
+- **Login WSAA resuelto**: caché en memoria, stores de sesión persistentes,
   deduplicación de logins en vuelo y recuperación de `coe.alreadyAuthenticated`
 - **API pública en TypeScript estricto**, con nombres al estilo JS mapeados a
   SOAP internamente
@@ -20,8 +20,8 @@ integración directa a WSFE y WSMTXCA.
 - **Ejemplos copiables**, escritos para que los lean personas y agentes de
   código
 
-La documentación está en castellano, en [docs/](./docs/README.md).
-[English summary](./docs/en/README.md).
+La documentación está en castellano, en el [sitio de documentación](https://facturas-sdk.dev)
+y en su [fuente Mintlify](./docs/index.mdx).
 
 ## Instalación
 
@@ -33,7 +33,7 @@ npm install facturas
 
 ## Emití tu primera factura
 
-Definí las [variables de entorno](./docs/configuracion.md#variables-de-entorno)
+Definí las [variables de entorno](./docs/reference/configuration.mdx#variables-de-entorno)
 con tu CUIT, certificado y clave. No hace falta nada más: ni base de datos, ni
 tabla, ni servicio externo.
 
@@ -52,22 +52,22 @@ const factura = await arca.issue({
 
 Tratá siempre los cuatro resultados:
 
-| Resultado | Significado y acción del llamador |
+| Resultado | Qué significa y qué hacer |
 | --- | --- |
-| `authorized` | Guardá el comprobante y el CAE. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada; prueba consistencia, no autoría. |
+| `authorized` | Guardá el comprobante y el CAE. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada. Esto prueba consistencia, no autoría. |
 | `rejected` | Revisá los `issues` de ARCA. Una clave queda ligada a su input incluso después de un rechazo. |
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
-El paso a paso está en [Inicio rápido](./docs/inicio-rapido.md); el detalle, en
-[Facturas](./docs/facturas.md).
+El paso a paso está en [Inicio rápido](./docs/getting-started/quickstart.mdx).
+El detalle está en [Facturas](./docs/guides/invoices.mdx).
 
 ## Reintentos seguros
 
-Recomendado en toda aplicación real, opcional para empezar. Sin
-`idempotencyKey`, un reintento después de una caída puede emitir la factura dos
-veces. Con un `store` y el ID estable de la venta como clave, el reintento
-consulta el número reservado y nunca vuelve a emitir.
+ARCA no recibe una clave de idempotencia como Stripe. Si una respuesta se
+pierde, no puede distinguir un reintento de una emisión nueva. `facturas` te
+permite guardar cada intento en un `store` con el ID estable de tu venta. Al
+repetir esa clave, consulta el número reservado en vez de empezar otra emisión.
 
 ```ts
 import { createArcaClient, createPostgresStore } from "facturas";
@@ -81,12 +81,13 @@ const factura = await arca.issue(input, { idempotencyKey: venta.id });
 ```
 
 Hay adaptadores para Postgres, Redis, archivos y memoria, y podés escribir el
-tuyo; con ellos, dos emisiones simultáneas sobre el mismo punto de venta se
-serializan y cada una escribe su número. Ver [Stores](./docs/stores.md).
+tuyo. Con ellos, dos emisiones simultáneas sobre el mismo punto de venta se
+serializan y cada una escribe su número. Ver
+[Evitar comprobantes duplicados](./docs/guides/avoid-duplicates.mdx).
 
 ## Nota de crédito
 
-ARCA no anula comprobantes: una corrección es una nota de crédito y también es
+ARCA no anula comprobantes. Una corrección es una nota de crédito y también es
 un documento real que queda en los registros de ARCA. Lo habitual es la nota
 parcial, que acredita las líneas que elegís.
 
@@ -101,31 +102,32 @@ const nota = await arca.issueCreditNote(
 ```
 
 Con `all: true` acreditás el original completo. El modo es explícito y
-obligatorio. La misma fachada emite [notas de débito y por
-período](./docs/notas-de-credito.md), tributos, FCE, [detalle de ítems por
-WSMTXCA](./docs/wsmtxca.md) y `recover()`, que concilia sin emitir.
+obligatorio. También podés emitir [notas de débito y por
+período](./docs/guides/credit-notes.mdx), tributos, FCE y [comprobantes con
+detalle de ítems por WSMTXCA](./docs/guides/wsmtxca.mdx). `recover()` concilia
+una reserva sin emitir.
 
 ## Documentación
 
-- [Inicio rápido](./docs/inicio-rapido.md): de cero a la primera factura y su
+- [Inicio rápido](./docs/getting-started/quickstart.mdx): de cero a la primera factura y su
   nota de crédito.
-- [Habilitación en ARCA](./docs/habilitacion-arca.md): CUIT, certificado, punto
+- [Habilitación en ARCA](./docs/getting-started/arca-setup.mdx): CUIT, certificado, punto
   de venta y referencias oficiales.
-- [CLI](./docs/cli.md): `init`, `check` e `issue`, con la tabla de diagnósticos.
-- [Facturas](./docs/facturas.md): `issue()`, `preview()`, datos de la factura y
-  contrato fiscal de la fachada.
-- [Notas de crédito](./docs/notas-de-credito.md): `issueCreditNote()`, modo
+- [CLI](./docs/getting-started/cli.mdx): `init`, `check` e `issue`, con la tabla de diagnósticos.
+- [Facturas](./docs/guides/invoices.mdx): `issue()`, `preview()`, datos de la factura y
+  contrato fiscal de emisión.
+- [Notas de crédito](./docs/guides/credit-notes.mdx): `issueCreditNote()`, modo
   parcial y modo total.
-- [Stores](./docs/stores.md): Postgres, Redis, archivos, memoria, store propio
-  y vida de los registros.
-- [Configuración](./docs/configuracion.md): variables de entorno, opciones del
-  cliente, sesiones WSAA, logging, reintentos y timeouts.
-- [Capa exacta](./docs/capa-exacta.md): builders, superficie de servicios,
-  emisión exacta y evidencia de recuperación.
-- [Errores](./docs/errores.md): clases de error y diagnóstico.
-- [Referencia](./docs/referencia.md): constantes, API pública con semver y
+- [Evitar comprobantes duplicados](./docs/guides/avoid-duplicates.mdx): claves para
+  reintentos, Postgres, Redis, archivos y memoria.
+- [Configuración](./docs/reference/configuration.mdx): variables de entorno, opciones del
+  cliente, sesiones WSAA, logs, reintentos y límites de tiempo.
+- [Métodos directos de ARCA](./docs/reference/arca-services.mdx): funciones para
+  armar comprobantes, consultas y emisión con numeración controlada por tu aplicación.
+- [Errores](./docs/reference/errors.mdx): clases de error y diagnóstico.
+- [Referencia](./docs/reference/public-api.mdx): constantes, API pública con semver y
   seguridad.
-- [Ejemplos](./docs/ejemplos.md): índice de [examples/](./examples).
+- [Ejemplos](./docs/reference/examples.mdx): índice de [examples/](./examples).
 
 ## Estado del proyecto
 

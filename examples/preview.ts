@@ -1,6 +1,6 @@
 import { createArcaClient, createMemoryStore, type IssueInput } from "facturas";
 
-// Example only: use a durable store in an app. Memory does not survive restarts.
+// Solo para este ejemplo. En una aplicación, usá un store persistente.
 const arca = createArcaClient({ store: createMemoryStore() });
 const venta = { id: "sale-example-002", totalEnCentavos: 121_000 };
 
@@ -11,21 +11,21 @@ const input: IssueInput = {
   items: [{ gross: 121_000, vat: 21 }], // ARS 1.210,00 en centavos
 };
 
-// preview() is synchronous and reaches no store, no WSAA and no SOAP.
+// preview() es sincrónico y no consulta el store, WSAA ni SOAP.
 const previsualizacion = arca.preview(input);
 console.log(
   previsualizacion.voucherClass, // "B"
   previsualizacion.voucherType, // 6
-  previsualizacion.amounts, // computedTotal, sentTotal, vatAdjustment
-  previsualizacion.request // the exact WSFE input, without the voucher number
+  previsualizacion.amounts, // computedTotal, sentTotal y vatAdjustment
+  previsualizacion.request // El input de WSFE, sin el número de comprobante.
 );
 
 if (previsualizacion.amounts.sentTotal !== venta.totalEnCentavos) {
-  throw new Error("The derived invoice does not match the sale total.");
+  throw new Error("El total de la factura no coincide con el de la venta.");
 }
 
 const factura = await arca.issue(input, { idempotencyKey: venta.id });
 if (factura.kind === "authorized") {
-  // The issued amounts are the ones the preview showed.
+  // Los importes emitidos son los que mostró la vista previa.
   console.log(factura.voucher.amounts, previsualizacion.amounts);
 }

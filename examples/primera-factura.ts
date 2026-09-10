@@ -1,7 +1,7 @@
 import { createArcaClient } from "facturas";
 
-// Only ARCA_TAX_ID, ARCA_CERTIFICATE_PEM, ARCA_PRIVATE_KEY_PEM and
-// ARCA_ENVIRONMENT are needed. No store, no table, no key.
+// Solo necesitás ARCA_TAX_ID, ARCA_CERTIFICATE_PEM, ARCA_PRIVATE_KEY_PEM y
+// ARCA_ENVIRONMENT. Este primer ejemplo no usa store ni clave para reintentos.
 const arca = createArcaClient();
 
 const factura = await arca.issue({
