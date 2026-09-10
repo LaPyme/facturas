@@ -1,14 +1,15 @@
 ---
-title: "API exacta"
-description: "Controlá el input, la numeración y la evidencia de WSFE, WSMTXCA y Padrón sin derivación de negocio."
-keywords: ["API exacta", "WSFE", "WSMTXCA", "Padrón", "numeración"]
+title: "Métodos directos de ARCA"
+description: "Usá WSFE, WSMTXCA y Padrón cuando necesites controlar el pedido o la numeración."
+keywords: ["WSFE", "WSMTXCA", "Padrón", "numeración", "request"]
 ---
 
-La API de alto nivel deriva el comprobante por vos. La API exacta te deja armar el
-`WsfeVoucherInput` completo, dueño de tu propia numeración, y te devuelve la
-evidencia del proveedor tal como llegó.
+Para la emisión habitual usá `issue()`. Los métodos de esta página sirven
+cuando tu aplicación ya reservó un número, necesita un campo de ARCA que
+`issue()` no recibe o tiene que consultar directamente WSFE, WSMTXCA o
+Padrón.
 
-## Control exacto
+## Control manual de la numeración
 
 Este bloque es
 [examples/factura-b-consumidor-final.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-b-consumidor-final.ts):
@@ -21,13 +22,16 @@ import {
   ARCA_RECEIVER_VAT_CONDITIONS,
 } from "facturas/constants";
 
+const environment = process.env.ARCA_ENVIRONMENT;
+if (environment !== "test" && environment !== "production") {
+  throw new Error("ARCA_ENVIRONMENT debe ser test o production");
+}
+
 const client = createArcaClient({
-  taxId: "20123456786",
-  certificatePem:
-    "-----BEGIN CERTIFICATE-----\nREPLACE_WITH_YOUR_CERTIFICATE\n-----END CERTIFICATE-----",
-  privateKeyPem:
-    "-----BEGIN PRIVATE KEY-----\nREPLACE_WITH_YOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----",
-  environment: "test",
+  taxId: process.env.ARCA_TAX_ID,
+  certificatePem: process.env.ARCA_CERTIFICATE_PEM,
+  privateKeyPem: process.env.ARCA_PRIVATE_KEY_PEM,
+  environment,
 });
 
 async function main() {
@@ -42,7 +46,7 @@ async function main() {
     vatRate: 21,
   });
 
-  // Exact layer: reserve the number yourself, then issue it exactly once.
+  // Reservá el número y emitilo una sola vez.
   const voucherNumber = await client.wsfe.getNextVoucherNumber({
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,
@@ -65,9 +69,9 @@ main().catch((error) => {
 `buildFacturaB()` deriva el tipo Factura B, el neto, el detalle de IVA, el
 importe de IVA, los campos en cero y el total, sin aritmética fiscal de punto
 flotante. `buildFacturaC()` arma aparte la forma de la Factura C con IVA cero.
-Los dos builders aceptan enteros en centavos de la moneda y soportan las ISO
+Las dos funciones aceptan enteros en centavos de la moneda y soportan las ISO
 `ARS` (la de por defecto) y `USD`. Factura B requiere un `taxableAmount`
-positivo; cuando `vatRate` es positivo, el importe tiene que producir al menos
+positivo. Cuando `vatRate` es positivo, el importe tiene que producir al menos
 un centavo de IVA después del redondeo. El IVA usa el criterio Round Half Even
 documentado por ARCA, así que un medio centavo exacto se redondea al centavo
 par.
@@ -89,17 +93,17 @@ const usdData = buildFacturaB({
 });
 ```
 
-## Superficie de servicios
+## Métodos por servicio
 
 ### `client.wsfe`
 
-Facturación electrónica WSFE. Los inputs usan nombres al estilo JS y el SDK los
+Facturación electrónica WSFE. Los inputs usan nombres habituales en JS y el SDK los
 mapea internamente a los campos SOAP de AFIP / ARCA.
 
 - Los campos de fecha aceptan `YYYY-MM-DD` o `YYYYMMDD`.
-- Armá facturas A/B/C desde afirmaciones explícitas con la API de alto nivel.
-- Emití facturas y notas de crédito con los métodos exactos de WSFE.
-- `issue({ voucherNumber, data })` manda una autorización exacta y devuelve
+- Armá facturas A/B/C desde afirmaciones explícitas con `client.issue()`.
+- Emití facturas y notas de crédito con los métodos directos de WSFE.
+- `issue({ voucherNumber, data })` manda un pedido de autorización y devuelve
   evidencia `authorized`, `rejected` o `indeterminate`.
 - `getNextVoucherNumber({ salesPoint, voucherType })` lee el próximo número a
   reservar.
@@ -109,7 +113,7 @@ mapea internamente a los campos SOAP de AFIP / ARCA.
 - Leé los catálogos de ARCA con métodos como `getVoucherTypes()` y
   `getVatRates()`. Hay métodos de catálogo disponibles para datos de referencia
   en vivo cuando no querés valores fijos en el código.
-- Verificá la salud del backend con `getServerStatus()`.
+- Verificá el estado del servidor con `getServerStatus()`.
 - Los métodos autenticados aceptan `forceRefresh: true` para descartar el TA
   WSAA cacheado y pedir un Token Authorization nuevo para el mismo servicio.
 
@@ -131,21 +135,20 @@ códigos.
 - Los métodos autenticados aceptan `forceRefresh: true` para renovar el TA WSAA
   de WSMTXCA antes de la llamada.
 
-La API de alto nivel también emite por WSMTXCA, con detalle de ítems, cuando pasás
-`{ service: "wsmtxca" }`: ver [WSMTXCA](/guides/wsmtxca). Esta API exacta sigue
-disponible para armar el request completo vos mismo. Si necesitás `issue`,
-`getLastAuthorizedVoucher`, `lookupVoucher`, `getVoucher` o `getSalesPoints`, la
-API de runtime está disponible, es pública y está cubierta por tests.
+`client.issue()` también emite por WSMTXCA, con detalle de ítems, cuando pasás
+`{ service: "wsmtxca" }`. La guía de [WSMTXCA](/guides/wsmtxca) explica ese
+flujo. Para armar el request completo, llamá directamente a `issue`,
+`getLastAuthorizedVoucher`, `lookupVoucher`, `getVoucher` o `getSalesPoints`.
 
-## Emisión exacta y evidencia de recuperación
+## Emitir un pedido armado por tu aplicación
 
-`client.issue()` deriva el request de WSFE, reserva el número y recupera
+`client.issue()` deriva el pedido de WSFE, reserva el número y recupera
 después de una caída por vos. Cuando necesitás algo que no deriva (una nota en
 otra moneda o a otro receptor, o cualquier campo fuera de la
-[superficie de alto nivel](/guides/invoices#datos-de-la-factura)) o la
-numeración es de tu aplicación, usá la API exacta: `client.wsfe.issue(...)`
+[entrada de `issue()`](/guides/invoices#datos-de-la-factura)) o la
+numeración es de tu aplicación, usá `client.wsfe.issue(...)`. Este método
 manda un FECAESolicitar para un número de comprobante que reservaste vos de
-forma durable, y te dice si ese intento exacto quedó autorizado, rechazado o
+forma persistente. Devuelve si ese intento quedó autorizado, rechazado o
 indeterminado. Preserva cada error y observación estructurados con su servicio,
 operación, código, origen y nivel de resultado.
 
@@ -163,7 +166,7 @@ if (outcome.kind === "authorized") {
   if (outcome.reason === "authentication_rejected") {
     console.error(outcome.authentication?.reason);
   }
-  // Consult the same number before any new authorization attempt.
+  // Consultá el mismo número antes de volver a intentar una autorización.
   const lookup = await client.wsfe.lookupVoucher({
     number: reservedVoucherNumber,
     salesPoint: data.salesPoint,
@@ -178,7 +181,7 @@ incluso cuando el cliente tiene configurados reintentos generales de
 transporte. Nunca refrescan credenciales ni reenvían de forma automática. Un
 rechazo de autenticación explícito del proveedor vuelve como
 `reason: "authentication_rejected"` con evidencia tipada y segura en
-`authentication`; un timeout, una falla de conexión, una respuesta inválida o
+`authentication`. Un timeout, una falla de conexión, una respuesta inválida o
 un resultado incompleto o contradictorio quedan indeterminados y sin reenvío.
 Así se evita que un trabajo fiscal incierto provoque una segunda autorización
 oculta.
@@ -188,7 +191,7 @@ una vez con un refresco forzado de credenciales después de un rechazo de
 autenticación explícito y tipado. Pasar `forceRefresh: true` desactiva
 cualquier otro intento de recuperación de autenticación.
 
-La ausencia en las consultas exactas depende de la operación:
+La ausencia en las consultas directas depende de la operación:
 
 - WSFE `FECompConsultar` código 602 devuelve `not_found`.
 - WSFE `FEParamGetPtosVenta` código 602 devuelve una lista vacía: ARCA responde así
@@ -200,12 +203,12 @@ La ausencia en las consultas exactas depende de la operación:
   un error.
 
 El SDK normaliza solamente la evidencia de protocolo del proveedor. Tu
-aplicación sigue siendo responsable de persistir el request exacto, de ser
+aplicación sigue siendo responsable de guardar el pedido enviado, de ser
 dueña de su secuencia o carril, y de decidir cuándo un reintento es seguro.
 
-Para los campos fiscales que la API de alto nivel no expone, usá la salida de emergencia
-`WsfeVoucherInput`. También sigue soportando exenciones, importes no gravados y
-varias alícuotas de IVA. Los importes exactos siguen siendo números en unidades
+Para los campos fiscales que `issue()` no recibe, usá `WsfeVoucherInput`.
+También soporta exenciones, importes no gravados y varias alícuotas de IVA. Sus
+importes son números en unidades
 mayores, se validan localmente y se serializan como strings canónicos de dos
 decimales:
 
@@ -220,7 +223,7 @@ import {
   ARCA_VOUCHER_TYPES,
 } from "facturas/constants";
 
-const exactData: WsfeVoucherInput = {
+const data: WsfeVoucherInput = {
   salesPoint: 1,
   voucherType: ARCA_VOUCHER_TYPES.FACTURA_B,
   concept: ARCA_CONCEPT_TYPES.PRODUCTOS,
@@ -240,36 +243,8 @@ const exactData: WsfeVoucherInput = {
 };
 ```
 
-Los inputs exactos y las respuestas de catálogo en vivo usan identificadores de
-protocolo de ARCA como `PES` y `DOL`; la API y los builders de alto nivel
-aceptan las ISO `ARS` y `USD`.
+## Importes y monedas
 
-## Migrar importes y monedas
-
-Las aplicaciones que antes redondeaban valores decimales en unidades mayores y
-traducían monedas a IDs de ARCA pueden mover ese trabajo de frontera del
-proveedor a un builder:
-
-```ts
-// Before: caller-owned decimal rounding and provider vocabulary.
-const exactAmount = Number(sourceAmount.toFixed(2));
-const exactCurrencyId = sourceCurrency === "ARS" ? "PES" : "DOL";
-
-// After: integer minor units and ISO currency input.
-const data = buildFacturaB({
-  salesPoint: 1,
-  concept: ARCA_CONCEPT_TYPES.PRODUCTOS,
-  documentType: ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL,
-  documentNumber: 0,
-  receiverVatConditionId: ARCA_RECEIVER_VAT_CONDITIONS.CONSUMIDOR_FINAL,
-  voucherDate: "2026-09-02",
-  taxableAmount: 10_000, // 100.00 in the selected currency.
-  vatRate: 21,
-  currency: "USD",
-  exchangeRate: "1095.5",
-});
-```
-
-Seguí usando `WsfeVoucherInput` cuando necesites campos exactos avanzados. Sus
-importes siguen siendo valores decimales en unidades mayores y su `currencyId`
-sigue siendo un ID de ARCA.
+`client.issue()`, `buildFacturaB()` y `buildFacturaC()` reciben enteros en
+centavos y monedas ISO `ARS` o `USD`. `WsfeVoucherInput` usa valores decimales
+en unidades mayores e identificadores de ARCA como `PES` y `DOL`.

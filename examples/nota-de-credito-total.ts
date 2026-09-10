@@ -1,8 +1,7 @@
 import { createArcaClient, createFileStore } from "facturas";
 
-// Configure ARCA credentials and a private durable directory before running.
-// ARCA has no cancellation: this writes a real credit note for the whole
-// invoice. Both the original and the note remain in ARCA's records.
+// Configurá las credenciales de ARCA y un directorio privado que sobreviva a
+// reinicios. Esto emite una nota de crédito real por toda la factura.
 const arca = createArcaClient({
   store: createFileStore("./private-arca-store"),
 });

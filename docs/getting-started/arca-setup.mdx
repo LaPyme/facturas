@@ -43,7 +43,7 @@ superior.
    [auth.afip.gob.ar](https://auth.afip.gob.ar/contribuyente_/login.xhtml).
 2. Abrí `WSASS - Autogestión Certificados Homologación` en Mis Servicios. Si no
    está, agregalo desde `Administrador de Relaciones` → `Adherir Servicio` →
-   ARCA → `Servicios Interactivos` → WSASS; después cerrá la sesión y volvé a
+   ARCA → `Servicios Interactivos` → WSASS. Después cerrá la sesión y volvé a
    entrar, que recién ahí aparece.
 3. En el menú del WSASS, `Nuevo Certificado`. Es el formulario "Crear DN y
    certificado", con tres campos: `Nombre simbólico del DN` (el alias),
@@ -54,7 +54,7 @@ superior.
    resultado de esa misma página, de `-----BEGIN CERTIFICATE-----` a
    `-----END CERTIFICATE-----`. Copialo entero y pegalo en el prompt de
    `npx facturas init` o `npx facturas cert`, que lo guardan como
-   `arca-test.crt`; si preferís, guardalo vos en un archivo de texto con ese
+   `arca-test.crt`. Si preferís, guardalo vos en un archivo de texto con ese
    mismo nombre.
 5. En el menú, `Crear autorización a servicio`:
    `Nombre simbólico del DN a autorizar` (el alias del paso 3),
@@ -72,7 +72,7 @@ los completa el sistema y no se editan.
 2. Abrí `Administración de Certificados Digitales` en Mis Servicios. Si no
    está, habilitalo desde `Administrador de Relaciones` → `Nueva Relación` →
    `BUSCAR` → `Servicios Interactivos` → el mismo
-   `Administración de Certificados Digitales` → `Confirmar`; después cerrá la
+   `Administración de Certificados Digitales` → `Confirmar`. Después cerrá la
    sesión y volvé a entrar.
 3. Apretá `Agregar alias`. El formulario pide el `Alias` (el nombre del
    computador fiscal) y el archivo CSR, con `Seleccionar archivo`. Confirmá con

@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 // Documentation checker. Dependency-free Node, run by `pnpm check:docs`.
 //
-// It enforces three things:
+// It enforces four things:
 //   1. `packages/arca/README.md` is a byte-identical copy of `README.md`.
 //      `pnpm docs:sync` produces it.
 //   2. Every repository link in README files and every Mintlify route in
 //      `docs/**/*.mdx` resolves, including heading anchors.
 //   3. Every `examples/*.ts` file is linked from at least one document.
+//   4. Public prose follows the repository punctuation and API-positioning
+//      rules. Fenced code is excluded.
 //
 // `packages/arca/README.md` is a copy of the root README, so its relative
 // links are resolved from the repository root: that is where npm resolves
@@ -134,6 +136,21 @@ const contents = new Map(
 const anchors = new Map(
   files.map((file) => [file, anchorsOf(contents.get(file))])
 );
+
+for (const file of files.filter(
+  (candidate) => candidate.endsWith(".mdx") || candidate.endsWith("README.md")
+)) {
+  const prose = stripCodeFences(contents.get(file));
+  if (prose.includes(";")) {
+    fail(file, "uses a semicolon in prose");
+  }
+  if (prose.includes("—")) {
+    fail(file, "uses an em dash in prose");
+  }
+  if (/API (?:de alto nivel|exacta)/i.test(prose)) {
+    fail(file, "presents the SDK as separate high-level and exact APIs");
+  }
+}
 
 if (contents.get(ROOT_README) !== contents.get(PACKAGE_README)) {
   fail(

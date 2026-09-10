@@ -69,7 +69,7 @@ export async function issueAdjustments(
     },
     all: true as const,
   };
-  // Consulta el original una vez; no reserva número ni escribe nada.
+  // Este método consulta el original una vez. No reserva número ni escribe nada.
   await arca.previewCreditNote(credit);
   return await arca.issueCreditNote(credit, {
     idempotencyKey: "credit:example",
