@@ -21,7 +21,7 @@ integración directa a WSFE y WSMTXCA.
   código
 
 La documentación está en castellano, en el [sitio de documentación](https://facturas.mintlify.site)
-y en su [fuente Mintlify](./docs/index.mdx). [English summary](./docs/en/overview.mdx).
+y en su [fuente Mintlify](./docs/index.mdx).
 
 ## Instalación
 

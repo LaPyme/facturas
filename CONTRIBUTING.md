@@ -16,11 +16,11 @@ The repo scripts still use the local workspace version.
 
 ## Documentation
 
-The documentation is Spanish-first. `README.md` is the package front door and
+The documentation is in Spanish. `README.md` is the package front door and
 `docs/` is a Mintlify site organized into getting-started, guides, reference,
-and resources. `docs/en/overview.mdx` is a short English summary.
-`docs/reference/arca-sources.mdx` is a maintainer ledger of the ARCA manual
-rules the SDK encodes; it stays in English.
+and examples. [`.github/ARCA_SOURCES.md`](./.github/ARCA_SOURCES.md) is a
+maintainer ledger of the ARCA manual rules the SDK encodes; it is not published
+on the documentation site.
 
 `packages/arca/README.md` is a byte-identical copy of `README.md`. After
 editing the root README, run:
