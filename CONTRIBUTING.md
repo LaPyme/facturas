@@ -19,8 +19,14 @@ The repo scripts still use the local workspace version.
 The documentation is in Spanish. `README.md` is the package front door and
 `docs/` is a Mintlify site organized into getting-started, guides, reference,
 and examples. [`.github/ARCA_SOURCES.md`](./.github/ARCA_SOURCES.md) is a
-maintainer ledger of the ARCA manual rules the SDK encodes; it is not published
+maintainer ledger of the ARCA manual rules the SDK encodes. It is not published
 on the documentation site.
+
+Write public documentation only in Argentinian Spanish with voseo. Keep
+sentences short and concrete. Do not use semicolons or em dashes in prose.
+Present `issue()` as the normal way to emit, and direct ARCA service methods as
+advanced tools for requests or numbering that `issue()` does not cover. Every
+runnable example must read ARCA credentials from environment variables.
 
 `packages/arca/README.md` is a byte-identical copy of `README.md`. After
 editing the root README, run:

@@ -33,7 +33,7 @@
           "guides/invoices",
           "guides/credit-notes",
           "guides/wsmtxca",
-          "guides/idempotency-stores"
+          "guides/avoid-duplicates"
         ]
       },
       {
@@ -41,7 +41,7 @@
         "icon": "braces",
         "pages": [
           "reference/configuration",
-          "reference/exact-api",
+          "reference/arca-services",
           "reference/errors",
           "reference/public-api",
           "reference/examples"

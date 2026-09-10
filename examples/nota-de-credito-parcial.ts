@@ -1,8 +1,7 @@
 import { createArcaClient, createFileStore } from "facturas";
 
-// Configure ARCA credentials and a private durable directory before running.
-// ARCA has no cancellation: this writes a real credit note for part of the
-// original invoice. Both documents remain in ARCA's records.
+// Configurá las credenciales de ARCA y un directorio privado que sobreviva a
+// reinicios. Esto emite una nota de crédito real por parte de la factura.
 const arca = createArcaClient({
   store: createFileStore("./private-arca-store"),
 });
@@ -10,9 +9,9 @@ const devolucion = { id: "refund-example-001" };
 
 const nota = await arca.issueCreditNote(
   {
-    // The original invoice: a class C invoice of ARS 1.500,00 here.
+    // La factura original es de clase C por ARS 1.500,00.
     for: { salesPoint: 3, voucherType: 11, number: 41 },
-    // Class C originals take amount items; A and B take { gross | net, vat }.
+    // Para clase C usá amount. Para A y B, usá gross o net junto con vat.
     items: [{ amount: 50_000 }], // ARS 500,00 en centavos
   },
   { idempotencyKey: `nc:${devolucion.id}` }

@@ -1,16 +1,16 @@
 ---
 title: "Ejemplos"
-description: "Encontrá ejemplos completos para facturas, notas, consultas, vistas previas y la API exacta."
+description: "Encontrá ejemplos completos para facturas, notas, consultas y vistas previas."
 keywords: ["ejemplos", "TypeScript", "facturas", "notas de crédito"]
 ---
 
-Los ejemplos viven en el directorio [examples/](https://github.com/LaPyme/facturas/tree/main/examples) del repositorio. Tienen valores fijos y legibles para que puedas adaptarlos a tu integración.
+Los ejemplos viven en el directorio [examples/](https://github.com/LaPyme/facturas/tree/main/examples) del repositorio. Leen las credenciales desde `ARCA_TAX_ID`, `ARCA_CERTIFICATE_PEM`, `ARCA_PRIVATE_KEY_PEM` y `ARCA_ENVIRONMENT`. Los datos fiscales de muestra quedan visibles para que puedas reemplazarlos por los de tu aplicación.
 
 <Warning>
   Los ejemplos de emisión usan fechas determinísticas para que compilen. Reemplazalas por una fecha actual permitida por ARCA antes de probarlos en homologación.
 </Warning>
 
-## API de alto nivel
+## Emitir y corregir comprobantes
 
 <Columns cols={2}>
   <Card title="Primera factura" icon="receipt" href="https://github.com/LaPyme/facturas/blob/main/examples/primera-factura.ts">
@@ -33,7 +33,7 @@ Los ejemplos viven en el directorio [examples/](https://github.com/LaPyme/factur
   </Card>
 </Columns>
 
-## API exacta
+## Armar requests de ARCA en forma manual
 
 - [factura-b-consumidor-final.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-b-consumidor-final.ts)
 - [factura-a-responsable-inscripto.ts](https://github.com/LaPyme/facturas/blob/main/examples/factura-a-responsable-inscripto.ts)
