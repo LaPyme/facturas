@@ -72,7 +72,7 @@ const previsualizacion = arca.preview(input, { service: "wsmtxca" });
 previsualizacion.request.comprobanteCAERequest.importeTotal; // number
 ```
 
-Con `include: { exactInput: true }`, un resultado autorizado trae en `sent` el
+Con `include: { sent: true }`, un resultado autorizado trae en `sent` el
 request de WSMTXCA que efectivamente se envió. Los llamadores de WSFE
 conservan sus tipos `WsfeVoucherInput` de siempre.
 

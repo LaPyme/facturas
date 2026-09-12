@@ -50,7 +50,7 @@ const RATES: Record<SupportedVatRate, { id: number; basisPoints: bigint }> = {
 };
 
 /**
- * Pure integer money core. Amount fields are exact-API major units.
+ * Pure integer money core. Amount fields are provider major units.
  * Invoices and credit notes share it: both resolve a class first.
  */
 export function calculateWsfeAmounts(input: WsfeAmountsInput): {

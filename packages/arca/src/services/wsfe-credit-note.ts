@@ -90,10 +90,9 @@ type DerivedCreditNote = {
 };
 
 function invalid(reason: string): never {
-  throw new ArcaInputError(
-    `issueCreditNote cannot proceed: ${reason}. Use the exact service API for manual control.`,
-    { code: "ARCA_INPUT_INVALID_VALUE" }
-  );
+  throw new ArcaInputError(`issueCreditNote cannot proceed: ${reason}.`, {
+    code: "ARCA_INPUT_INVALID_VALUE",
+  });
 }
 function required<T>(value: T | undefined, field: string): T {
   if (value === undefined || value === null) {
@@ -399,7 +398,7 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
   validateIssuanceFields(input);
   if ("associatedPeriod" in input) {
     throw new ArcaInputError(
-      "issueCreditNote does not support associatedPeriod; a note against a period is exact-layer work. Use the exact service API for manual control.",
+      "issueCreditNote adjusts either the originals named in for or a period, never both; drop one of them.",
       {
         code: "ARCA_INPUT_RESERVED_FIELD",
         field: "associatedPeriod",
@@ -517,7 +516,7 @@ function assertCreditNoteTarget(
     )
   ) {
     throw new ArcaInputError(
-      "issueCreditNote requires an authorized invoice or debit note in a supported family in for.voucherType. Use the exact service API for manual control.",
+      "issueCreditNote requires an authorized invoice or debit note in a supported family in for.voucherType.",
       {
         code: "ARCA_INPUT_INVALID_VALUE",
         field: `input.${path}.voucherType`,

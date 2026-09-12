@@ -243,10 +243,9 @@ secuencia siguió sin esta clave. En `blocked` no se reservó ningún número:
 clave nueva.
 
 El segundo argumento acepta `idempotencyKey`, `signal`, `representedTaxId`,
-`forceRefresh`, `service`, `number` e
-`include: { raw: true, exactInput: true }`.
-Los resultados no traen la evidencia cruda por defecto; `sent` se incluye solo
-en resultados autorizados y solo si lo pedís. Una repetición sin un resultado
+`forceRefresh`, `service`, `number` e `include: { raw: true, sent: true }`.
+Los resultados no traen la evidencia cruda por defecto; `sent` —el request que
+se envió— se incluye solo en resultados autorizados y solo si lo pedís. Una repetición sin un resultado
 de escritura observado usa un intento indeterminado con
 `reason: "incomplete_response"`; la consulta aporta la evidencia de
 autorización.

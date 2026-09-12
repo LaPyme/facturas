@@ -204,7 +204,7 @@ export function deriveWsfeInvoice(
       throw cause;
     }
     throw new ArcaError(
-      "The derived invoice failed exact WSFE validation. This is an SDK invariant failure.",
+      "The derived invoice failed WSFE validation. This is an SDK invariant failure.",
       "ARCA_ISSUE_INVARIANT",
       { cause }
     );
@@ -471,8 +471,7 @@ export function assertIssueKeys(
       throw new ArcaInputError(`${field} is not supported by ${method}.`, {
         code: "ARCA_INPUT_RESERVED_FIELD",
         field,
-        expected:
-          "a supported high-level API field; use the exact API for other fiscal fields",
+        expected: "a field the facade supports",
       });
     }
   }

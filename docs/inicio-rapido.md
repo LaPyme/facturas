@@ -96,8 +96,8 @@ llamá a `issue()`.
 - `indeterminate`: conservá el número y la evidencia; conciliá o repetí el mismo input (con su clave, ver el paso 6).
 - `conflict`: hay otro comprobante en ese número; detené el flujo e investigá.
 
-La evidencia SOAP y el input exacto no aparecen por defecto. Podés pedirlos
-con `include: { raw: true, exactInput: true }`. Qué llamadas hace cada camino
+La evidencia SOAP y el request enviado no aparecen por defecto. Podés pedirlos
+con `include: { raw: true, sent: true }`. Qué llamadas hace cada camino
 está en
 [Contrato fiscal de la fachada](./facturas.md#contrato-fiscal-de-la-fachada).
 Cuando una llamada falla, mirá [Errores](./errores.md).

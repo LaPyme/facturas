@@ -27,12 +27,12 @@ import {
   wsmtxcaRequest,
 } from "./issuance-wsmtxca";
 import type {
-  ExactIssueInput,
   IssuanceService,
   IssuedVoucher,
   IssueOptions,
   IssueOutcome,
   IssuePreview,
+  IssueRequest,
   ServiceFor,
 } from "./vouchers-types";
 import {
@@ -814,14 +814,14 @@ async function runAuthorization(
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
   const includeRaw = options.include?.raw === true;
-  const includeExact = options.include?.exactInput === true;
+  const includeSent = options.include?.sent === true;
   const number = reservedNumber ?? (await nextNumber(wsfe, data, options));
   const attempted = {
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,
     number,
   };
-  const exact = exactEvidence(data, number, options, includeExact);
+  const sentRequest = sentEvidence(data, number, options, includeSent);
   const voucher = (cae: string, caeExpiry: string): IssuedVoucher => ({
     ...attempted,
     voucherClass,
@@ -836,7 +836,7 @@ async function runAuthorization(
     data,
     attempted,
     includeRaw,
-    exact,
+    sentRequest,
     voucher,
     service: options.service,
   };
@@ -875,7 +875,7 @@ async function runAuthorization(
       recoveredByMatch: false,
       voucher: voucher(authorization.cae, authorization.caeExpiry),
       authorization: projectEvidence(authorization, includeRaw),
-      ...exact,
+      ...sentRequest,
     };
   }
   if (authorization.kind === "rejected") {
@@ -887,7 +887,7 @@ async function runAuthorization(
       replay
     );
   }
-  // The exact outcome type permits an absent expiry. Keep that uncertainty visible.
+  // The provider outcome type permits an absent expiry. Keep that visible.
   const uncertain =
     authorization.kind === "indeterminate"
       ? authorization
@@ -908,7 +908,7 @@ async function runAuthorization(
     attempted,
     attempt,
     includeRaw,
-    exact,
+    sentRequest,
     voucher,
   });
 }
@@ -968,7 +968,7 @@ type RecoveryInput = {
     "raw"
   > & { raw?: Record<string, unknown> };
   includeRaw: boolean;
-  exact: { sent?: ExactIssueInput<IssuanceService> };
+  sentRequest: { sent?: IssueRequest<IssuanceService> };
   voucher: (cae: string, caeExpiry: string) => IssuedVoucher;
   /** The reserved number was claimed in this call: any voucher on it is foreign. */
   strangerAtNumber?: boolean;
@@ -980,7 +980,7 @@ async function recoverInvoice({
   attempted,
   attempt,
   includeRaw,
-  exact,
+  sentRequest,
   voucher,
   lookup: suppliedLookup,
   service,
@@ -1075,7 +1075,7 @@ async function recoverInvoice({
     ),
     attempt,
     lookup: { ...toVoucherSummary(lookup.voucher), ...raw },
-    ...exact,
+    ...sentRequest,
   };
 }
 
@@ -1216,8 +1216,8 @@ function validateOptions(options: IssueOptions) {
   }
   if (options.include !== undefined) {
     assertIssueObject(options.include, "options.include");
-    assertIssueKeys(options.include, ["raw", "exactInput"], "options.include");
-    for (const field of ["raw", "exactInput"] as const) {
+    assertIssueKeys(options.include, ["raw", "sent"], "options.include");
+    for (const field of ["raw", "sent"] as const) {
       if (
         options.include[field] !== undefined &&
         typeof options.include[field] !== "boolean"
@@ -1423,12 +1423,12 @@ function preparePeriodNote(
   return prepared;
 }
 
-function exactEvidence(
+function sentEvidence(
   data: FiscalHeader,
   number: number,
   options: IssueOptions,
   include: boolean
-): { sent?: ExactIssueInput<IssuanceService> } {
+): { sent?: IssueRequest<IssuanceService> } {
   return include
     ? {
         sent:
@@ -1541,11 +1541,11 @@ function consultReservation(
     attempted,
     attempt: replayEvidence(storedOptions.service),
     includeRaw: options.include?.raw === true,
-    exact: exactEvidence(
+    sentRequest: sentEvidence(
       prepared.data,
       record.number,
       storedOptions,
-      options.include?.exactInput === true
+      options.include?.sent === true
     ),
     voucher: (cae, caeExpiry) => ({
       ...attempted,

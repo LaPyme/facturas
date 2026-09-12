@@ -126,7 +126,7 @@ describe("complete WSFE issuance", () => {
     const preview = client.preview(input);
     const result = await client.issue(input, {
       number: 42,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(preview).toMatchObject({
       voucherType: type,
@@ -153,7 +153,7 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_399,
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
@@ -232,7 +232,7 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(issued).toMatchObject({
       kind: "authorized",
@@ -245,7 +245,7 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(credited).toMatchObject({
       kind: "authorized",
@@ -308,7 +308,7 @@ describe("complete WSFE issuance", () => {
       "original"
     );
     expect(
-      await client.issueCreditNote(period, { include: { exactInput: true } })
+      await client.issueCreditNote(period, { include: { sent: true } })
     ).toMatchObject({
       kind: "authorized",
       sent: {
@@ -370,7 +370,7 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_101,
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
@@ -560,7 +560,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     const options = {
       service: "wsmtxca" as const,
       idempotencyKey: "invoice",
-      include: { exactInput: true },
+      include: { sent: true },
     };
     const input = { ...detailed, taxes: [tax] };
     const preview = client.preview(input, { service: "wsmtxca" });

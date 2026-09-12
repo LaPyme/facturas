@@ -150,7 +150,7 @@ export async function facadeConsumerContract(
       result satisfies never;
   }
   const included = await client.issue(input, {
-    include: { exactInput: true, raw: true },
+    include: { sent: true, raw: true },
   });
   if (included.kind === "authorized") {
     included.sent satisfies WsfeVoucherInput;
@@ -298,7 +298,7 @@ export async function creditNoteConsumerContract(
       items: [{ gross: 6050, vat: 21 }],
       total: 6050,
     },
-    { idempotencyKey: "nc:1", include: { exactInput: true, raw: true } }
+    { idempotencyKey: "nc:1", include: { sent: true, raw: true } }
   );
   switch (partial.kind) {
     case "authorized":
@@ -351,7 +351,7 @@ export async function completeIssuanceConsumerContract(
   const issued = await client.issue(input, {
     service: "wsmtxca",
     number: 42,
-    include: { exactInput: true },
+    include: { sent: true },
   });
   if (issued.kind === "authorized") {
     issued.sent.comprobanteCAERequest.importeTotal satisfies number;
@@ -368,7 +368,7 @@ export async function completeIssuanceConsumerContract(
   await client.previewDebitNote(period);
   await client.issueDebitNote(period, { idempotencyKey: "debit" });
   const recovery = await client.recover("debit", {
-    include: { exactInput: true },
+    include: { sent: true },
   });
   if (
     recovery.kind === "authorized" &&
