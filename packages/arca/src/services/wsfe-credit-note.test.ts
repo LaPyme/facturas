@@ -139,13 +139,13 @@ describe("full credit note derivation", () => {
         { ...invoice, [field]: [{ value: 1 }] },
         full("20260905")
       )
-    ).toThrow("exact service API");
+    ).toThrow("incomplete or malformed");
     expect(() =>
       deriveWsfePartialCreditNote(
         [{ ...invoice, [field]: [{ value: 1 }] }],
         partial([{ gross: 100, vat: 21 }])
       )
-    ).toThrow("exact service API");
+    ).toThrow("incomplete or malformed");
   });
   it("rejects missing required evidence and unsupported originals", () => {
     for (const change of [

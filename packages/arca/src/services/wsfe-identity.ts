@@ -47,7 +47,7 @@ export type WsfeIdentityMatch =
  * Compares the invoice subset supported by issue(): header identity, amounts,
  * VAT, tributes, associations, optional fields, buyers, activities and the
  * foreign-currency payment flag. This proves consistency, not authorship.
- * Configure a store and pass idempotencyKey for retries. Exact-API extensions
+ * Configure a store and pass idempotencyKey for retries. Provider fields
  * outside that subset stay incomplete; a missing field is never proof.
  */
 export function matchWsfeVoucherIdentity(

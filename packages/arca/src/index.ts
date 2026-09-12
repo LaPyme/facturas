@@ -76,12 +76,12 @@ export type {
   VouchersService,
 } from "./services/vouchers";
 export type {
-  ExactIssueInput,
   IssuanceService,
   IssuedVoucher,
   IssueOptions,
   IssueOutcome,
   IssuePreview,
+  IssueRequest,
 } from "./services/vouchers-types";
 export type {
   CreateWsfeServiceOptions,

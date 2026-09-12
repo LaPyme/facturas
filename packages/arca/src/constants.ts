@@ -61,7 +61,7 @@ export const ARCA_CURRENCY_IDS = {
 
 /**
  * Common ARCA currency identifiers.
- * @deprecated Use ISO_CURRENCIES for builders or ARCA_CURRENCY_IDS at the exact provider boundary.
+ * @deprecated Use ISO_CURRENCIES, or ARCA_CURRENCY_IDS at the provider boundary.
  */
 export const ARCA_CURRENCIES = {
   PES: "PES",

@@ -133,7 +133,7 @@ describe("credit note orchestration", () => {
     const { service, calls } = fake();
     const result = await service.issueCreditNote(note, {
       ...(keyed ? { idempotencyKey: options.idempotencyKey } : {}),
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(calls).toEqual(["lookup", "next", "authorize"]);
     expect(result).toMatchObject({
@@ -146,7 +146,7 @@ describe("credit note orchestration", () => {
     const { service, calls, wsfe } = fake();
     const result = await service.issueCreditNote(partial, {
       ...options,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(calls).toEqual(["lookup", "next", "authorize"]);
     expect(result).toMatchObject({
@@ -492,7 +492,7 @@ describe("notes against several originals", () => {
     expect(
       await service.issueCreditNote(several, {
         ...options,
-        include: { exactInput: true },
+        include: { sent: true },
       })
     ).toMatchObject({
       kind: "authorized",
