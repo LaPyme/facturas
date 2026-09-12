@@ -2,8 +2,6 @@ import {
   ArcaAuthenticationError,
   ArcaInputError,
   type ArcaInputErrorCode,
-  buildFacturaB,
-  buildFacturaC,
   createArcaClient,
   type IssuePreview,
   isArcaAuthenticationError,
@@ -18,43 +16,37 @@ import {
   ArcaAuthenticationError as SubpathAuthenticationError,
   ArcaInputError as SubpathInputError,
 } from "facturas/errors";
-import {
-  buildFacturaB as buildFacturaBFromWsfe,
-  buildFacturaC as buildFacturaCFromWsfe,
-  type WsfeAuthorizeVoucherInput as SubpathAuthorizeVoucherInput,
-  type WsfeVoucherInput as SubpathVoucherInput,
+import type {
+  WsfeAuthorizeVoucherInput as SubpathAuthorizeVoucherInput,
+  WsfeVoucherInput as SubpathVoucherInput,
 } from "facturas/wsfe";
 
-const facturaB = buildFacturaB({
+// The transport modules take the provider request as it goes on the wire.
+const transportInput: WsfeVoucherInput = {
   salesPoint: 1,
+  voucherType: 6,
   concept: 1,
   documentType: 99,
   documentNumber: 0,
   receiverVatConditionId: 5,
   voucherDate: "2026-09-02",
-  taxableAmount: 10_000,
-  vatRate: 21,
-  currency: ISO_CURRENCIES.ARS,
-});
-const facturaC = buildFacturaCFromWsfe({
-  salesPoint: 1,
-  concept: 1,
-  documentType: 99,
-  documentNumber: 0,
-  receiverVatConditionId: 5,
-  voucherDate: "2026-09-02",
-  amount: 10_000,
-  currency: ISO_CURRENCIES.USD,
-  exchangeRate: "1095.5",
-});
-const exactInput: WsfeVoucherInput = facturaB;
-const subpathExactInput: SubpathVoucherInput = facturaC;
+  totalAmount: 121,
+  netAmount: 100,
+  vatAmount: 21,
+  exemptAmount: 0,
+  nonTaxableAmount: 0,
+  taxAmount: 0,
+  currencyId: ARCA_CURRENCY_IDS[ISO_CURRENCIES.ARS],
+  exchangeRate: "1",
+  vatRates: [{ id: 5, baseAmount: 100, amount: 21 }],
+};
+const subpathTransportInput: SubpathVoucherInput = transportInput;
 const authorizationInput: WsfeAuthorizeVoucherInput = {
-  data: exactInput,
+  data: transportInput,
   voucherNumber: 1,
 };
 const subpathAuthorizationInput: SubpathAuthorizeVoucherInput = {
-  data: subpathExactInput,
+  data: subpathTransportInput,
   voucherNumber: 2,
 };
 const inputError = new ArcaInputError("invalid date", {
@@ -89,8 +81,6 @@ const outcome: WsfeAuthorizationOutcome = {
 
 export const packageConsumerContract = {
   createArcaClient,
-  buildFacturaBFromWsfe,
-  buildFacturaC,
   authorizationInput,
   subpathAuthorizationInput,
   inputError,

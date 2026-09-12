@@ -86,9 +86,8 @@ a stored reservation and never authorizes. See
 | [wsmtxca.md](../wsmtxca.md) | Detailed WSMTXCA issuance through the facade |
 | [stores.md](../stores.md) | Postgres, Redis, files, memory, custom store |
 | [configuracion.md](../configuracion.md) | Environment variables and client options |
-| [capa-exacta.md](../capa-exacta.md) | Exact WSFE / WSMTXCA layer and service surface |
 | [errores.md](../errores.md) | Error classes and troubleshooting |
-| [referencia.md](../referencia.md) | Constants, public API, security |
+| [referencia.md](../referencia.md) | Constants, public API, transport modules, security |
 | [ejemplos.md](../ejemplos.md) | Index of [examples/](../../examples) |
 
 [CONTRIBUTING.md](../../CONTRIBUTING.md) is in English.

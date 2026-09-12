@@ -1,8 +1,10 @@
 # Facturas
 
 `issue()` es la fachada: derivá el comprobante desde datos de negocio, reservá
-el número y recuperá los reintentos. Para los campos que no deriva, usá la
-[capa exacta](./capa-exacta.md).
+el número y recuperá los reintentos. Ese input de negocio es el único input.
+Los campos que el SDK no deriva —`optionalFields`, `buyers`, `activities`—
+pasan tal cual al proveedor, y `preview().request` te muestra el comprobante
+armado antes de mandarlo.
 
 ## Emitir
 
@@ -139,8 +141,8 @@ los ítems ni del Padrón. Un emisor RI produce A para receptores RI o
 Monotributo y B para las demás condiciones soportadas. Los emisores
 Monotributo, Exento y No Alcanzado producen C y usan
 `items: [{ amount: 10_000 }]`. ARCA valida la habilitación real. `to` es el
-receptor fiscal (los campos de documento y de condición del receptor de la capa
-exacta), no un registro de cliente.
+receptor fiscal —el tipo y el número de documento y la condición de IVA que
+viajan en el comprobante—, no un registro de cliente.
 
 Los importes son enteros en centavos. Para ítems de RI, elegí `net` o `gross`
 en cada ítem y uno de `0 | 2.5 | 5 | 10.5 | 21 | 27 | "exempt" | "untaxed"`
@@ -262,5 +264,5 @@ moneda, todos los importes de cabecera, alícuotas de IVA, fechas de servicio,
 tributos, campos opcionales, compradores, actividades, las asociaciones de
 notas (incluidos el CUIT emisor y la fecha informados) y el flag de pago en
 moneda extranjera. Los campos faltantes quedan incompletos y nunca cuentan como
-prueba de coincidencia; las diferencias son conflictos. Las extensiones exactas
-fuera de ese conjunto quedan incompletas.
+prueba de coincidencia; las diferencias son conflictos. Los campos del
+proveedor fuera de ese conjunto quedan incompletos.

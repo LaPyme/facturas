@@ -114,13 +114,6 @@ export type {
   VatItem,
   VatRate,
 } from "./services/wsfe-amounts";
-export type {
-  BuildFacturaBInput,
-  BuildFacturaCInput,
-  WsfeBuilderCurrencyInput,
-  WsfeBuilderVatRate,
-} from "./services/wsfe-builders";
-export { buildFacturaB, buildFacturaC } from "./services/wsfe-builders";
 export type { CreditNoteInput } from "./services/wsfe-credit-note";
 export type { IssueCommon, IssueInput, Receiver } from "./services/wsfe-derive";
 export type {

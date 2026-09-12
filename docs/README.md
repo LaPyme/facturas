@@ -22,11 +22,9 @@ los términos de ARCA quedan como están en el código.
   vida de los registros.
 - [Configuración](./configuracion.md): variables de entorno, opciones del
   cliente, sesiones WSAA, logging, reintentos y timeouts.
-- [Capa exacta](./capa-exacta.md): builders, superficie de servicios, emisión
-  exacta y evidencia de recuperación.
 - [Errores](./errores.md): clases de error y diagnóstico.
-- [Referencia](./referencia.md): constantes, API pública con semver y
-  seguridad.
+- [Referencia](./referencia.md): constantes, API pública con semver, módulos
+  de transporte y seguridad.
 - [Ejemplos](./ejemplos.md): índice de [examples/](../examples).
 - [English summary](./en/README.md): a short overview in English.
 

@@ -177,9 +177,9 @@ retención o percepción y qué percepción corresponde en cada caso siguen sien
 de la aplicación. Los campos opcionales propios de la nota los aportás vos: no
 se copian del original.
 
-Una nota a otro receptor o en otra moneda es un documento distinto y pertenece
-a la [capa exacta](./capa-exacta.md). Para emitir la nota con detalle de ítems,
-mirá [WSMTXCA](./wsmtxca.md).
+Una nota a otro receptor o en otra moneda es un documento distinto: emitila
+como una nota propia contra su original. Para emitir la nota con detalle de
+ítems, mirá [WSMTXCA](./wsmtxca.md).
 
 ## Notas de débito
 

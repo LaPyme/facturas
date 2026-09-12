@@ -120,11 +120,9 @@ WSMTXCA](./docs/wsmtxca.md) y `recover()`, que concilia sin emitir.
   y vida de los registros.
 - [Configuración](./docs/configuracion.md): variables de entorno, opciones del
   cliente, sesiones WSAA, logging, reintentos y timeouts.
-- [Capa exacta](./docs/capa-exacta.md): builders, superficie de servicios,
-  emisión exacta y evidencia de recuperación.
 - [Errores](./docs/errores.md): clases de error y diagnóstico.
-- [Referencia](./docs/referencia.md): constantes, API pública con semver y
-  seguridad.
+- [Referencia](./docs/referencia.md): constantes, API pública con semver,
+  módulos de transporte y seguridad.
 - [Ejemplos](./docs/ejemplos.md): índice de [examples/](./examples).
 
 ## Estado del proyecto
