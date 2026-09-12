@@ -1,16 +1,22 @@
-# Facturas
+---
+title: "Facturas"
+description: "Emití y previsualizá facturas, y tratá cada resultado fiscal sin perder comprobantes."
+keywords: ["facturas", "issue", "preview", "idempotencia", "WSFE"]
+---
 
 `issue()` es la fachada: derivá el comprobante desde datos de negocio, reservá
 el número y recuperá los reintentos. Ese input de negocio es el único input.
-Los campos que el SDK no deriva —`optionalFields`, `buyers`, `activities`—
+Los campos que el SDK no deriva, `optionalFields`, `buyers` y `activities`,
 pasan tal cual al proveedor, y `preview().request` te muestra el comprobante
-armado antes de mandarlo.
+armado antes de mandarlo. Para las lecturas, los catálogos y el Padrón que
+están por debajo, mirá los
+[módulos de transporte](/reference/arca-services).
 
 ## Emitir
 
-Definí las [variables de entorno](./configuracion.md#variables-de-entorno).
+Definí las [variables de entorno](/reference/configuration#variables-de-entorno).
 No hace falta store ni ningún servicio externo. Este bloque es
-[examples/primera-factura.ts](../examples/primera-factura.ts):
+[examples/primera-factura.ts](https://github.com/LaPyme/facturas/blob/main/examples/primera-factura.ts):
 
 ```ts
 import { createArcaClient } from "facturas";
@@ -25,14 +31,14 @@ const factura = await arca.issue({
 });
 ```
 
-## Reintentos seguros con clave de idempotencia
+## Evitar duplicados al reintentar
 
-Recomendado en toda aplicación real, opcional para empezar. Sin
-`idempotencyKey`, un reintento después de una caída puede emitir la factura
-dos veces. Configurá un `store` y pasá el ID estable de la venta como clave:
-el reintento consulta el número reservado y nunca vuelve a emitir. El ejemplo
-asume que `venta` es tu venta y que la tabla del
-[store](./stores.md#postgres) existe.
+ARCA no recibe una clave de idempotencia como Stripe. Si la conexión se corta
+después del envío, repetir la llamada sin guardar el intento puede duplicar la
+factura. `facturas` facilita la deduplicación con un `store`: guarda el número
+reservado, el input y el resultado. Pasale el ID estable de tu venta como
+`idempotencyKey`. Este ejemplo supone que `venta` es tu venta y que ya creaste
+la tabla [Postgres](/guides/avoid-duplicates#postgres).
 
 ```ts
 import { createArcaClient, createPostgresStore } from "facturas";
@@ -47,21 +53,22 @@ const factura = await arca.issue(input, { idempotencyKey: venta.id });
 
 Una clave tiene de 1 a 255 caracteres. Usá el ID de la venta o del pedido,
 nunca un UUID nuevo por intento. No pongas CUIT, DNI ni otros datos personales
-en las claves. Reusá la misma clave y el mismo input en los reintentos; si el
+en las claves. Reusá la misma clave y el mismo input en los reintentos. Si el
 input cambia, se lanza `ARCA_INPUT_IDEMPOTENCY_MISMATCH`. Las claves están
 alcanzadas al CUIT del cliente y al entorno. `representedTaxId` también se
 controla como parte de la identidad del input. Una clave sin store lanza antes
 de cualquier I/O con el proveedor. Claves distintas identifican operaciones de
 negocio distintas.
 
-Con un store que provee `withLock` —Postgres, Redis, archivos, memoria o el
-tuyo—, las llamadas con clave sobre el mismo punto de venta y tipo de
+Con un store que provee `withLock`, como Postgres, Redis, archivos, memoria o el
+tuyo, las llamadas con clave sobre el mismo punto de venta y tipo de
 comprobante se serializan: cada una toma el número siguiente y escribe una sola
 vez. La coordinación alcanza a los procesos que comparten ese store, no a otros
 escritores del mismo punto de venta. El detalle, con la tabla de garantías por
-adaptador, está en [Stores](./stores.md#qué-garantiza-cada-store).
+adaptador, está en
+[Evitar comprobantes duplicados](/guides/avoid-duplicates#qué-guarda-cada-opción).
 
-`signal` es tu deadline, un `AbortSignal` cualquiera, por ejemplo
+`signal` marca el límite de tiempo con un `AbortSignal`, por ejemplo
 `AbortSignal.timeout(20_000)`. Aborta el login WSAA, la escritura y las
 consultas de esa llamada. Si se corta después de haber enviado la escritura, el
 resultado es `indeterminate` con `lookup.kind === "aborted"`: la reserva queda y
@@ -69,32 +76,32 @@ resultado es `indeterminate` con `lookup.kind === "aborted"`: la reserva queda y
 con el que ya tenga tu aplicación.
 
 El ejemplo completo, con el tratamiento de los cuatro resultados, está en
-[examples/issue-invoice.ts](../examples/issue-invoice.ts).
+[examples/issue-invoice.ts](https://github.com/LaPyme/facturas/blob/main/examples/issue-invoice.ts).
 
 `recover(clave, opciones)` concilia sin emitir. Solo consulta la reserva
 guardada, con el proveedor y el número que quedaron registrados: nunca autoriza
 ni reserva un número nuevo. Si ARCA confirma que el número está vacío, el
 resultado es `indeterminate` con `lookup.kind === "not_found"`, no una
-autorización; para emitir se llama `issue()` con la misma clave. Si no hay
+autorización. Para emitir, llamá a `issue()` con la misma clave. Si no hay
 reserva para esa clave, lanza `ArcaInputError` con
 `code === "ARCA_INPUT_RESERVATION_NOT_FOUND"`. Esa ausencia no es el
-`lookup.kind === "not_found"` de una reserva consultada y no prueba que otro
+`lookup.kind === "not_found"` de una reserva consultada. Tampoco prueba que otro
 proceso todavía no esté por guardarla. Acepta `representedTaxId`,
 `forceRefresh`, `include` y `signal`.
 
 ## Revisá antes de emitir
 
-`preview()` deriva exactamente lo que enviaría `issue()`, sin ninguna I/O: sin
-store, sin WSAA, sin SOAP y sin lectura del próximo número. Lanza los mismos
+`preview()` deriva exactamente lo que enviaría `issue()` sin hacer I/O. No usa
+el store, WSAA, SOAP ni lee el próximo número. Lanza los mismos
 errores de input que lanza `issue()` antes de su primera llamada, así que un
 input que previsualiza limpio no genera ningún error local nuevo al emitir.
 
-Este bloque es [examples/preview.ts](../examples/preview.ts):
+Este bloque es [examples/preview.ts](https://github.com/LaPyme/facturas/blob/main/examples/preview.ts):
 
 ```ts
 import { createArcaClient, createMemoryStore, type IssueInput } from "facturas";
 
-// Example only: use a durable store in an app. Memory does not survive restarts.
+// Solo para este ejemplo. En una aplicación, usá un store persistente.
 const arca = createArcaClient({ store: createMemoryStore() });
 const venta = { id: "sale-example-002", totalEnCentavos: 121_000 };
 
@@ -105,48 +112,48 @@ const input: IssueInput = {
   items: [{ gross: 121_000, vat: 21 }], // ARS 1.210,00 en centavos
 };
 
-// preview() is synchronous and reaches no store, no WSAA and no SOAP.
+// preview() es sincrónico y no consulta el store, WSAA ni SOAP.
 const previsualizacion = arca.preview(input);
 console.log(
   previsualizacion.voucherClass, // "B"
   previsualizacion.voucherType, // 6
-  previsualizacion.amounts, // computedTotal, sentTotal, vatAdjustment
-  previsualizacion.request // the exact WSFE input, without the voucher number
+  previsualizacion.amounts, // computedTotal, sentTotal y vatAdjustment
+  previsualizacion.request // El input de WSFE, sin el número de comprobante.
 );
 
 if (previsualizacion.amounts.sentTotal !== venta.totalEnCentavos) {
-  throw new Error("The derived invoice does not match the sale total.");
+  throw new Error("El total de la factura no coincide con el de la venta.");
 }
 
 const factura = await arca.issue(input, { idempotencyKey: venta.id });
 if (factura.kind === "authorized") {
-  // The issued amounts are the ones the preview showed.
+  // Los importes emitidos son los que mostró la vista previa.
   console.log(factura.voucher.amounts, previsualizacion.amounts);
 }
 ```
 
 `preview()` es sincrónico y devuelve la `voucherClass` derivada, el
 `voucherType`, los mismos `amounts` que informa un resultado autorizado, y
-`request`, el input exacto que enviaría `issue()`: un `WsfeVoucherInput`, o el
+`request`, el input que enviaría `issue()`. Es un `WsfeVoucherInput` o el
 request de WSMTXCA si pasás `{ service: "wsmtxca" }`. El número de comprobante
 no aparece porque recién se conoce cuando se reserva el número al emitir.
 Previsualizar una nota sí necesita el original, así que `previewCreditNote()` y
-`previewDebitNote()` son asincrónicas y hacen esa consulta; están en
-[Notas de crédito](./notas-de-credito.md#vista-previa-de-notas).
+`previewDebitNote()` son asincrónicas y hacen esa consulta. Están en
+[Notas de crédito](/guides/credit-notes#vista-previa-de-notas).
 
 ## Datos de la factura
 
-El emisor es tu afirmación legal en cada llamada; el SDK nunca lo infiere de
+El emisor es tu afirmación legal en cada llamada. El SDK nunca lo infiere de
 los ítems ni del Padrón. Un emisor RI produce A para receptores RI o
 Monotributo y B para las demás condiciones soportadas. Los emisores
 Monotributo, Exento y No Alcanzado producen C y usan
 `items: [{ amount: 10_000 }]`. ARCA valida la habilitación real. `to` es el
-receptor fiscal —el tipo y el número de documento y la condición de IVA que
-viajan en el comprobante—, no un registro de cliente.
+receptor fiscal, el tipo y el número de documento y la condición de IVA que
+viajan en el comprobante, no un registro de cliente.
 
 Los importes son enteros en centavos. Para ítems de RI, elegí `net` o `gross`
 en cada ítem y uno de `0 | 2.5 | 5 | 10.5 | 21 | 27 | "exempt" | "untaxed"`
-para `vat`. El cero numérico es una alícuota de IVA; los importes exentos y no
+para `vat`. El cero numérico es una alícuota de IVA. Los importes exentos y no
 gravados tienen campos fiscales propios. Los ítems se agrupan por alícuota
 antes del redondeo Round Half Even.
 
@@ -159,7 +166,7 @@ exactamente. Los resultados autorizados exponen `computedTotal`, `sentTotal` y
 Los valores por defecto son la fecha de hoy en Buenos Aires, productos
 (concepto 1) y `ARS` con tipo de cambio `1`. Usá `currency: "USD"` con un
 `exchangeRate` decimal positivo en string, o `service: { from, to, dueDate }`
-para el concepto 2. Las fechas aceptan `YYYY-MM-DD` o `YYYYMMDD`; el fin del
+para el concepto 2. Las fechas aceptan `YYYY-MM-DD` o `YYYYMMDD`. El fin del
 servicio tiene que ser igual o posterior a su inicio y el vencimiento de pago
 igual o posterior a la fecha de la factura.
 
@@ -191,23 +198,23 @@ revisado: se controla contra las reglas de conciliación de importes del
 proveedor y no se reescribe en silencio.
 
 `concept: "products_and_services"` es el concepto 3, junto a `"products"` y
-`"services"`; `dueDate` informa el vencimiento de pago. `paidInForeignCurrency`
+`"services"`. `dueDate` informa el vencimiento de pago. `paidInForeignCurrency`
 marca la cancelación en la misma moneda extranjera y no se acepta en ARS. Para
 monedas que no son `ARS` ni `USD`, pasá `currency: { id: "060" }` con un
-`exchangeRate` explícito; ARCA controla la elegibilidad.
+`exchangeRate` explícito. ARCA controla la elegibilidad.
 
 `to.condition` también acepta el número de la condición de IVA del receptor del
 catálogo de ARCA, con `cuit`, `dni` o `document: { type, number }`. Los campos
-`optionalFields`, `buyers` y `activities` pasan tal cual a WSFE y a WSMTXCA; no
+`optionalFields`, `buyers` y `activities` pasan tal cual a WSFE y a WSMTXCA. No
 dupliques ahí lo que ya informa `fce`.
 
 Cada ítem puede además describir su línea: `description`, `quantity`, `unit`,
-`unitPrice`, `discount`, `code`, `matrixCode` y `matrixUnits`. WSFE los ignora;
-WSMTXCA los necesita y arma sus filas con ellos. Mirá
-[WSMTXCA](./wsmtxca.md). El ejemplo compilado de todo esto es
-[examples/emision-completa.ts](../examples/emision-completa.ts).
+`unitPrice`, `discount`, `code`, `matrixCode` y `matrixUnits`. WSFE los ignora.
+WSMTXCA los necesita y arma sus filas con ellos, como explica
+[WSMTXCA](/guides/wsmtxca). El ejemplo compilado de todo esto es
+[examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts).
 
-## Contrato fiscal de la fachada
+## Qué hace `issue()` al emitir
 
 Sin clave, una llamada lee un próximo número y autoriza una vez, con a lo sumo
 una consulta de identidad después de una respuesta indeterminada. Es el
@@ -221,17 +228,18 @@ del original solo cuando crea una reserva nueva.
 Un 10016 sobre un número que esta misma llamada reservó no se resuelve por
 coincidencia de campos: si la consulta encuentra un comprobante el resultado es
 `conflict`, y si no encuentra nada sigue siendo `rejected`. Dos ventas con
-datos fiscales idénticos —dos consumidor final por el mismo importe el mismo
-día— coinciden en todos los campos, así que la coincidencia probaría
+datos fiscales idénticos, por ejemplo dos ventas a consumidor final por el
+mismo importe el mismo día, coinciden en todos los campos. Por eso, la
+coincidencia probaría
 consistencia y nunca autoría. La comparación de identidad queda para una
 reserva que ya existía, el único caso en el que el número puede ser una
 escritura propia anterior. Todo `conflict` se anota en el store antes de
-responder; una repetición con esa clave, o un `recover()`, devuelve el mismo
+responder. Una repetición con esa clave, o un `recover()`, devuelve el mismo
 `conflict` sin ninguna llamada al proveedor.
 
-| Resultado | Significado y acción del llamador |
+| Resultado | Qué significa y qué hacer |
 | --- | --- |
-| `authorized` | Guardá el comprobante y el CAE. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada; prueba consistencia, no autoría. |
+| `authorized` | Guardá el comprobante y el CAE. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada. Esto prueba consistencia, no autoría. |
 | `rejected` | Revisá los `issues` de ARCA. Una clave queda ligada a su input incluso después de un rechazo. |
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
@@ -246,10 +254,11 @@ clave nueva.
 
 El segundo argumento acepta `idempotencyKey`, `signal`, `representedTaxId`,
 `forceRefresh`, `service`, `number` e `include: { raw: true, sent: true }`.
-Los resultados no traen la evidencia cruda por defecto; `sent` —el request que
-se envió— se incluye solo en resultados autorizados y solo si lo pedís. Una repetición sin un resultado
+Los resultados no traen la evidencia cruda por defecto. `sent`, el request que
+se envió, se incluye solo en resultados autorizados y solo si lo pedís. Una
+repetición sin un resultado
 de escritura observado usa un intento indeterminado con
-`reason: "incomplete_response"`; la consulta aporta la evidencia de
+`reason: "incomplete_response"`. La consulta aporta la evidencia de
 autorización.
 
 `service` elige el proveedor: `"wsfe"` por defecto, `"wsmtxca"` para el detalle
@@ -257,13 +266,13 @@ de ítems. Nunca cambia solo. `number` es un número reservado por fuera: cuando
 lo pasás, la llamada no lee el próximo número, así que la aplicación sigue
 siendo dueña de la secuencia del punto de venta.
 
-La fachada cubre la emisión de CAE de facturas y notas. CAEA, exportación y
-los demás servicios de ARCA no están cubiertos por ella.
+`issue()` cubre la emisión de CAE para facturas y notas. No cubre CAEA,
+exportación ni los demás servicios de ARCA.
 
 El comparador de identidad compara coordenadas, fecha, concepto, receptor,
 moneda, todos los importes de cabecera, alícuotas de IVA, fechas de servicio,
 tributos, campos opcionales, compradores, actividades, las asociaciones de
 notas (incluidos el CUIT emisor y la fecha informados) y el flag de pago en
 moneda extranjera. Los campos faltantes quedan incompletos y nunca cuentan como
-prueba de coincidencia; las diferencias son conflictos. Los campos del
-proveedor fuera de ese conjunto quedan incompletos.
+prueba de coincidencia. Las diferencias son conflictos. Los campos del
+proveedor que quedan fuera de ese conjunto se consideran incompletos.

@@ -1,10 +1,14 @@
-# Notas de crédito
+---
+title: "Notas de crédito y débito"
+description: "Emití notas parciales, totales, por período y FCE con asociaciones fiscales correctas."
+keywords: ["nota de crédito", "nota de débito", "FCE", "ARCA"]
+---
 
 ARCA no anula comprobantes. Una corrección es una nota de crédito, y todos los
 modos de `issueCreditNote()` escriben un documento fiscal real que queda en los
 registros de ARCA.
 
-Una nota de crédito nombra el comprobante —o los comprobantes— que corrige, o
+Una nota de crédito nombra el comprobante, o los comprobantes, que corrige, o
 el período que ajusta. `issueDebitNote()` emite notas de débito con el mismo
 contrato.
 
@@ -13,14 +17,13 @@ contrato.
 Lo habitual es la nota parcial: una devolución o una corrección de precio que
 acredita las líneas que elegís en vez de la factura entera.
 
-Este bloque es [examples/nota-de-credito-parcial.ts](../examples/nota-de-credito-parcial.ts):
+Este bloque es [examples/nota-de-credito-parcial.ts](https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-parcial.ts):
 
 ```ts
 import { createArcaClient, createFileStore } from "facturas";
 
-// Configure ARCA credentials and a private durable directory before running.
-// ARCA has no cancellation: this writes a real credit note for part of the
-// original invoice. Both documents remain in ARCA's records.
+// Configurá las credenciales de ARCA y un directorio privado que sobreviva a
+// reinicios. Esto emite una nota de crédito real por parte de la factura.
 const arca = createArcaClient({
   store: createFileStore("./private-arca-store"),
 });
@@ -28,9 +31,9 @@ const devolucion = { id: "refund-example-001" };
 
 const nota = await arca.issueCreditNote(
   {
-    // The original invoice: a class C invoice of ARS 1.500,00 here.
+    // La factura original es de clase C por ARS 1.500,00.
     for: { salesPoint: 3, voucherType: 11, number: 41 },
-    // Class C originals take amount items; A and B take { gross | net, vat }.
+    // Para clase C usá amount. Para A y B, usá gross o net junto con vat.
     items: [{ amount: 50_000 }], // ARS 500,00 en centavos
   },
   { idempotencyKey: `nc:${devolucion.id}` }
@@ -59,14 +62,13 @@ switch (nota.kind) {
 `all: true` acredita el original completo: espeja sus importes y sus alícuotas
 de IVA línea por línea.
 
-Este bloque es [examples/nota-de-credito-total.ts](../examples/nota-de-credito-total.ts):
+Este bloque es [examples/nota-de-credito-total.ts](https://github.com/LaPyme/facturas/blob/main/examples/nota-de-credito-total.ts):
 
 ```ts
 import { createArcaClient, createFileStore } from "facturas";
 
-// Configure ARCA credentials and a private durable directory before running.
-// ARCA has no cancellation: this writes a real credit note for the whole
-// invoice. Both the original and the note remain in ARCA's records.
+// Configurá las credenciales de ARCA y un directorio privado que sobreviva a
+// reinicios. Esto emite una nota de crédito real por toda la factura.
 const arca = createArcaClient({
   store: createFileStore("./private-arca-store"),
 });
@@ -92,8 +94,8 @@ switch (nota.kind) {
 }
 ```
 
-El modo es explícito y obligatorio: un input sin `items` ni `all: true`, o con
-los dos, se rechaza antes de cualquier I/O, así un campo olvidado nunca puede
+El modo es explícito y obligatorio. Un input sin `items` ni `all: true`, o con
+los dos, se rechaza antes de cualquier I/O. Así, un campo olvidado nunca puede
 acreditar la factura entera.
 
 ## Qué sale del original y qué aportás vos
@@ -101,15 +103,15 @@ acreditar la factura entera.
 Del original el SDK toma la clase y por lo tanto el tipo de nota
 (1 → 3, 6 → 8, 11 → 13), el tipo, el número y la condición de IVA del receptor,
 la moneda y el tipo de cambio, el concepto y, para los conceptos 2 y 3, las
-fechas de servicio, con el vencimiento elevado a la fecha de la nota. El
-llamador aporta `for`, el modo (`items` o `amounts`, con un `total` opcional,
+fechas de servicio, con el vencimiento elevado a la fecha de la nota. La
+aplicación aporta `for`, el modo (`items` o `amounts`, con un `total` opcional,
 o `all: true`) y, como mucho, el `salesPoint` de la nota, que por defecto es el
 del original, y `date`, que por defecto es hoy en Buenos Aires. Una nota
-vinculada no tiene campos `issuer`, `to` ni `currency`; solo las notas por
+vinculada no tiene campos `issuer`, `to` ni `currency`. Solo las notas por
 período los llevan, porque no hay original de donde tomarlos.
 
 La forma de los ítems sigue la clase del original. Una nota de clase C acepta
-ítems `{ amount }`; las notas de clase A y B aceptan ítems `{ gross | net, vat }`
+ítems `{ amount }`. Las notas de clase A y B aceptan ítems `{ gross | net, vat }`
 con las mismas alícuotas y la misma conciliación que `issue()`. La clase es
 evidencia del original, así que una forma que la contradice se rechaza después
 de consultarlo y antes de cualquier escritura.
@@ -117,7 +119,7 @@ de consultarlo y antes de cualquier escritura.
 En lugar de `items` podés pasar `amounts`, el mismo desglose fiscal revisado
 que acepta `issue()`: `{ net, vat, exempt?, untaxed?, vatRates? }` en centavos,
 con un `total` opcional. Es el modo para una nota parcial cuya composición ya
-calculó tu aplicación; el SDK no recalcula el IVA. `items` y `amounts` son
+calculó tu aplicación. El SDK no recalcula el IVA. `items` y `amounts` son
 excluyentes, y ninguno de los dos se combina con `all: true`.
 
 ## Varios originales
@@ -141,7 +143,7 @@ const nota = await arca.issueCreditNote(
 
 Como la nota tiene un solo valor de cada campo heredado y varias fuentes para
 él, los originales tienen que coincidir en todo lo que la nota hereda: clase y
-familia —y por lo tanto el tipo de nota—, tipo y número de documento y
+familia, y por lo tanto el tipo de nota, tipo y número de documento y
 condición de IVA del receptor, moneda y tipo de cambio, concepto y fechas de
 servicio. Si alguno difiere, se lanza `ArcaInputError` nombrando el campo, y la
 nota se emite por grupo. El punto de venta de la nota entra en esa
@@ -164,7 +166,7 @@ SDK nunca adivina qué percepción corresponde ni en qué proporción.
 
 La nota no puede superar el total del original, o la suma de los totales
 cuando `for` nombra varios. El SDK no lleva la cuenta de notas anteriores
-contra un original; evitar que varias notas sumen más que la factura es tarea
+contra un original. Evitar que varias notas sumen más que la factura es tarea
 de la aplicación.
 
 El original puede ser una factura o una nota de débito autorizada de las
@@ -178,9 +180,9 @@ retención o percepción y qué percepción corresponde en cada caso siguen sien
 de la aplicación. Los campos opcionales propios de la nota los aportás vos: no
 se copian del original.
 
-Una nota a otro receptor o en otra moneda es un documento distinto: emitila
-como una nota propia contra su original. Para emitir la nota con detalle de
-ítems, mirá [WSMTXCA](./wsmtxca.md).
+Una nota a otro receptor o en otra moneda es un documento distinto. Emitila
+como una nota propia contra su original. Para emitir una nota con detalle de
+ítems, mirá [WSMTXCA](/guides/wsmtxca).
 
 ## Notas de débito
 
@@ -241,9 +243,9 @@ const nota = await arca.issueCreditNote(
 emisión. A diferencia de `preview()`, que no hace ninguna I/O, estas consultan
 los originales: una lectura por original, sin escritura y sin reservar número.
 La respuesta de una nota vinculada incluye esos comprobantes en `originals`,
-`VoucherSummary` normalizados y sin datos raw, en el orden en que los pasaste.
-Una nota por período no tiene originales, así que tampoco necesita esa consulta
-ni devuelve esa propiedad.
+`VoucherSummary` normalizados y sin la respuesta cruda, en el orden en que los
+pasaste. Una nota por período no tiene originales, así que tampoco necesita esa
+consulta ni devuelve esa propiedad.
 
 ```ts
 const previsualizacion = await arca.previewCreditNote({
@@ -258,9 +260,9 @@ console.log(
 );
 ```
 
-## Idempotencia y prueba en producción
+## Evitar duplicados y probar en producción
 
-`idempotencyKey` e `include` funcionan igual que en `issue()`; dale a la nota su
+`idempotencyKey` e `include` funcionan igual que en `issue()`. Dale a la nota su
 propia clave estable, por ejemplo `nc:${devolucion.id}`. Una repetición con
 clave consulta solo la nota reservada e informa `amounts` a partir del request
 guardado, así que en ese camino `computedTotal` es igual a `sentTotal` y
@@ -268,5 +270,5 @@ guardado, así que en ese camino `computedTotal` es igual a `sentTotal` y
 
 Una prueba de humo en producción es una factura de ARS 1 seguida de una nota
 total. **Los dos documentos son reales y quedan en los registros de ARCA.** La
-nota es una operación aparte; si falla, la factura queda pendiente. Hacé
+nota es una operación aparte. Si falla, la factura queda pendiente. Hacé
 coincidir `issuer` con tu condición fiscal real.

@@ -1,13 +1,16 @@
 import { createArcaClient } from "facturas";
 import { ARCA_VOUCHER_TYPES } from "facturas/constants";
 
+const environment = process.env.ARCA_ENVIRONMENT;
+if (environment !== "test" && environment !== "production") {
+  throw new Error("ARCA_ENVIRONMENT debe ser test o production");
+}
+
 const client = createArcaClient({
-  taxId: "20123456786",
-  certificatePem:
-    "-----BEGIN CERTIFICATE-----\nREPLACE_WITH_YOUR_CERTIFICATE\n-----END CERTIFICATE-----",
-  privateKeyPem:
-    "-----BEGIN PRIVATE KEY-----\nREPLACE_WITH_YOUR_PRIVATE_KEY\n-----END PRIVATE KEY-----",
-  environment: "test",
+  taxId: process.env.ARCA_TAX_ID,
+  certificatePem: process.env.ARCA_CERTIFICATE_PEM,
+  privateKeyPem: process.env.ARCA_PRIVATE_KEY_PEM,
+  environment,
 });
 
 async function main() {

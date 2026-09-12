@@ -35,7 +35,7 @@ export async function issueDetailedInvoice(
       {
         net: 10_000,
         vat: 21,
-        description: "Product",
+        description: "Producto",
         quantity: 1,
         unit: 7,
         unitPrice: "100.000000",
@@ -68,7 +68,7 @@ export async function issueAdjustments(
     },
     all: true as const,
   };
-  // Consulta el original una vez; no reserva número ni escribe nada.
+  // Este método consulta el original una vez. No reserva número ni escribe nada.
   await arca.previewCreditNote(credit);
   return await arca.issueCreditNote(credit, {
     idempotencyKey: "credit:example",
