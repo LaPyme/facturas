@@ -1,6 +1,6 @@
 import { createArcaClient, createMemoryStore } from "facturas";
 
-// Example only: use a durable store in an app. Memory does not survive restarts.
+// Solo para este ejemplo. En una aplicación, usá un store persistente.
 const arca = createArcaClient({ store: createMemoryStore() });
 const venta = { id: "sale-example-001" };
 const factura = await arca.issue(

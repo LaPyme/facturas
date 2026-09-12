@@ -1,8 +1,12 @@
-# WSMTXCA
+---
+title: "WSMTXCA"
+description: "Emití comprobantes con detalle de ítems mediante WSMTXCA."
+keywords: ["WSMTXCA", "detalle de ítems", "CAE", "FCE"]
+---
 
 WSMTXCA es el otro servicio de CAE de ARCA. Su diferencia con WSFE es el
-detalle: cada comprobante lleva sus ítems, no solo la cabecera fiscal. La
-fachada lo cubre con los mismos métodos que WSFE.
+detalle: cada comprobante lleva sus ítems, no solo la cabecera fiscal.
+`issue()`, las notas y las vistas previas funcionan con ambos servicios.
 
 ## Elegir el proveedor
 
@@ -21,15 +25,16 @@ los de WSMTXCA, sin casts.
 
 ## Detalle de ítems
 
-El detalle vive en los mismos `items`. Además de la plata —`net` o `gross` con
-`vat`, o `amount` en clase C— cada ítem puede llevar `description`, `quantity`,
+El detalle vive en los mismos `items`. Además de la plata, `net` o `gross` con
+`vat`, o `amount` en clase C, cada ítem puede llevar `description`, `quantity`,
 `unit`, `unitPrice` y, opcionalmente, `discount`, `code`, `matrixCode` y
-`matrixUnits`. WSMTXCA necesita los cuatro primeros en todos los ítems; si
-falta alguno, se lanza `ArcaInputError` con el índice del ítem y el campo. WSFE
-ignora estos campos y arma su cabecera igual que siempre.
+`matrixUnits`. `{ service: "wsmtxca" }` necesita `description`, `quantity`,
+`unit` y `unitPrice` en todos los ítems. Si falta alguno, se lanza
+`ArcaInputError` con el índice del ítem y el campo. WSFE ignora estos campos y
+arma su cabecera igual que siempre.
 
 Este bloque sale de
-[examples/emision-completa.ts](../examples/emision-completa.ts):
+[examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts):
 
 ```ts
 const input = {
@@ -40,7 +45,7 @@ const input = {
     {
       net: 10_000,
       vat: 21,
-      description: "Product",
+      description: "Producto",
       quantity: 1,
       unit: 7,
       unitPrice: "100.000000",
@@ -66,8 +71,8 @@ unidades mayores** con hasta seis decimales, para no perder la precisión del
 precio unitario del proveedor. Todos los demás importes del ítem son enteros en
 centavos.
 
-El SDK arma las dos codificaciones de proveedor; la aplicación no construye
-arrays SOAP.
+El SDK arma las dos codificaciones del proveedor. La aplicación no construye
+listas SOAP.
 
 ## Previsualizar
 
@@ -80,8 +85,8 @@ previsualizacion.request.comprobanteCAERequest.importeTotal; // number
 ```
 
 Con `include: { sent: true }`, un resultado autorizado trae en `sent` el
-request de WSMTXCA que efectivamente se envió. Los llamadores de WSFE
-conservan sus tipos `WsfeVoucherInput` de siempre.
+request de WSMTXCA que efectivamente se envió. Las llamadas a WSFE conservan
+sus tipos `WsfeVoucherInput`.
 
 ## FCE en los dos proveedores
 
@@ -105,10 +110,11 @@ que ARCA tiene registrados. Si la consulta vuelve incompleta, el resultado
 queda `indeterminate` y no se reenvía nada.
 
 Las reservas guardan el proveedor. Una reserva de WSMTXCA, o cualquier reserva
-con líneas de proveedor, se escribe como registro `v: 2`; la versión 0.10 no puede
+con líneas de proveedor, se escribe como registro `v: 2`. La versión 0.10 no puede
 reproducirla, justamente para que no reenvíe por WSFE un comprobante que era de
-WSMTXCA. Ver [Stores](./stores.md#store-propio-y-vida-de-los-registros).
+WSMTXCA. La vida de estos registros está en
+[Evitar comprobantes duplicados](/guides/avoid-duplicates#implementar-otro-store).
 
-Para el acceso directo a `client.wsmtxca` —`issue()`,
-`getLastAuthorizedVoucher()`, `getVoucher()`— mirá
-[Módulos de transporte](./referencia.md#clientwsmtxca).
+Para las lecturas de `client.wsmtxca`, como `getLastAuthorizedVoucher()`,
+`getVoucher()` y `getSalesPoints()`, mirá
+[Módulos de transporte](/reference/arca-services#clientwsmtxca).

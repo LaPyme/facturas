@@ -1,0 +1,113 @@
+---
+title: "API pública y constantes"
+description: "Consultá las constantes exportadas, la política de API pública, semver y las prácticas de seguridad."
+keywords: ["API pública", "constantes", "semver", "seguridad"]
+---
+
+## Datos de referencia
+
+El paquete exporta un conjunto chico y estable de códigos comunes de ARCA desde
+`facturas/constants`.
+
+```ts
+import {
+  ARCA_CONCEPT_TYPES,
+  ARCA_CURRENCY_IDS,
+  ARCA_DOCUMENT_TYPES,
+  ARCA_RECEIVER_VAT_CONDITIONS,
+  ARCA_VAT_RATES,
+  ARCA_VOUCHER_TYPES,
+  ISO_CURRENCIES,
+} from "facturas/constants";
+
+ARCA_VOUCHER_TYPES.FACTURA_A; // 1
+ARCA_VOUCHER_TYPES.FACTURA_B; // 6
+ARCA_DOCUMENT_TYPES.CUIT; // 80
+ARCA_DOCUMENT_TYPES.DNI; // 96
+ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL; // 99
+ARCA_RECEIVER_VAT_CONDITIONS.RESPONSABLE_INSCRIPTO; // 1
+ARCA_RECEIVER_VAT_CONDITIONS.CONSUMIDOR_FINAL; // 5
+ARCA_CONCEPT_TYPES.SERVICIOS; // 2
+ARCA_VAT_RATES.IVA_21; // 5
+ISO_CURRENCIES.ARS; // "ARS"
+ARCA_CURRENCY_IDS.USD; // "DOL"
+```
+
+Las constantes cubren los valores más comunes que usan la documentación y los
+ejemplos:
+
+- tipos de comprobante para factura A/B/C, nota de débito A/B/C y nota de
+  crédito A/B/C
+- tipos de documento para CUIT, DNI y consumidor final
+- condiciones de IVA del receptor más comunes, sujetas a las reglas de clase de
+  comprobante y de catálogo en vivo
+- tipos de concepto para productos, servicios y productos + servicios
+- alícuotas de IVA `0`, `2.5`, `5`, `10.5`, `21` y `27`
+- monedas ISO que acepta la fachada, `ARS` y `USD`, con sus mapeos explícitos a
+  `PES` y `DOL` en ARCA
+
+Si necesitás catálogos más amplios en tiempo de ejecución, están disponibles
+los métodos de WSFE como `getVoucherTypes()`,
+`getDocumentTypes()`, `getCurrencyTypes()` y `getVatRates()`.
+`getCurrencyTypes()` devuelve identificadores en vivo de ARCA, no códigos ISO.
+
+## API pública (semver)
+
+Métodos del cliente cubiertos por semver: `issue`, `preview`, `recover`,
+`issueCreditNote`, `issueDebitNote`, `previewCreditNote`, `previewDebitNote`, y
+los módulos `wsfe`, `wsmtxca` y `padron`.
+
+Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
+`signal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
+consultas de esa llamada. Un corte posterior al envío devuelve `indeterminate`
+con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
+de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
+resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
+esta clave y hay que emitir bajo una clave nueva. Está documentado en
+[Facturas](/guides/invoices#evitar-duplicados-al-reintentar).
+
+Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
+`IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
+`DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
+`RecoveryOptions`, `IssueRequest`, `IssuanceService`, `FceOptions`,
+`InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
+`ItemLine`, `WsmtxcaLine` y `WsmtxcaIssueRequest`. `ItemLine` es el ítem de la
+fachada, con su plata y el detalle de línea que usa WSMTXCA. `WsmtxcaLine` es
+la fila que devuelven las consultas de WSMTXCA.
+
+`include: { raw: true, sent: true }` agrega la evidencia cruda y el request
+enviado a un resultado autorizado, y `NotePreview.originals` lista los
+comprobantes que una nota vinculada corrige. Los
+[módulos de transporte](/reference/arca-services) documentan `client.wsfe`,
+`client.wsmtxca` y `client.padron`.
+
+Entradas documentadas:
+
+- `facturas`
+- `facturas/constants`
+- `facturas/wsfe`
+- `facturas/wsmtxca`
+- `facturas/padron`
+- `facturas/errors`
+- `facturas/types`
+
+Los internos de bajo nivel de SOAP, HTTP y WSAA no forman parte del contrato de
+semver.
+
+Ejemplo con subpaths:
+
+```ts
+import { createWsfeService } from "facturas/wsfe";
+import { ARCA_VOUCHER_TYPES } from "facturas/constants";
+import { ArcaServiceError } from "facturas/errors";
+```
+
+## Seguridad
+
+- Tratá los certificados y las claves privadas como secretos.
+- Por defecto, los tickets WSAA se guardan solo en memoria.
+- El SDK persiste los tickets WSAA cuando le pasás `store` o
+  `wsaaSessionStore`. Mantené privado su almacenamiento. Los adaptadores
+  incluidos nunca guardan la configuración de certificado ni de clave privada.
+- Las implementaciones de `wsaaSessionStore` en producción tendrían que cifrar
+  las credenciales en reposo o usar un almacenamiento que ya las cifre.

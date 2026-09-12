@@ -1,0 +1,106 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "palm",
+  "name": "facturas",
+  "description": "SDK de Node.js para facturación electrónica ARCA mediante WSFE y WSMTXCA.",
+  "colors": {
+    "primary": "#1E40AF",
+    "light": "#60A5FA",
+    "dark": "#3B82F6"
+  },
+  "appearance": {
+    "default": "system"
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Empezar",
+        "icon": "rocket",
+        "pages": [
+          "index",
+          "getting-started/quickstart",
+          "getting-started/arca-setup",
+          "getting-started/cli"
+        ]
+      },
+      {
+        "group": "Guías",
+        "icon": "book-open",
+        "pages": [
+          "guides/invoices",
+          "guides/credit-notes",
+          "guides/wsmtxca",
+          "guides/avoid-duplicates"
+        ]
+      },
+      {
+        "group": "Referencia",
+        "icon": "braces",
+        "pages": [
+          "reference/configuration",
+          "reference/arca-services",
+          "reference/errors",
+          "reference/public-api",
+          "reference/examples"
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "type": "github",
+        "href": "https://github.com/LaPyme/facturas"
+      },
+      {
+        "label": "npm",
+        "href": "https://www.npmjs.com/package/facturas"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Inicio rápido",
+      "href": "/getting-started/quickstart"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/LaPyme/facturas"
+    },
+    "links": [
+      {
+        "header": "Proyecto",
+        "items": [
+          {
+            "label": "npm",
+            "href": "https://www.npmjs.com/package/facturas"
+          },
+          {
+            "label": "Changelog",
+            "href": "https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md"
+          },
+          {
+            "label": "Licencia",
+            "href": "https://github.com/LaPyme/facturas/blob/main/LICENSE"
+          }
+        ]
+      }
+    ]
+  },
+  "search": {
+    "prompt": "Buscar en la documentación..."
+  },
+  "contextual": {
+    "options": ["copy", "chatgpt", "claude"],
+    "display": "toc"
+  },
+  "metadata": {
+    "timestamp": true
+  },
+  "seo": {
+    "indexing": "navigable"
+  }
+}
