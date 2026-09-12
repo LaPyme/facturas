@@ -396,11 +396,60 @@ function absorbAdjustment(drafts: readonly LineDraft[], adjustment: bigint) {
   settle(drafts, (draft) => draft.rate !== undefined, adjustment, true);
 }
 
+const ITEM_KEYS = [
+  "net",
+  "gross",
+  "amount",
+  "vat",
+  "description",
+  "quantity",
+  "unit",
+  "unitPrice",
+  "discount",
+  "code",
+  "matrixCode",
+  "matrixUnits",
+];
+
 /** WSMTXCA needs the line fields on every item; the index names the offender. */
 function assertItemLine(
   item: VatItem | AmountItem,
   path: string
 ): Omit<WsmtxcaLine, "amount" | "vatAmount" | "vatCondition"> {
+  assertRequiredLineFields(item, path);
+  for (const key of ["code", "matrixCode"] as const) {
+    if (item[key] !== undefined && typeof item[key] !== "string") {
+      invalidItem(`${path}.${key}`, "a string");
+    }
+  }
+  if (item.matrixUnits !== undefined && !Number.isFinite(item.matrixUnits)) {
+    invalidItem(`${path}.matrixUnits`, "a number");
+  }
+  return {
+    ...(item.matrixUnits === undefined
+      ? {}
+      : { matrixUnits: item.matrixUnits }),
+    ...(item.matrixCode === undefined ? {} : { matrixCode: item.matrixCode }),
+    ...(item.code === undefined ? {} : { code: item.code }),
+    description: item.description as string,
+    quantity: item.quantity as number,
+    unit: item.unit as number,
+    unitPrice: item.unitPrice as string,
+    discount: Number(
+      assertArcaMinorUnits(item.discount ?? 0, `${path}.discount`)
+    ),
+  };
+}
+
+function assertRequiredLineFields(
+  item: VatItem | AmountItem,
+  path: string
+): void {
+  for (const key of Object.keys(item)) {
+    if (!ITEM_KEYS.includes(key)) {
+      invalidItem(`${path}.${key}`, "a supported item field");
+    }
+  }
   const { description, quantity, unit, unitPrice } = item;
   if (typeof description !== "string" || description.trim() === "") {
     invalidItem(`${path}.description`, "a non-empty description");
@@ -417,26 +466,4 @@ function assertItemLine(
       "a major-unit decimal string with at most six decimals"
     );
   }
-  for (const key of ["code", "matrixCode"] as const) {
-    if (item[key] !== undefined && typeof item[key] !== "string") {
-      invalidItem(`${path}.${key}`, "a string");
-    }
-  }
-  if (item.matrixUnits !== undefined && !Number.isFinite(item.matrixUnits)) {
-    invalidItem(`${path}.matrixUnits`, "a number");
-  }
-  return {
-    ...(item.matrixUnits === undefined
-      ? {}
-      : { matrixUnits: item.matrixUnits }),
-    ...(item.matrixCode === undefined ? {} : { matrixCode: item.matrixCode }),
-    ...(item.code === undefined ? {} : { code: item.code }),
-    description: description as string,
-    quantity: quantity as number,
-    unit: unit as number,
-    unitPrice: unitPrice as string,
-    discount: Number(
-      assertArcaMinorUnits(item.discount ?? 0, `${path}.discount`)
-    ),
-  };
 }
