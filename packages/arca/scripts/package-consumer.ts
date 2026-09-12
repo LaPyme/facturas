@@ -215,8 +215,16 @@ export async function creditNoteConsumerContract(
   } as const;
   const linkedPreview: NotePreview =
     await client.previewCreditNote(linkedPreviewInput);
-  linkedPreview.original?.cae satisfies string | undefined;
-  linkedPreview.original?.totalAmount satisfies number | undefined;
+  linkedPreview.originals?.[0]?.cae satisfies string | undefined;
+  linkedPreview.originals?.[0]?.totalAmount satisfies number | undefined;
+  // A note against several originals reads every one of them.
+  const manyPreview = await client.previewCreditNote({
+    for: [target, { ...target, number: 2 }],
+    items: [{ amount: 100 }],
+  });
+  manyPreview.originals?.length satisfies number | undefined;
+  // all: true against several originals is refused at runtime, before any I/O.
+  await client.issueCreditNote({ for: [target], all: true });
   const periodPreview = await client.previewCreditNote({
     issuer: "responsable_inscripto",
     salesPoint: 1,
@@ -224,7 +232,7 @@ export async function creditNoteConsumerContract(
     items: [{ net: 10_000, vat: 21 }],
     associatedPeriod: { from: "20260901", to: "20260930" },
   });
-  periodPreview.original satisfies object | undefined;
+  periodPreview.originals satisfies readonly object[] | undefined;
   // @ts-expect-error A credit note needs exactly one mode: items, amounts or all: true.
   await client.issueCreditNote({ for: target });
   await client.issueCreditNote({
@@ -326,20 +334,15 @@ export async function completeIssuanceConsumerContract(
     issuer: "responsable_inscripto" as const,
     salesPoint: 1,
     to: { condition: 1, cuit: "20123456789" },
-    amounts: {
-      net: 10_000,
-      vat: 2100,
-      vatRates: [{ id: 5, base: 10_000, amount: 2100 }],
-    },
-    details: [
+    // One item carries both the money and the line WSMTXCA sends.
+    items: [
       {
+        net: 10_000,
+        vat: 21 as const,
         description: "Product",
         quantity: 1,
         unit: 7,
         unitPrice: "100",
-        vatCondition: 5,
-        vatAmount: 2100,
-        amount: 12_100,
       },
     ],
   };
@@ -359,10 +362,10 @@ export async function completeIssuanceConsumerContract(
       issued.authorization.service satisfies "wsmtxca";
     }
   }
-  const { details: _details, ...header } = input;
-  client.preview(header).request satisfies WsfeVoucherInput;
+  // WSFE ignores the line fields and derives the same header from the money.
+  client.preview(input).request satisfies WsfeVoucherInput;
   const period = {
-    ...header,
+    ...input,
     associatedPeriod: { from: "20260901" as const, to: "20260906" as const },
   };
   await client.previewDebitNote(period);

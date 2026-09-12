@@ -201,8 +201,10 @@ catálogo de ARCA, con `cuit`, `dni` o `document: { type, number }`. Los campos
 `optionalFields`, `buyers` y `activities` pasan tal cual a WSFE y a WSMTXCA; no
 dupliques ahí lo que ya informa `fce`.
 
-Para el detalle de ítems de WSMTXCA, mirá [WSMTXCA](./wsmtxca.md). El ejemplo
-compilado de todo esto es
+Cada ítem puede además describir su línea: `description`, `quantity`, `unit`,
+`unitPrice`, `discount`, `code`, `matrixCode` y `matrixUnits`. WSFE los ignora;
+WSMTXCA los necesita y arma sus filas con ellos. Mirá
+[WSMTXCA](./wsmtxca.md). El ejemplo compilado de todo esto es
 [examples/emision-completa.ts](../examples/emision-completa.ts).
 
 ## Contrato fiscal de la fachada

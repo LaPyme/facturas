@@ -57,8 +57,8 @@ export type {
   VoucherAmounts,
 } from "./services/issuance-fields";
 export type {
-  VoucherItemDetail,
   WsmtxcaIssueRequest,
+  WsmtxcaLine,
 } from "./services/issuance-wsmtxca";
 export type {
   CreatePadronServiceOptions,
@@ -111,6 +111,7 @@ export { createWsfeService } from "./services/wsfe";
 export type {
   AmountItem,
   IssueAmounts,
+  ItemLine,
   VatItem,
   VatRate,
 } from "./services/wsfe-amounts";

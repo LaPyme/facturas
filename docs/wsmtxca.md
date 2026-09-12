@@ -21,10 +21,12 @@ los de WSMTXCA, sin casts.
 
 ## Detalle de ítems
 
-`details` es el detalle del comprobante. Cada fila lleva `description`,
-`quantity`, `unit`, `unitPrice`, `vatCondition`, `vatAmount` cuando
-corresponde, y `amount`; opcionalmente `discount`, `code`, `matrixCode` y
-`matrixUnits`.
+El detalle vive en los mismos `items`. Además de la plata —`net` o `gross` con
+`vat`, o `amount` en clase C— cada ítem puede llevar `description`, `quantity`,
+`unit`, `unitPrice` y, opcionalmente, `discount`, `code`, `matrixCode` y
+`matrixUnits`. WSMTXCA necesita los cuatro primeros en todos los ítems; si
+falta alguno, se lanza `ArcaInputError` con el índice del ítem y el campo. WSFE
+ignora estos campos y arma su cabecera igual que siempre.
 
 Este bloque sale de
 [examples/emision-completa.ts](../examples/emision-completa.ts):
@@ -34,30 +36,35 @@ const input = {
   issuer: "responsable_inscripto",
   salesPoint: 1,
   to: { condition: "responsable_inscripto", cuit: "20123456789" },
-  items: [{ net: 10_000, vat: 21 }],
-  details: [
+  items: [
     {
+      net: 10_000,
+      vat: 21,
       description: "Product",
       quantity: 1,
       unit: 7,
       unitPrice: "100.000000",
-      vatCondition: 5,
-      vatAmount: 2100,
-      amount: 12_100,
     },
   ],
 } satisfies IssueInput;
 ```
 
-Los importes de los ítems incluyen el IVA, y un ítem de clase A además informa
-su importe de IVA. Los totales del detalle tienen que conciliar con la
-cabecera fiscal, sin contar los tributos. Los agregados fiscales salen del
-mismo `items` o `amounts` que usa WSFE: el detalle no reemplaza al desglose.
+El SDK deriva de ahí las filas del proveedor: la condición de IVA sale de la
+alícuota del ítem (21 → 5, 10,5 → 4, 0 → 3, 2,5 → 9, 5 → 8, 27 → 6, exento → 2,
+no gravado → 1, y clase C → 3), el importe del ítem incluye el IVA, y un ítem
+de clase A además informa su importe de IVA. Como la cabecera y las líneas
+salen de los mismos ítems, no hay dos descripciones de la misma plata que
+puedan discrepar: el IVA por línea se concilia con el redondeo agrupado por
+alícuota, y que las líneas sumen la cabecera es un invariante del SDK.
+
+Un desglose `amounts` ya revisado no tiene líneas, así que
+`{ service: "wsmtxca" }` con `amounts` se rechaza con `ArcaInputError`: WSMTXCA
+necesita `items` con detalle.
 
 `unitPrice` es la única excepción monetaria del SDK: un **string decimal en
 unidades mayores** con hasta seis decimales, para no perder la precisión del
-precio unitario del proveedor. Todos los demás importes del detalle son
-enteros en centavos.
+precio unitario del proveedor. Todos los demás importes del ítem son enteros en
+centavos.
 
 El SDK arma las dos codificaciones de proveedor; la aplicación no construye
 arrays SOAP.
@@ -98,7 +105,7 @@ que ARCA tiene registrados. Si la consulta vuelve incompleta, el resultado
 queda `indeterminate` y no se reenvía nada.
 
 Las reservas guardan el proveedor. Una reserva de WSMTXCA, o cualquier reserva
-con detalle, se escribe como registro `v: 2`; la versión 0.10 no puede
+con líneas de proveedor, se escribe como registro `v: 2`; la versión 0.10 no puede
 reproducirla, justamente para que no reenvíe por WSFE un comprobante que era de
 WSMTXCA. Ver [Stores](./stores.md#store-propio-y-vida-de-los-registros).
 

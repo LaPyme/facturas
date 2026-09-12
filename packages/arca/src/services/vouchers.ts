@@ -42,6 +42,7 @@ import {
   type WsfeVoucherInfo,
   type WsfeVoucherInput,
 } from "./wsfe";
+import { deriveWsmtxcaLines } from "./wsfe-amounts";
 import {
   assertCreditNoteInput,
   type CreditNoteInput,
@@ -300,21 +301,33 @@ function previewInvoice(
 }
 function prepareInvoice(input: IssueInput, options: IssueOptions): Prepared {
   const prepared: Prepared = deriveWsfeInvoice(input);
-  if (input.details !== undefined) {
-    prepared.data.details = structuredClone(input.details);
-  }
+  attachLines(prepared, options);
   validatePrepared(prepared, options);
   return prepared;
+}
+/**
+ * WSMTXCA sends the lines the items describe. WSFE ignores them, so nothing is
+ * derived for it and the reservation stays a version-1 record.
+ */
+function attachLines(prepared: Prepared, options: IssueOptions): void {
+  if (options.service !== "wsmtxca") {
+    return;
+  }
+  if (prepared.lineSource === undefined) {
+    throw new ArcaInputError(
+      "WSMTXCA needs items with line detail; a reviewed amounts breakdown has no lines.",
+      { code: "ARCA_INPUT_INVALID_VALUE", field: "amounts" }
+    );
+  }
+  prepared.data.lines = deriveWsmtxcaLines(
+    prepared.lineSource,
+    prepared.amounts.vatAdjustment
+  );
 }
 function validatePrepared(prepared: Prepared, options: IssueOptions): void {
   validateFiscalHeader(prepared.data);
   if (options.service === "wsmtxca") {
     wsmtxcaRequest(prepared.data);
-  } else if (prepared.data.details !== undefined) {
-    throw new ArcaInputError("Detailed items require service: wsmtxca", {
-      code: "ARCA_INPUT_INVALID_VALUE",
-      field: "details",
-    });
   }
 }
 function toPreview(
@@ -438,7 +451,7 @@ async function runOperation(
   function reservation(number: number): ArcaAttemptRecord {
     const service = options.service ?? "wsfe";
     const versioned =
-      service === "wsmtxca" || prepared.data.details !== undefined;
+      service === "wsmtxca" || prepared.data.lines !== undefined;
     return {
       v: versioned ? 2 : 1,
       operation,
@@ -1332,13 +1345,14 @@ async function prepareNote(
     note.all === true
       ? deriveWsfeFullCreditNote(firstOriginal as WsfeVoucherInfo, note)
       : deriveWsfePartialCreditNote(originals, note, new Date(), kind);
-  if (note.details !== undefined) {
-    prepared.data.details = structuredClone(note.details);
-  } else if (note.all && "details" in (firstOriginal ?? {})) {
-    prepared.data.details = structuredClone(
-      (firstOriginal as { details?: FiscalHeader["details"] })
-        .details as FiscalHeader["details"]
-    );
+  if (note.all === true) {
+    // A full note mirrors the original, lines included, as ARCA returned them.
+    const mirrored = (firstOriginal as { lines?: FiscalHeader["lines"] }).lines;
+    if (mirrored !== undefined) {
+      prepared.data.lines = structuredClone(mirrored);
+    }
+  } else {
+    attachLines(prepared, options);
   }
   if (voucherFamily(prepared.data.voucherType).family === "fce") {
     const taxId = options.representedTaxId ?? context?.taxId;

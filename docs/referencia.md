@@ -71,7 +71,7 @@ Tipos exportados de la fachada, además de `IssueInput`, `IssueOptions`,
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
 `RecoveryOptions`, `IssueRequest`, `IssuanceService`, `FceOptions`,
 `InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
-`VoucherItemDetail` y `WsmtxcaIssueRequest`.
+`ItemLine`, `WsmtxcaLine` y `WsmtxcaIssueRequest`.
 
 Entradas documentadas:
 
