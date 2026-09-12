@@ -104,4 +104,4 @@ WSMTXCA. Ver [Stores](./stores.md#store-propio-y-vida-de-los-registros).
 
 Para el acceso directo a `client.wsmtxca` —`issue()`,
 `getLastAuthorizedVoucher()`, `getVoucher()`— mirá
-[Capa exacta](./capa-exacta.md#clientwsmtxca).
+[Módulos de transporte](./referencia.md#clientwsmtxca).
