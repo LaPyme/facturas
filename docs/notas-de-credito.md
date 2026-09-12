@@ -4,8 +4,9 @@ ARCA no anula comprobantes. Una corrección es una nota de crédito, y todos los
 modos de `issueCreditNote()` escriben un documento fiscal real que queda en los
 registros de ARCA.
 
-Una nota de crédito nombra el comprobante que corrige, o el período que
-ajusta. `issueDebitNote()` emite notas de débito con el mismo contrato.
+Una nota de crédito nombra el comprobante —o los comprobantes— que corrige, o
+el período que ajusta. `issueDebitNote()` emite notas de débito con el mismo
+contrato.
 
 ## Nota parcial
 
