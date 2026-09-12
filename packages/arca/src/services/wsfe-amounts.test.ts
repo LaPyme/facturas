@@ -429,6 +429,7 @@ describe("WSMTXCA lines derived from the same items", () => {
     ["items[1].unitPrice", { unitPrice: "1,5" }],
     ["items[1].discount", { discount: 1.5 }],
     ["items[1].code", { code: 7 }],
+    ["items[1].vatAmount", { vatAmount: 21 }],
   ])("names %s when the line detail is wrong", (field, change) => {
     expect(() =>
       deriveWsmtxcaLines(
