@@ -111,13 +111,45 @@ La forma de los ítems sigue la clase del original. Una nota de clase C acepta
 ítems `{ amount }`; las notas de clase A y B aceptan ítems `{ gross | net, vat }`
 con las mismas alícuotas y la misma conciliación que `issue()`. La clase es
 evidencia del original, así que una forma que la contradice se rechaza después
-de la única consulta del original y antes de cualquier escritura.
+de consultarlo y antes de cualquier escritura.
 
 En lugar de `items` podés pasar `amounts`, el mismo desglose fiscal revisado
 que acepta `issue()`: `{ net, vat, exempt?, untaxed?, vatRates? }` en centavos,
 con un `total` opcional. Es el modo para una nota parcial cuya composición ya
 calculó tu aplicación; el SDK no recalcula el IVA. `items` y `amounts` son
 excluyentes, y ninguno de los dos se combina con `all: true`.
+
+## Varios originales
+
+`for` acepta un original o una lista de originales. Con una lista, el SDK
+consulta cada uno y los asocia todos a la misma nota, y el tope deja de ser el
+total de un comprobante para ser la suma de los totales de todos.
+
+```ts
+const nota = await arca.issueCreditNote(
+  {
+    for: [
+      { salesPoint: 3, voucherType: 11, number: 41 },
+      { salesPoint: 3, voucherType: 11, number: 42 },
+    ],
+    items: [{ amount: 50_000 }],
+  },
+  { idempotencyKey: `nc:${devolucion.id}` },
+);
+```
+
+Como la nota tiene un solo valor de cada campo heredado y varias fuentes para
+él, los originales tienen que coincidir en todo lo que la nota hereda: clase y
+familia —y por lo tanto el tipo de nota—, tipo y número de documento y
+condición de IVA del receptor, moneda y tipo de cambio, concepto y fechas de
+servicio. Si alguno difiere, se lanza `ArcaInputError` nombrando el campo, y la
+nota se emite por grupo. El punto de venta de la nota entra en esa
+comparación solo cuando no lo pasás: con `salesPoint` explícito, los originales
+pueden ser de puntos de venta distintos.
+
+`all: true` acepta un solo original: una nota total de varios comprobantes no
+tiene un total único, así que se rechaza antes de cualquier I/O. Con varios
+originales van `items` o `amounts`.
 
 ## Tributos en las notas
 
@@ -129,15 +161,16 @@ SDK nunca adivina qué percepción corresponde ni en qué proporción.
 
 ## Límites
 
-La nota no puede superar el total del original. El SDK no lleva la cuenta de
-notas anteriores contra un original; evitar que varias notas sumen más que la
-factura es tarea de la aplicación.
+La nota no puede superar el total del original, o la suma de los totales
+cuando `for` nombra varios. El SDK no lleva la cuenta de notas anteriores
+contra un original; evitar que varias notas sumen más que la factura es tarea
+de la aplicación.
 
 El original puede ser una factura o una nota de débito autorizada de las
 familias ordinaria (1, 2, 6, 7, 11, 12), A con leyenda (51, 52) o FCE
 (201, 202, 206, 207, 211, 212), incluidos los originales con tributos. `for`
-identifica el original con `{ salesPoint, voucherType, number }` y nada más:
-alcanza con esas tres coordenadas del comprobante anterior.
+identifica cada original con `{ salesPoint, voucherType, number }` y nada más:
+alcanzan esas tres coordenadas del comprobante anterior.
 
 Los saldos acumulados, el stock, la contabilidad, la condición de agente de
 retención o percepción y qué percepción corresponde en cada caso siguen siendo
@@ -205,10 +238,11 @@ const nota = await arca.issueCreditNote(
 
 `previewCreditNote()` y `previewDebitNote()` derivan lo que enviaría la
 emisión. A diferencia de `preview()`, que no hace ninguna I/O, estas consultan
-el original: una lectura, sin escritura y sin reservar número. La respuesta de
-una nota vinculada incluye ese comprobante como `original`, un
-`VoucherSummary` normalizado y sin datos raw. Una nota por período no tiene
-original, así que tampoco necesita esa consulta ni devuelve esa propiedad.
+los originales: una lectura por original, sin escritura y sin reservar número.
+La respuesta de una nota vinculada incluye esos comprobantes en `originals`,
+`VoucherSummary` normalizados y sin datos raw, en el orden en que los pasaste.
+Una nota por período no tiene originales, así que tampoco necesita esa consulta
+ni devuelve esa propiedad.
 
 ```ts
 const previsualizacion = await arca.previewCreditNote({
@@ -218,8 +252,8 @@ const previsualizacion = await arca.previewCreditNote({
 console.log(
   previsualizacion.voucherType,
   previsualizacion.amounts,
-  previsualizacion.original.cae,
-  previsualizacion.original.totalAmount,
+  previsualizacion.originals?.[0]?.cae,
+  previsualizacion.originals?.[0]?.totalAmount,
 );
 ```
 

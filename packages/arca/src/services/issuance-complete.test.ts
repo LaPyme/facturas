@@ -655,13 +655,15 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       )
     ).toMatchObject({
       service: "wsmtxca",
-      original: {
-        number: 9,
-        salesPoint: 1,
-        voucherType: 1,
-        totalAmount: 124,
-        cae: "12345678901234",
-      },
+      originals: [
+        {
+          number: 9,
+          salesPoint: 1,
+          voucherType: 1,
+          totalAmount: 124,
+          cae: "12345678901234",
+        },
+      ],
     });
     expect(
       await client.issueCreditNote(

@@ -6,6 +6,7 @@ import {
 } from "./wsfe";
 import type { AmountItem, VatItem } from "./wsfe-amounts";
 import {
+  assertCreditNoteInput,
   type CreditNoteInput,
   deriveWsfeFullCreditNote,
   deriveWsfePartialCreditNote,
@@ -141,7 +142,7 @@ describe("full credit note derivation", () => {
     ).toThrow("exact service API");
     expect(() =>
       deriveWsfePartialCreditNote(
-        { ...invoice, [field]: [{ value: 1 }] },
+        [{ ...invoice, [field]: [{ value: 1 }] }],
         partial([{ gross: 100, vat: 21 }])
       )
     ).toThrow("exact service API");
@@ -195,7 +196,7 @@ describe("full credit note derivation", () => {
 describe("partial credit note derivation", () => {
   it("credits chosen amount items against a class C original", () => {
     const result = deriveWsfePartialCreditNote(
-      classC,
+      [classC],
       partial([{ amount: 40 }])
     );
     expect(result.voucherClass).toBe("C");
@@ -233,7 +234,7 @@ describe("partial credit note derivation", () => {
       { net: 1000, vat: 10.5 },
       { gross: 500, vat: "exempt" },
     ];
-    const result = deriveWsfePartialCreditNote(source, partial(items));
+    const result = deriveWsfePartialCreditNote([source], partial(items));
     expect(result.voucherClass).toBe(voucherClass);
     expect(result.data.voucherType).toBe(voucherType);
     expect(result.amounts).toEqual({
@@ -274,7 +275,7 @@ describe("partial credit note derivation", () => {
       total: 7717,
     });
     const asNote = deriveWsfePartialCreditNote(
-      invoice,
+      [invoice],
       partial(items, { total: 7717 })
     );
     expect(asNote.amounts).toEqual(asInvoice.amounts);
@@ -290,13 +291,13 @@ describe("partial credit note derivation", () => {
       expect(asNote.data[field]).toEqual(asInvoice.data[field]);
     }
     expect(() =>
-      deriveWsfePartialCreditNote(invoice, partial(items, { total: 7720 }))
+      deriveWsfePartialCreditNote([invoice], partial(items, { total: 7720 }))
     ).toThrowError(
       expect.objectContaining({ code: "ARCA_INPUT_AMOUNT_MISMATCH" })
     );
   });
   it("credits a reviewed breakdown the way issue() derives one", () => {
-    const result = deriveWsfePartialCreditNote(invoice, {
+    const result = deriveWsfePartialCreditNote([invoice], {
       for: target,
       date: "20260905",
       amounts: {
@@ -326,7 +327,7 @@ describe("partial credit note derivation", () => {
     Number.NaN,
   ])("rejects the reviewed total %s before reading the original", (total) => {
     expect(() =>
-      deriveWsfePartialCreditNote(invoice, {
+      deriveWsfePartialCreditNote([invoice], {
         for: target,
         date: "20260905",
         amounts: { net: 10_000, vat: 2100 },
@@ -342,7 +343,7 @@ describe("partial credit note derivation", () => {
   });
   it("rejects an item shape that does not match the original's class", () => {
     expect(() =>
-      deriveWsfePartialCreditNote(classC, partial([{ gross: 100, vat: 21 }]))
+      deriveWsfePartialCreditNote([classC], partial([{ gross: 100, vat: 21 }]))
     ).toThrowError(
       expect.objectContaining({
         code: "ARCA_INPUT_INVALID_VALUE",
@@ -352,7 +353,7 @@ describe("partial credit note derivation", () => {
     );
     for (const source of [classA, invoice]) {
       expect(() =>
-        deriveWsfePartialCreditNote(source, partial([{ amount: 100 }]))
+        deriveWsfePartialCreditNote([source], partial([{ amount: 100 }]))
       ).toThrowError(
         expect.objectContaining({
           code: "ARCA_INPUT_INVALID_VALUE",
@@ -364,7 +365,7 @@ describe("partial credit note derivation", () => {
   });
   it("refuses a note greater than the original and allows the exact total", () => {
     expect(() =>
-      deriveWsfePartialCreditNote(classC, partial([{ amount: 101 }]))
+      deriveWsfePartialCreditNote([classC], partial([{ amount: 101 }]))
     ).toThrowError(
       expect.objectContaining({
         code: "ARCA_INPUT_INVALID_VALUE",
@@ -372,12 +373,12 @@ describe("partial credit note derivation", () => {
       })
     );
     expect(
-      deriveWsfePartialCreditNote(classC, partial([{ amount: 100 }])).amounts
+      deriveWsfePartialCreditNote([classC], partial([{ amount: 100 }])).amounts
         .sentTotal
     ).toBe(100);
     expect(() =>
       deriveWsfePartialCreditNote(
-        invoice,
+        [invoice],
         partial([{ gross: 30_000, vat: 21 }])
       )
     ).toThrow("greater than the original");
@@ -393,7 +394,7 @@ describe("partial credit note derivation", () => {
       exchangeRate: 1200.5,
     };
     const { data } = deriveWsfePartialCreditNote(
-      services,
+      [services],
       partial([{ gross: 12_100, vat: 21 }])
     );
     expect(data).toMatchObject({
@@ -409,7 +410,7 @@ describe("partial credit note derivation", () => {
   it("issues the note from its own sales point when asked", () => {
     expect(
       deriveWsfePartialCreditNote(
-        classC,
+        [classC],
         partial([{ amount: 40 }], { salesPoint: 7 })
       ).data
     ).toMatchObject({
@@ -421,9 +422,144 @@ describe("partial credit note derivation", () => {
   });
   it("requires items", () => {
     expect(() =>
-      deriveWsfePartialCreditNote(classC, { for: target, all: true })
+      deriveWsfePartialCreditNote([classC], { for: target, all: true })
     ).toThrowError(
       expect.objectContaining({ code: "ARCA_INPUT_INVALID_VALUE" })
+    );
+  });
+});
+
+describe("notes against several originals", () => {
+  const second = { ...classC, voucherNumber: 2 };
+  const targets = [
+    { salesPoint: 1, voucherType: 11, number: 1 },
+    { salesPoint: 1, voucherType: 11, number: 2 },
+  ];
+  function many(
+    items: readonly AmountItem[],
+    extra: { total?: number } = {}
+  ): CreditNoteInput {
+    return { for: targets, items, date: "20260905", ...extra };
+  }
+  it("associates every original and inherits their common header", () => {
+    const { data, voucherClass, amounts } = deriveWsfePartialCreditNote(
+      [classC, second],
+      many([{ amount: 150 }])
+    );
+    expect(voucherClass).toBe("C");
+    expect(data).toMatchObject({
+      voucherType: 13,
+      salesPoint: 1,
+      documentType: 99,
+      receiverVatConditionId: 5,
+      currencyId: "PES",
+      totalAmount: 1.5,
+    });
+    expect(data.associatedVouchers).toEqual([
+      { type: 11, salesPoint: 1, number: 1, voucherDate: "20260904" },
+      { type: 11, salesPoint: 1, number: 2, voucherDate: "20260904" },
+    ]);
+    expect(amounts.sentTotal).toBe(150);
+    normalizeWsfeVoucherInput(data);
+  });
+  it("caps the note at the sum of the originals, not at one of them", () => {
+    expect(
+      deriveWsfePartialCreditNote([classC, second], many([{ amount: 200 }]))
+        .amounts.sentTotal
+    ).toBe(200);
+    expect(() =>
+      deriveWsfePartialCreditNote([classC, second], many([{ amount: 201 }]))
+    ).toThrowError(
+      expect.objectContaining({
+        code: "ARCA_INPUT_INVALID_VALUE",
+        message: expect.stringContaining(
+          "greater than the sum of the originals"
+        ),
+      })
+    );
+  });
+  it.each([
+    ["documentNumber", { documentNumber: "20123456789" }],
+    ["receiverVatConditionId", { receiverVatConditionId: 1 }],
+    ["currencyId", { currencyId: "DOL", exchangeRate: 1200 }],
+    ["voucherType", { voucherType: 1 }],
+    [
+      "concept",
+      {
+        concept: 3,
+        serviceStartDate: "20260901",
+        serviceEndDate: "20260904",
+        paymentDueDate: "20260905",
+      },
+    ],
+  ])("rejects originals that disagree on %s", (field, change) => {
+    expect(() =>
+      deriveWsfePartialCreditNote(
+        [classC, { ...second, ...change }],
+        many([{ amount: 50 }])
+      )
+    ).toThrowError(
+      expect.objectContaining({
+        code: "ARCA_INPUT_INVALID_VALUE",
+        message: expect.stringContaining(`disagree on ${field}`),
+      })
+    );
+  });
+  it("takes the note sales point from the input when the originals differ", () => {
+    const elsewhere = { ...second, salesPoint: 4 };
+    expect(() =>
+      deriveWsfePartialCreditNote([classC, elsewhere], many([{ amount: 50 }]))
+    ).toThrow("disagree on salesPoint");
+    expect(
+      deriveWsfePartialCreditNote([classC, elsewhere], {
+        ...many([{ amount: 50 }]),
+        salesPoint: 9,
+      }).data
+    ).toMatchObject({ salesPoint: 9 });
+  });
+});
+
+describe("credit note input with several originals", () => {
+  const targets = [
+    { salesPoint: 1, voucherType: 11, number: 1 },
+    { salesPoint: 1, voucherType: 11, number: 2 },
+  ];
+  it("keeps one object an object and a list a list", () => {
+    expect(
+      assertCreditNoteInput({ for: target, items: [{ amount: 1 }] }).for
+    ).toEqual(target);
+    expect(
+      assertCreditNoteInput({ for: targets, items: [{ amount: 1 }] }).for
+    ).toEqual(targets);
+  });
+  it("refuses all: true against several originals", () => {
+    expect(() =>
+      assertCreditNoteInput({ for: targets, all: true })
+    ).toThrowError(
+      expect.objectContaining({
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "input.all",
+        message: expect.stringContaining("no single total"),
+      })
+    );
+    expect(assertCreditNoteInput({ for: [target], all: true }).all).toBe(true);
+  });
+  it("refuses an empty list and names the offending entry", () => {
+    expect(() =>
+      assertCreditNoteInput({ for: [], items: [{ amount: 1 }] })
+    ).toThrowError(
+      expect.objectContaining({
+        code: "ARCA_INPUT_MISSING_FIELD",
+        field: "input.for",
+      })
+    );
+    expect(() =>
+      assertCreditNoteInput({
+        for: [target, { ...target, voucherType: 3 }],
+        items: [{ amount: 1 }],
+      })
+    ).toThrowError(
+      expect.objectContaining({ field: "input.for[1].voucherType" })
     );
   });
 });
