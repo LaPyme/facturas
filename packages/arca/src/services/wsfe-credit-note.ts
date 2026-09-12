@@ -24,6 +24,7 @@ import {
   calculateWsfeAmounts,
   type IssueAmounts,
   type VatItem,
+  type WsfeAmountsInput,
 } from "./wsfe-amounts";
 import {
   assertIssueKeys,
@@ -47,7 +48,6 @@ export type CreditNoteInput = Pick<
   IssuanceFields,
   "taxes" | "optionalFields" | "fce"
 > & {
-  details?: readonly import("./issuance-wsmtxca").VoucherItemDetail[];
   /**
    * The authorized invoice or debit note the note corrects, or a non-empty
    * list of them. Every original is consulted and every one is associated to
@@ -87,6 +87,8 @@ type DerivedCreditNote = {
   data: WsfeVoucherInput;
   voucherClass: VoucherClass;
   amounts: IssueAmounts;
+  /** The items the header came from, so provider lines derive from the same money. */
+  lineSource?: WsfeAmountsInput;
 };
 
 function invalid(reason: string): never {
@@ -155,16 +157,23 @@ export function deriveWsfePartialCreditNote(
   const { note, header } = prepareCreditNote(originals, input, now, kind);
   // The class comes from the original, so the item shape must match it.
   // A reviewed breakdown takes the same path invoices take.
-  const { data: amountsData, amounts } = input.amounts
-    ? reviewedInvoiceAmounts(input.amounts, input.taxes)
-    : calculateWsfeAmounts({
+  const lineSource: WsfeAmountsInput | undefined = input.amounts
+    ? undefined
+    : {
         voucherClass: note.voucherClass,
         items: input.items as NonNullable<IssueInput["items"]>,
         total:
           input.total === undefined
             ? undefined
             : input.total - tributeTotal(input.taxes ?? []),
-      });
+      };
+  const { data: amountsData, amounts } =
+    lineSource === undefined
+      ? reviewedInvoiceAmounts(
+          input.amounts as NonNullable<CreditNoteInput["amounts"]>,
+          input.taxes
+        )
+      : calculateWsfeAmounts(lineSource);
   // The ceiling is the sum of every original the note is associated to.
   const originalTotal = originals.reduce(
     (sum, original) =>
@@ -214,7 +223,12 @@ export function deriveWsfePartialCreditNote(
   amounts.computedTotal += total - amounts.sentTotal;
   amounts.sentTotal = sentTotal;
   normalizeWsfeVoucherInput(data);
-  return { data, voucherClass: note.voucherClass, amounts };
+  return {
+    data,
+    voucherClass: note.voucherClass,
+    amounts,
+    ...(lineSource === undefined ? {} : { lineSource }),
+  };
 }
 
 /**
@@ -383,7 +397,6 @@ const CREDIT_NOTE_KEYS = [
   "taxes",
   "amounts",
   "optionalFields",
-  "details",
   "fce",
 ];
 const TARGET_BOUNDS = [
@@ -420,9 +433,6 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
     ...(input.taxes === undefined
       ? {}
       : { taxes: structuredClone(input.taxes) }),
-    ...(input.details === undefined
-      ? {}
-      : { details: structuredClone(input.details) }),
     ...(input.optionalFields === undefined
       ? {}
       : { optionalFields: structuredClone(input.optionalFields) }),

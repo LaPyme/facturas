@@ -39,6 +39,7 @@ import {
   calculateWsfeAmounts,
   type IssueAmounts,
   type VatItem,
+  type WsfeAmountsInput,
 } from "./wsfe-amounts";
 
 export type Receiver =
@@ -60,7 +61,6 @@ export type Receiver =
     };
 export type IssueCommon = IssuanceFields & {
   family?: InvoiceFamily;
-  details?: readonly import("./issuance-wsmtxca").VoucherItemDetail[];
   salesPoint: number;
   to: Receiver;
   total?: number;
@@ -102,6 +102,8 @@ export function deriveWsfeInvoice(
   data: WsfeVoucherInput;
   voucherClass: VoucherClass;
   amounts: IssueAmounts;
+  /** The items the header came from, so provider lines derive from the same money. */
+  lineSource?: WsfeAmountsInput;
 } {
   assertIssueObject(input, "input");
   assertIssueKeys(
@@ -109,7 +111,6 @@ export function deriveWsfeInvoice(
     [
       ...ISSUANCE_KEYS,
       "family",
-      "details",
       "issuer",
       "items",
       "salesPoint",
@@ -130,16 +131,20 @@ export function deriveWsfeInvoice(
   assertSalesPoint(input.salesPoint);
   const receiver = deriveReceiver(input.to);
   const voucherClass = resolveInvoiceClass(input.issuer, input.to.condition);
-  const { data: amountsData, amounts } = input.amounts
-    ? reviewedInvoiceAmounts(input.amounts, input.taxes)
-    : calculateWsfeAmounts({
+  const lineSource: WsfeAmountsInput | undefined = input.amounts
+    ? undefined
+    : {
         voucherClass,
         items: input.items,
         total:
           input.total === undefined
             ? undefined
             : input.total - tributeTotal(input.taxes ?? []),
-      });
+      };
+  const { data: amountsData, amounts } =
+    lineSource === undefined
+      ? reviewedInvoiceAmounts(input.amounts as VoucherAmounts, input.taxes)
+      : calculateWsfeAmounts(lineSource);
   const currency = deriveCurrency(input);
   const voucherDate = normalizeWsfeDateInput(
     input.date === undefined ? buenosAiresDate(now) : input.date,
@@ -209,7 +214,12 @@ export function deriveWsfeInvoice(
       { cause }
     );
   }
-  return { data, voucherClass, amounts };
+  return {
+    data,
+    voucherClass,
+    amounts,
+    ...(lineSource === undefined ? {} : { lineSource }),
+  };
 }
 
 type HeaderAmounts = Pick<

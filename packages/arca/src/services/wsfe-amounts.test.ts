@@ -7,6 +7,7 @@ import { normalizeWsfeVoucherInput } from "./wsfe";
 import {
   type AmountItem,
   calculateWsfeAmounts,
+  deriveWsmtxcaLines,
   type VatItem,
 } from "./wsfe-amounts";
 
@@ -310,5 +311,136 @@ describe("WSFE amount core", () => {
     ).toThrowError(
       expect.objectContaining({ code: "ARCA_INPUT_INVALID_AMOUNT" })
     );
+  });
+});
+
+const LINE = {
+  description: "Product",
+  quantity: 2,
+  unit: 7,
+  unitPrice: "50.000000",
+};
+const withLines = <T extends object>(items: readonly T[]) =>
+  items.map((item) => ({ ...LINE, ...item }));
+
+describe("WSMTXCA lines derived from the same items", () => {
+  it("reconciles every generated set with the header it derives", () => {
+    for (const items of generatedSets()) {
+      const input = { voucherClass: "A" as const, items: withLines(items) };
+      const { data, amounts } = calculateWsfeAmounts(input);
+      const lines = deriveWsmtxcaLines(input, amounts.vatAdjustment);
+      expect(lines).toHaveLength(items.length);
+      const itemTotal = lines.reduce((sum, line) => sum + line.amount, 0);
+      // The lines are the header, split up: they may never disagree with it.
+      expect(itemTotal).toBe(minor(data.totalAmount));
+      expect(lines.reduce((sum, line) => sum + (line.vatAmount ?? 0), 0)).toBe(
+        minor(data.vatAmount)
+      );
+      for (const rate of data.vatRates ?? []) {
+        expect(
+          lines
+            .filter((line) => line.vatCondition === rate.id)
+            .reduce((sum, line) => sum + (line.vatAmount ?? 0), 0)
+        ).toBe(minor(rate.amount));
+      }
+      expect(lines.every((line) => (line.vatAmount ?? 0) >= 0)).toBe(true);
+    }
+  });
+  it("maps each item rate to its WSMTXCA condition code", () => {
+    const items: VatItem[] = [
+      { net: 10_000, vat: 21 },
+      { net: 10_000, vat: 10.5 },
+      { net: 10_000, vat: 0 },
+      { net: 10_000, vat: 2.5 },
+      { net: 10_000, vat: 5 },
+      { net: 10_000, vat: 27 },
+      { net: 10_000, vat: "exempt" },
+      { net: 10_000, vat: "untaxed" },
+    ];
+    expect(
+      deriveWsmtxcaLines({ voucherClass: "A", items: withLines(items) }, 0).map(
+        (line) => line.vatCondition
+      )
+    ).toEqual([5, 4, 3, 9, 8, 6, 2, 1]);
+    // A class C line bears no VAT, so it reports the 0% condition and no amount.
+    expect(
+      deriveWsmtxcaLines(
+        { voucherClass: "C", items: withLines([{ amount: 500 }]) },
+        0
+      )
+    ).toEqual([{ ...LINE, discount: 0, vatCondition: 3, amount: 500 }]);
+  });
+  it("reports the VAT amount on class A lines only", () => {
+    const input = { items: withLines([{ gross: 12_100, vat: 21 as const }]) };
+    expect(
+      deriveWsmtxcaLines({ ...input, voucherClass: "A" }, 0)[0]
+    ).toMatchObject({ amount: 12_100, vatAmount: 2100 });
+    expect(
+      deriveWsmtxcaLines({ ...input, voucherClass: "B" }, 0)[0]
+    ).not.toHaveProperty("vatAmount");
+  });
+  it("carries an asserted total's VAT adjustment into the lines", () => {
+    const items = withLines([
+      { gross: 100, vat: 21 as const },
+      { gross: 100, vat: 10.5 as const },
+    ]);
+    const input = { voucherClass: "A" as const, items, total: 202 };
+    const { data, amounts } = calculateWsfeAmounts(input);
+    expect(amounts.vatAdjustment).not.toBe(0);
+    const lines = deriveWsmtxcaLines(input, amounts.vatAdjustment);
+    expect(lines.reduce((sum, line) => sum + line.amount, 0)).toBe(
+      minor(data.totalAmount)
+    );
+  });
+  it("copies the optional line fields and defaults the discount", () => {
+    expect(
+      deriveWsmtxcaLines(
+        {
+          voucherClass: "C",
+          items: [
+            {
+              ...LINE,
+              amount: 100,
+              discount: 25,
+              code: "SKU-1",
+              matrixCode: "MTX-1",
+              matrixUnits: 3,
+            },
+          ],
+        },
+        0
+      )
+    ).toEqual([
+      {
+        ...LINE,
+        amount: 100,
+        discount: 25,
+        code: "SKU-1",
+        matrixCode: "MTX-1",
+        matrixUnits: 3,
+        vatCondition: 3,
+      },
+    ]);
+  });
+  it.each([
+    ["items[1].description", { description: "" }],
+    ["items[1].quantity", { quantity: -1 }],
+    ["items[1].unit", { unit: -1 }],
+    ["items[1].unitPrice", { unitPrice: "1,5" }],
+    ["items[1].discount", { discount: 1.5 }],
+    ["items[1].code", { code: 7 }],
+  ])("names %s when the line detail is wrong", (field, change) => {
+    expect(() =>
+      deriveWsmtxcaLines(
+        {
+          voucherClass: "C",
+          items: [
+            { ...LINE, amount: 100 },
+            { ...LINE, ...change, amount: 100 },
+          ] as AmountItem[],
+        },
+        0
+      )
+    ).toThrowError(expect.objectContaining({ field }));
   });
 });
