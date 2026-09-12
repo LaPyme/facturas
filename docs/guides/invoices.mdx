@@ -4,10 +4,13 @@ description: "Emití y previsualizá facturas, y tratá cada resultado fiscal si
 keywords: ["facturas", "issue", "preview", "idempotencia", "WSFE"]
 ---
 
-`issue()` es el camino normal para emitir. Recibe los datos de negocio, arma el
-request fiscal y trata las respuestas ambiguas de ARCA. Si necesitás controlar
-un request o una numeración que `issue()` no cubre, usá los
-[métodos directos de ARCA](/reference/arca-services).
+`issue()` es la fachada: derivá el comprobante desde datos de negocio, reservá
+el número y recuperá los reintentos. Ese input de negocio es el único input.
+Los campos que el SDK no deriva, `optionalFields`, `buyers` y `activities`,
+pasan tal cual al proveedor, y `preview().request` te muestra el comprobante
+armado antes de mandarlo. Para las lecturas, los catálogos y el Padrón que
+están por debajo, mirá los
+[módulos de transporte](/reference/arca-services).
 
 ## Emitir
 
@@ -145,8 +148,8 @@ los ítems ni del Padrón. Un emisor RI produce A para receptores RI o
 Monotributo y B para las demás condiciones soportadas. Los emisores
 Monotributo, Exento y No Alcanzado producen C y usan
 `items: [{ amount: 10_000 }]`. ARCA valida la habilitación real. `to` es el
-receptor fiscal con su documento y condición ante el IVA, no un registro de
-cliente.
+receptor fiscal, el tipo y el número de documento y la condición de IVA que
+viajan en el comprobante, no un registro de cliente.
 
 Los importes son enteros en centavos. Para ítems de RI, elegí `net` o `gross`
 en cada ítem y uno de `0 | 2.5 | 5 | 10.5 | 21 | 27 | "exempt" | "untaxed"`
@@ -205,8 +208,10 @@ catálogo de ARCA, con `cuit`, `dni` o `document: { type, number }`. Los campos
 `optionalFields`, `buyers` y `activities` pasan tal cual a WSFE y a WSMTXCA. No
 dupliques ahí lo que ya informa `fce`.
 
-Para el detalle de ítems de WSMTXCA, mirá [WSMTXCA](/guides/wsmtxca). El ejemplo
-compilado de todo esto es
+Cada ítem puede además describir su línea: `description`, `quantity`, `unit`,
+`unitPrice`, `discount`, `code`, `matrixCode` y `matrixUnits`. WSFE los ignora.
+WSMTXCA los necesita y arma sus filas con ellos, como explica
+[WSMTXCA](/guides/wsmtxca). El ejemplo compilado de todo esto es
 [examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts).
 
 ## Qué hace `issue()` al emitir
@@ -248,10 +253,10 @@ secuencia siguió sin esta clave. En `blocked` no se reservó ningún número:
 clave nueva.
 
 El segundo argumento acepta `idempotencyKey`, `signal`, `representedTaxId`,
-`forceRefresh`, `service`, `number` e
-`include: { raw: true, exactInput: true }`.
-Los resultados no traen la evidencia cruda por defecto. `sent` se incluye solo
-en resultados autorizados y solo si lo pedís. Una repetición sin un resultado
+`forceRefresh`, `service`, `number` e `include: { raw: true, sent: true }`.
+Los resultados no traen la evidencia cruda por defecto. `sent`, el request que
+se envió, se incluye solo en resultados autorizados y solo si lo pedís. Una
+repetición sin un resultado
 de escritura observado usa un intento indeterminado con
 `reason: "incomplete_response"`. La consulta aporta la evidencia de
 autorización.
@@ -269,5 +274,5 @@ moneda, todos los importes de cabecera, alícuotas de IVA, fechas de servicio,
 tributos, campos opcionales, compradores, actividades, las asociaciones de
 notas (incluidos el CUIT emisor y la fecha informados) y el flag de pago en
 moneda extranjera. Los campos faltantes quedan incompletos y nunca cuentan como
-prueba de coincidencia. Las diferencias son conflictos. Los campos directos que
-quedan fuera de ese conjunto se consideran incompletos.
+prueba de coincidencia. Las diferencias son conflictos. Los campos del
+proveedor que quedan fuera de ese conjunto se consideran incompletos.

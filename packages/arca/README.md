@@ -122,8 +122,9 @@ una reserva sin emitir.
   reintentos, Postgres, Redis, archivos y memoria.
 - [Configuración](./docs/reference/configuration.mdx): variables de entorno, opciones del
   cliente, sesiones WSAA, logs, reintentos y límites de tiempo.
-- [Métodos directos de ARCA](./docs/reference/arca-services.mdx): funciones para
-  armar comprobantes, consultas y emisión con numeración controlada por tu aplicación.
+- [Módulos de transporte](./docs/reference/arca-services.mdx): `client.wsfe`,
+  `client.wsmtxca` y `client.padron` para lecturas, catálogos, estado del
+  servicio y Padrón.
 - [Errores](./docs/reference/errors.mdx): clases de error y diagnóstico.
 - [Referencia](./docs/reference/public-api.mdx): constantes, API pública con semver y
   seguridad.

@@ -27,23 +27,26 @@ import {
   wsmtxcaRequest,
 } from "./issuance-wsmtxca";
 import type {
-  ExactIssueInput,
   IssuanceService,
   IssuedVoucher,
   IssueOptions,
   IssueOutcome,
   IssuePreview,
+  IssueRequest,
   ServiceFor,
 } from "./vouchers-types";
 import {
   normalizeWsfeDateInput,
   normalizeWsfeVoucherInput,
   type WsfeService,
+  type WsfeVoucherInfo,
   type WsfeVoucherInput,
 } from "./wsfe";
+import { deriveWsmtxcaLines } from "./wsfe-amounts";
 import {
   assertCreditNoteInput,
   type CreditNoteInput,
+  creditNoteTargets,
   deriveWsfeFullCreditNote,
   deriveWsfePartialCreditNote,
 } from "./wsfe-credit-note";
@@ -74,8 +77,8 @@ export type DebitNoteInput =
   | PeriodNoteInput;
 export type NotePreview<S extends IssuanceService = "wsfe"> =
   IssuePreview<S> & {
-    /** Present for a note linked to a voucher; absent for a period note. */
-    original?: VoucherSummary;
+    /** The originals consulted, in input order; absent for a period note. */
+    originals?: readonly VoucherSummary[];
   };
 export type RecoveryOptions = Pick<
   IssueOptions,
@@ -98,9 +101,9 @@ export type VouchersService = {
   ): Promise<IssueOutcome<O>>;
   /**
    * Derives what issueCreditNote() would send. Unlike the zero-I/O preview(),
-   * it consults the original once: one read, no write and no number reserved.
-   * A linked note returns that raw-free original in `original`. A period note
-   * carries its own business input, needs no lookup and has no `original`.
+   * it consults each original once: reads only, no write and no number
+   * reserved. A linked note returns those raw-free originals in `originals`. A
+   * period note carries its own business input and needs no lookup at all.
    */
   previewCreditNote<O extends PreviewOptions = { service?: never }>(
     input: CreditNoteInput | PeriodNoteInput,
@@ -118,9 +121,10 @@ export type VouchersService = {
    * `amounts`, or the whole original with `all: true`.
    *
    * For a linked note everything except the credited lines, the note's sales
-   * point and its date comes from the original: class, receiver, currency,
-   * concept and service dates. ARCA has no cancellation; every mode writes a
-   * real fiscal document.
+   * point and its date comes from the originals: class, receiver, currency,
+   * concept and service dates. `for` takes one original or a list of them,
+   * and every one is associated to the note. ARCA has no cancellation; every
+   * mode writes a real fiscal document.
    */
   issueCreditNote<O extends IssueOptions = { include?: never }>(
     input: CreditNoteInput | PeriodNoteInput,
@@ -297,21 +301,33 @@ function previewInvoice(
 }
 function prepareInvoice(input: IssueInput, options: IssueOptions): Prepared {
   const prepared: Prepared = deriveWsfeInvoice(input);
-  if (input.details !== undefined) {
-    prepared.data.details = structuredClone(input.details);
-  }
+  attachLines(prepared, options);
   validatePrepared(prepared, options);
   return prepared;
+}
+/**
+ * WSMTXCA sends the lines the items describe. WSFE ignores them, so nothing is
+ * derived for it and the reservation stays a version-1 record.
+ */
+function attachLines(prepared: Prepared, options: IssueOptions): void {
+  if (options.service !== "wsmtxca") {
+    return;
+  }
+  if (prepared.lineSource === undefined) {
+    throw new ArcaInputError(
+      "WSMTXCA needs items with line detail; a reviewed amounts breakdown has no lines.",
+      { code: "ARCA_INPUT_INVALID_VALUE", field: "amounts" }
+    );
+  }
+  prepared.data.lines = deriveWsmtxcaLines(
+    prepared.lineSource,
+    prepared.amounts.vatAdjustment
+  );
 }
 function validatePrepared(prepared: Prepared, options: IssueOptions): void {
   validateFiscalHeader(prepared.data);
   if (options.service === "wsmtxca") {
     wsmtxcaRequest(prepared.data);
-  } else if (prepared.data.details !== undefined) {
-    throw new ArcaInputError("Detailed items require service: wsmtxca", {
-      code: "ARCA_INPUT_INVALID_VALUE",
-      field: "details",
-    });
   }
 }
 function toPreview(
@@ -435,7 +451,7 @@ async function runOperation(
   function reservation(number: number): ArcaAttemptRecord {
     const service = options.service ?? "wsfe";
     const versioned =
-      service === "wsmtxca" || prepared.data.details !== undefined;
+      service === "wsmtxca" || prepared.data.lines !== undefined;
     return {
       v: versioned ? 2 : 1,
       operation,
@@ -811,14 +827,14 @@ async function runAuthorization(
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   };
   const includeRaw = options.include?.raw === true;
-  const includeExact = options.include?.exactInput === true;
+  const includeSent = options.include?.sent === true;
   const number = reservedNumber ?? (await nextNumber(wsfe, data, options));
   const attempted = {
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,
     number,
   };
-  const exact = exactEvidence(data, number, options, includeExact);
+  const sentRequest = sentEvidence(data, number, options, includeSent);
   const voucher = (cae: string, caeExpiry: string): IssuedVoucher => ({
     ...attempted,
     voucherClass,
@@ -833,7 +849,7 @@ async function runAuthorization(
     data,
     attempted,
     includeRaw,
-    exact,
+    sentRequest,
     voucher,
     service: options.service,
   };
@@ -872,7 +888,7 @@ async function runAuthorization(
       recoveredByMatch: false,
       voucher: voucher(authorization.cae, authorization.caeExpiry),
       authorization: projectEvidence(authorization, includeRaw),
-      ...exact,
+      ...sentRequest,
     };
   }
   if (authorization.kind === "rejected") {
@@ -884,7 +900,7 @@ async function runAuthorization(
       replay
     );
   }
-  // The exact outcome type permits an absent expiry. Keep that uncertainty visible.
+  // The provider outcome type permits an absent expiry. Keep that visible.
   const uncertain =
     authorization.kind === "indeterminate"
       ? authorization
@@ -905,7 +921,7 @@ async function runAuthorization(
     attempted,
     attempt,
     includeRaw,
-    exact,
+    sentRequest,
     voucher,
   });
 }
@@ -965,7 +981,7 @@ type RecoveryInput = {
     "raw"
   > & { raw?: Record<string, unknown> };
   includeRaw: boolean;
-  exact: { sent?: ExactIssueInput<IssuanceService> };
+  sentRequest: { sent?: IssueRequest<IssuanceService> };
   voucher: (cae: string, caeExpiry: string) => IssuedVoucher;
   /** The reserved number was claimed in this call: any voucher on it is foreign. */
   strangerAtNumber?: boolean;
@@ -977,7 +993,7 @@ async function recoverInvoice({
   attempted,
   attempt,
   includeRaw,
-  exact,
+  sentRequest,
   voucher,
   lookup: suppliedLookup,
   service,
@@ -1072,7 +1088,7 @@ async function recoverInvoice({
     ),
     attempt,
     lookup: { ...toVoucherSummary(lookup.voucher), ...raw },
-    ...exact,
+    ...sentRequest,
   };
 }
 
@@ -1213,8 +1229,8 @@ function validateOptions(options: IssueOptions) {
   }
   if (options.include !== undefined) {
     assertIssueObject(options.include, "options.include");
-    assertIssueKeys(options.include, ["raw", "exactInput"], "options.include");
-    for (const field of ["raw", "exactInput"] as const) {
+    assertIssueKeys(options.include, ["raw", "sent"], "options.include");
+    for (const field of ["raw", "sent"] as const) {
       if (
         options.include[field] !== undefined &&
         typeof options.include[field] !== "boolean"
@@ -1295,7 +1311,9 @@ async function previewNote(
   const prepared = await prepareNote(wsfe, input, options, context, kind);
   return {
     ...toPreview(prepared, options),
-    ...(prepared.original === undefined ? {} : { original: prepared.original }),
+    ...(prepared.originals === undefined
+      ? {}
+      : { originals: prepared.originals }),
   };
 }
 
@@ -1305,7 +1323,7 @@ async function prepareNote(
   options: IssueOptions,
   context: StoreContext | undefined,
   kind: "creditNote" | "debitNote"
-): Promise<Prepared & { original?: VoucherSummary }> {
+): Promise<Prepared & { originals?: readonly VoucherSummary[] }> {
   validateOptions(options);
   assertIssueObject(input, "input");
   if ("associatedPeriod" in input && !("for" in input)) {
@@ -1317,7 +1335,47 @@ async function prepareNote(
       code: "ARCA_INPUT_INVALID_VALUE",
     });
   }
-  const target = note.for;
+  const targets = creditNoteTargets(note);
+  const originals: WsfeVoucherInfo[] = [];
+  for (const target of targets) {
+    originals.push(await lookupOriginal(wsfe, target, options));
+  }
+  const [firstOriginal] = originals;
+  const prepared: Prepared =
+    note.all === true
+      ? deriveWsfeFullCreditNote(firstOriginal as WsfeVoucherInfo, note)
+      : deriveWsfePartialCreditNote(originals, note, new Date(), kind);
+  if (note.all === true) {
+    // A full note mirrors the original, lines included, as ARCA returned them.
+    const mirrored = (firstOriginal as { lines?: FiscalHeader["lines"] }).lines;
+    if (mirrored !== undefined) {
+      prepared.data.lines = structuredClone(mirrored);
+    }
+  } else {
+    attachLines(prepared, options);
+  }
+  if (voucherFamily(prepared.data.voucherType).family === "fce") {
+    const taxId = options.representedTaxId ?? context?.taxId;
+    if (!taxId) {
+      throw new ArcaInputError("FCE association requires the issuer tax ID", {
+        code: "ARCA_INPUT_MISSING_FIELD",
+        field: "representedTaxId",
+      });
+    }
+    for (const associated of prepared.data.associatedVouchers ?? []) {
+      associated.taxId = String(taxId);
+    }
+  }
+  validatePrepared(prepared, options);
+  return { ...prepared, originals: originals.map(toVoucherSummary) };
+}
+
+/** One read of one original, checked against the coordinates that asked for it. */
+async function lookupOriginal(
+  wsfe: IssueWsfeService,
+  target: VoucherCoordinates,
+  options: IssueOptions
+): Promise<WsfeVoucherInfo> {
   const original = await wsfe.lookupVoucher({
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
@@ -1339,31 +1397,7 @@ async function prepareNote(
       { code: "ARCA_INPUT_INVALID_VALUE", field: "input.for" }
     );
   }
-  const prepared: Prepared =
-    note.all === true
-      ? deriveWsfeFullCreditNote(original.voucher, note)
-      : deriveWsfePartialCreditNote(original.voucher, note, new Date(), kind);
-  if (note.details !== undefined) {
-    prepared.data.details = structuredClone(note.details);
-  } else if (note.all && "details" in original.voucher) {
-    prepared.data.details = structuredClone(
-      original.voucher.details as FiscalHeader["details"]
-    );
-  }
-  if (voucherFamily(prepared.data.voucherType).family === "fce") {
-    const taxId = options.representedTaxId ?? context?.taxId;
-    if (!taxId) {
-      throw new ArcaInputError("FCE association requires the issuer tax ID", {
-        code: "ARCA_INPUT_MISSING_FIELD",
-        field: "representedTaxId",
-      });
-    }
-    for (const associated of prepared.data.associatedVouchers ?? []) {
-      associated.taxId = String(taxId);
-    }
-  }
-  validatePrepared(prepared, options);
-  return { ...prepared, original: toVoucherSummary(original.voucher) };
+  return original.voucher;
 }
 
 function preparePeriodNote(
@@ -1403,12 +1437,12 @@ function preparePeriodNote(
   return prepared;
 }
 
-function exactEvidence(
+function sentEvidence(
   data: FiscalHeader,
   number: number,
   options: IssueOptions,
   include: boolean
-): { sent?: ExactIssueInput<IssuanceService> } {
+): { sent?: IssueRequest<IssuanceService> } {
   return include
     ? {
         sent:
@@ -1521,11 +1555,11 @@ function consultReservation(
     attempted,
     attempt: replayEvidence(storedOptions.service),
     includeRaw: options.include?.raw === true,
-    exact: exactEvidence(
+    sentRequest: sentEvidence(
       prepared.data,
       record.number,
       storedOptions,
-      options.include?.exactInput === true
+      options.include?.sent === true
     ),
     voucher: (cae, caeExpiry) => ({
       ...attempted,

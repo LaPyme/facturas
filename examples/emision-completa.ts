@@ -29,17 +29,16 @@ export async function issueDetailedInvoice(
     issuer: "responsable_inscripto",
     salesPoint: 1,
     to: { condition: "responsable_inscripto", cuit: "20123456789" },
-    items: [{ net: 10_000, vat: 21 }],
+    // Los mismos ítems llevan el detalle de línea que pide WSMTXCA.
     // unitPrice es la única excepción: string decimal en unidades mayores.
-    details: [
+    items: [
       {
-        description: "Product",
+        net: 10_000,
+        vat: 21,
+        description: "Producto",
         quantity: 1,
         unit: 7,
         unitPrice: "100.000000",
-        vatCondition: 5,
-        vatAmount: 2100,
-        amount: 12_100,
       },
     ],
   } satisfies IssueInput;

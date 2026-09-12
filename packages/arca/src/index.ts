@@ -57,8 +57,8 @@ export type {
   VoucherAmounts,
 } from "./services/issuance-fields";
 export type {
-  VoucherItemDetail,
   WsmtxcaIssueRequest,
+  WsmtxcaLine,
 } from "./services/issuance-wsmtxca";
 export type {
   CreatePadronServiceOptions,
@@ -76,12 +76,12 @@ export type {
   VouchersService,
 } from "./services/vouchers";
 export type {
-  ExactIssueInput,
   IssuanceService,
   IssuedVoucher,
   IssueOptions,
   IssueOutcome,
   IssuePreview,
+  IssueRequest,
 } from "./services/vouchers-types";
 export type {
   CreateWsfeServiceOptions,
@@ -111,16 +111,10 @@ export { createWsfeService } from "./services/wsfe";
 export type {
   AmountItem,
   IssueAmounts,
+  ItemLine,
   VatItem,
   VatRate,
 } from "./services/wsfe-amounts";
-export type {
-  BuildFacturaBInput,
-  BuildFacturaCInput,
-  WsfeBuilderCurrencyInput,
-  WsfeBuilderVatRate,
-} from "./services/wsfe-builders";
-export { buildFacturaB, buildFacturaC } from "./services/wsfe-builders";
 export type { CreditNoteInput } from "./services/wsfe-credit-note";
 export type { IssueCommon, IssueInput, Receiver } from "./services/wsfe-derive";
 export type {

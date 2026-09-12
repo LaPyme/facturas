@@ -24,6 +24,7 @@ import {
   calculateWsfeAmounts,
   type IssueAmounts,
   type VatItem,
+  type WsfeAmountsInput,
 } from "./wsfe-amounts";
 import {
   assertIssueKeys,
@@ -36,7 +37,7 @@ import type { VoucherCoordinates } from "./wsfe-identity";
 
 /**
  * The credited lines and, at most, the note's own sales point and date.
- * Class, receiver, currency, concept and service dates come from the original.
+ * Class, receiver, currency, concept and service dates come from the originals.
  *
  * The mode is explicit: `items` or a reviewed `amounts` breakdown credits the
  * chosen lines, `all: true` credits the whole original. A forgotten field never
@@ -47,9 +48,12 @@ export type CreditNoteInput = Pick<
   IssuanceFields,
   "taxes" | "optionalFields" | "fce"
 > & {
-  details?: readonly import("./issuance-wsmtxca").VoucherItemDetail[];
-  /** The authorized invoice or debit note the note corrects. */
-  for: VoucherCoordinates;
+  /**
+   * The authorized invoice or debit note the note corrects, or a non-empty
+   * list of them. Every original is consulted and every one is associated to
+   * the note; they must agree on everything the note inherits.
+   */
+  for: VoucherCoordinates | readonly VoucherCoordinates[];
   salesPoint?: number;
   date?: WsfeDateInput;
 } & (
@@ -83,13 +87,14 @@ type DerivedCreditNote = {
   data: WsfeVoucherInput;
   voucherClass: VoucherClass;
   amounts: IssueAmounts;
+  /** The items the header came from, so provider lines derive from the same money. */
+  lineSource?: WsfeAmountsInput;
 };
 
 function invalid(reason: string): never {
-  throw new ArcaInputError(
-    `issueCreditNote cannot proceed: ${reason}. Use the exact service API for manual control.`,
-    { code: "ARCA_INPUT_INVALID_VALUE" }
-  );
+  throw new ArcaInputError(`issueCreditNote cannot proceed: ${reason}.`, {
+    code: "ARCA_INPUT_INVALID_VALUE",
+  });
 }
 function required<T>(value: T | undefined, field: string): T {
   if (value === undefined || value === null) {
@@ -98,14 +103,17 @@ function required<T>(value: T | undefined, field: string): T {
   return value;
 }
 
-/** Mirrors the original line by line, which items cannot reproduce cent-exact. */
+/**
+ * Mirrors the original line by line, which items cannot reproduce cent-exact.
+ * There is only ever one original here: a full note of several has no total.
+ */
 export function deriveWsfeFullCreditNote(
   original: WsfeVoucherInfo,
   input: CreditNoteInput,
   now = new Date(),
   kind: "creditNote" | "debitNote" = "creditNote"
 ): DerivedCreditNote {
-  const { note, header } = prepareCreditNote(original, input, now, kind);
+  const { note, header } = prepareCreditNote([original], input, now, kind);
   const data: WsfeVoucherInput = {
     ...header,
     ...(original.taxes ? { taxes: structuredClone(original.taxes) } : {}),
@@ -132,7 +140,7 @@ export function deriveWsfeFullCreditNote(
 
 /** Credits chosen lines through the same amount pipeline as issue(). */
 export function deriveWsfePartialCreditNote(
-  original: WsfeVoucherInfo,
+  originals: readonly WsfeVoucherInfo[],
   input: CreditNoteInput,
   now = new Date(),
   kind: "creditNote" | "debitNote" = "creditNote"
@@ -146,29 +154,44 @@ export function deriveWsfePartialCreditNote(
     input.total === undefined
       ? undefined
       : assertArcaMinorUnits(input.total, "total");
-  const { note, header } = prepareCreditNote(original, input, now, kind);
+  const { note, header } = prepareCreditNote(originals, input, now, kind);
   // The class comes from the original, so the item shape must match it.
   // A reviewed breakdown takes the same path invoices take.
-  const { data: amountsData, amounts } = input.amounts
-    ? reviewedInvoiceAmounts(input.amounts, input.taxes)
-    : calculateWsfeAmounts({
+  const lineSource: WsfeAmountsInput | undefined = input.amounts
+    ? undefined
+    : {
         voucherClass: note.voucherClass,
         items: input.items as NonNullable<IssueInput["items"]>,
         total:
           input.total === undefined
             ? undefined
             : input.total - tributeTotal(input.taxes ?? []),
-      });
-  const originalTotal = normalizeArcaAmountToMinorUnits(
-    required(original.totalAmount, "totalAmount"),
-    "totalAmount"
+      };
+  const { data: amountsData, amounts } =
+    lineSource === undefined
+      ? reviewedInvoiceAmounts(
+          input.amounts as NonNullable<CreditNoteInput["amounts"]>,
+          input.taxes
+        )
+      : calculateWsfeAmounts(lineSource);
+  // The ceiling is the sum of every original the note is associated to.
+  const originalTotal = originals.reduce(
+    (sum, original) =>
+      sum +
+      normalizeArcaAmountToMinorUnits(
+        required(original.totalAmount, "totalAmount"),
+        "totalAmount"
+      ),
+    0n
   );
+  const ceiling =
+    originals.length === 1 ? "the original" : "the sum of the originals";
   if (
     kind === "creditNote" &&
     (requestedTotal ?? BigInt(amounts.sentTotal)) > originalTotal
   ) {
     invalid(
-      "the note total is greater than the original; the SDK does not track earlier notes against an original"
+      `the note total is greater than ${ceiling}; the SDK does not track earlier notes against an original`
     );
   }
   const data: WsfeVoucherInput = { ...header, ...amountsData };
@@ -194,17 +217,77 @@ export function deriveWsfePartialCreditNote(
       ? Number(requestedTotal)
       : total;
   if (kind === "creditNote" && BigInt(sentTotal) > originalTotal) {
-    invalid("the note total is greater than the original");
+    invalid(`the note total is greater than ${ceiling}`);
   }
   data.totalAmount = minor(sentTotal, "total");
   amounts.computedTotal += total - amounts.sentTotal;
   amounts.sentTotal = sentTotal;
   normalizeWsfeVoucherInput(data);
-  return { data, voucherClass: note.voucherClass, amounts };
+  return {
+    data,
+    voucherClass: note.voucherClass,
+    amounts,
+    ...(lineSource === undefined ? {} : { lineSource }),
+  };
 }
 
-/** Shared evidence: everything except the amounts comes from the original. */
+/**
+ * Shared evidence: everything except the amounts comes from the originals.
+ * Each original derives a header of its own and they must come out identical,
+ * because the note has one of each inherited field and several sources for it.
+ * Only the associations accumulate.
+ */
 function prepareCreditNote(
+  originals: readonly WsfeVoucherInfo[],
+  input: CreditNoteInput,
+  now: Date,
+  kind: "creditNote" | "debitNote"
+): { note: CreditNote; header: CreditNoteHeader } {
+  const derived = originals.map((original) =>
+    prepareOneCreditNote(original, input, now, kind)
+  );
+  const [first, ...rest] = derived;
+  if (first === undefined) {
+    invalid("for must name at least one original");
+  }
+  for (const other of rest) {
+    assertInheritedHeader(first.header, other.header);
+  }
+  return {
+    note: first.note,
+    header: {
+      ...first.header,
+      associatedVouchers: derived.flatMap(
+        (one) => one.header.associatedVouchers ?? []
+      ),
+    },
+  };
+}
+
+/**
+ * Everything the note inherits must be the same for every original. A field
+ * that differs has no single value on the note, so the note is not derivable
+ * and the caller issues one note per group instead.
+ */
+function assertInheritedHeader(
+  first: CreditNoteHeader,
+  other: CreditNoteHeader
+): void {
+  for (const field of new Set([...Object.keys(first), ...Object.keys(other)])) {
+    if (field === "associatedVouchers") {
+      continue;
+    }
+    const left = first[field as keyof CreditNoteHeader];
+    const right = other[field as keyof CreditNoteHeader];
+    if (JSON.stringify(left) !== JSON.stringify(right)) {
+      invalid(
+        `the originals disagree on ${field}, which the note inherits from them`
+      );
+    }
+  }
+}
+
+function prepareOneCreditNote(
   original: WsfeVoucherInfo,
   input: CreditNoteInput,
   now: Date,
@@ -314,7 +397,6 @@ const CREDIT_NOTE_KEYS = [
   "taxes",
   "amounts",
   "optionalFields",
-  "details",
   "fce",
 ];
 const TARGET_BOUNDS = [
@@ -329,7 +411,7 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
   validateIssuanceFields(input);
   if ("associatedPeriod" in input) {
     throw new ArcaInputError(
-      "issueCreditNote does not support associatedPeriod; a note against a period is exact-layer work. Use the exact service API for manual control.",
+      "issueCreditNote adjusts either the originals named in for or a period, never both; drop one of them.",
       {
         code: "ARCA_INPUT_RESERVED_FIELD",
         field: "associatedPeriod",
@@ -338,7 +420,7 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
     );
   }
   assertIssueKeys(input, CREDIT_NOTE_KEYS, "input", "issueCreditNote()");
-  const target = assertCreditNoteTarget(input.for);
+  const target = assertCreditNoteTargets(input.for);
   if (input.salesPoint !== undefined) {
     assertCreditNoteBound(input.salesPoint, 99_999, "salesPoint");
   }
@@ -351,9 +433,6 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
     ...(input.taxes === undefined
       ? {}
       : { taxes: structuredClone(input.taxes) }),
-    ...(input.details === undefined
-      ? {}
-      : { details: structuredClone(input.details) }),
     ...(input.optionalFields === undefined
       ? {}
       : { optionalFields: structuredClone(input.optionalFields) }),
@@ -396,13 +475,38 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
   };
 }
 
-function assertCreditNoteTarget(value: CreditNoteInput["for"]) {
+/** One object stays one object; a list stays a list, so the input hash does. */
+function assertCreditNoteTargets(
+  value: CreditNoteInput["for"]
+): VoucherCoordinates | VoucherCoordinates[] {
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      throw new ArcaInputError(
+        "issueCreditNote requires for to name at least one authorized original.",
+        {
+          code: "ARCA_INPUT_MISSING_FIELD",
+          field: "input.for",
+          expected: "a non-empty array of { salesPoint, voucherType, number }",
+        }
+      );
+    }
+    return value.map((target, index) =>
+      assertCreditNoteTarget(target, `for[${index}]`)
+    );
+  }
+  return assertCreditNoteTarget(value as VoucherCoordinates, "for");
+}
+
+function assertCreditNoteTarget(
+  value: VoucherCoordinates,
+  path: string
+): VoucherCoordinates {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new ArcaInputError(
       "issueCreditNote requires for: the coordinates of the authorized invoice the note corrects.",
       {
         code: "ARCA_INPUT_MISSING_FIELD",
-        field: "input.for",
+        field: `input.${path}`,
         expected: "{ salesPoint, voucherType, number }",
       }
     );
@@ -410,11 +514,11 @@ function assertCreditNoteTarget(value: CreditNoteInput["for"]) {
   assertIssueKeys(
     value,
     ["salesPoint", "voucherType", "number"],
-    "input.for",
+    `input.${path}`,
     "issueCreditNote()"
   );
   for (const [field, max] of TARGET_BOUNDS) {
-    assertCreditNoteBound(value[field], max, `for.${field}`);
+    assertCreditNoteBound(value[field], max, `${path}.${field}`);
   }
   if (
     ![1, 2, 6, 7, 11, 12, 51, 52, 201, 202, 206, 207, 211, 212].includes(
@@ -422,10 +526,10 @@ function assertCreditNoteTarget(value: CreditNoteInput["for"]) {
     )
   ) {
     throw new ArcaInputError(
-      "issueCreditNote requires an authorized invoice or debit note in a supported family in for.voucherType. Use the exact service API for manual control.",
+      "issueCreditNote requires an authorized invoice or debit note in a supported family in for.voucherType.",
       {
         code: "ARCA_INPUT_INVALID_VALUE",
-        field: "input.for.voucherType",
+        field: `input.${path}.voucherType`,
         expected: "1, 6 or 11",
       }
     );
@@ -435,6 +539,15 @@ function assertCreditNoteTarget(value: CreditNoteInput["for"]) {
     voucherType: value.voucherType,
     number: value.number,
   };
+}
+
+/** The originals a note input names, in the order the caller gave them. */
+export function creditNoteTargets(
+  input: CreditNoteInput
+): readonly VoucherCoordinates[] {
+  return Array.isArray(input.for)
+    ? input.for
+    : [input.for as VoucherCoordinates];
 }
 
 function assertCreditNoteBound(value: number, max: number, path: string) {
@@ -531,6 +644,16 @@ function assertFullMode(input: CreditNoteInput): void {
         code: "ARCA_INPUT_INVALID_VALUE",
         field: "input.total",
         expected: "no total when all is true",
+      }
+    );
+  }
+  if (Array.isArray(input.for) && input.for.length > 1) {
+    throw new ArcaInputError(
+      "issueCreditNote takes all: true against one original; a full note of several originals has no single total. Pass items or amounts instead.",
+      {
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "input.all",
+        expected: "one original in for when all is true",
       }
     );
   }

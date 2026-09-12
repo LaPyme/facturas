@@ -101,8 +101,8 @@ llamá a `issue()`.
 - `indeterminate`: conservá el número y la evidencia. Conciliá o repetí el mismo input con su clave, como explica el paso 6.
 - `conflict`: hay otro comprobante en ese número. Detené el flujo e investigá.
 
-La evidencia SOAP y el input exacto no aparecen por defecto. Podés pedirlos
-con `include: { raw: true, exactInput: true }`. La secuencia de llamadas está en
+La evidencia SOAP y el request enviado no aparecen por defecto. Podés pedirlos
+con `include: { raw: true, sent: true }`. La secuencia de llamadas está en
 [Qué hace `issue()` al emitir](/guides/invoices#qué-hace-issue-al-emitir).
 Cuando una llamada falla, mirá [Errores](/reference/errors).
 

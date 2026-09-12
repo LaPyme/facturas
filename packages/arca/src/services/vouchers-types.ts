@@ -15,7 +15,7 @@ export type IssueOptions = {
   idempotencyKey?: string;
   representedTaxId?: number | string;
   forceRefresh?: boolean;
-  include?: { raw?: boolean; exactInput?: boolean };
+  include?: { raw?: boolean; sent?: boolean };
   /**
    * The caller's deadline. It aborts the WSAA login, the submission and every
    * consultation of this call. An abort after the write was sent answers
@@ -42,7 +42,7 @@ export type ServiceFor<O extends IssueOptions> = "service" extends keyof O
       : IssuanceService
     : "wsfe"
   : "wsfe";
-export type ExactIssueInput<S extends IssuanceService = "wsfe"> =
+export type IssueRequest<S extends IssuanceService = "wsfe"> =
   S extends "wsmtxca"
     ? import("./issuance-wsmtxca").WsmtxcaIssueRequest
     : WsfeVoucherInput;
@@ -54,7 +54,7 @@ export type IssuePreview<S extends IssuanceService = "wsfe"> = {
   voucherClass: VoucherClass;
   voucherType: number;
   amounts: IssueAmounts;
-  request: ExactIssueInput<S>;
+  request: IssueRequest<S>;
   service?: S;
 };
 
@@ -63,14 +63,14 @@ type WithRaw<T, O extends IssueOptions> = T &
     ? { raw?: Record<string, unknown> }
     : unknown);
 type WithSent<O extends IssueOptions> = O extends {
-  include: { exactInput: true };
+  include: { sent: true };
 }
   ? {
-      sent: ExactIssueInput<ServiceFor<O>>;
+      sent: IssueRequest<ServiceFor<O>>;
     }
-  : true extends NonNullable<O["include"]>["exactInput"]
+  : true extends NonNullable<O["include"]>["sent"]
     ? {
-        sent?: ExactIssueInput<ServiceFor<O>>;
+        sent?: IssueRequest<ServiceFor<O>>;
       }
     : unknown;
 type Evidence<

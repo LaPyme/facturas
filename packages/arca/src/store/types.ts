@@ -28,7 +28,7 @@ export type ArcaAttemptRecord = {
   number: number;
   inputHash: string;
   sent: WsfeVoucherInput & {
-    details?: readonly import("../services/issuance-wsmtxca").VoucherItemDetail[];
+    lines?: readonly import("../services/issuance-wsmtxca").WsmtxcaLine[];
   };
   createdAt: string;
 };

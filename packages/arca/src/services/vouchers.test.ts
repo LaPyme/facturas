@@ -74,7 +74,7 @@ function fake(
   const wsfe = {
     getNextVoucherNumber: vi.fn().mockResolvedValue(77),
     issue: vi.fn(({ data }: WsfeAuthorizeVoucherInput) => {
-      // Exercise the real exact-input reconciliation on every attempted write.
+      // Exercise the real provider reconciliation on every attempted write.
       normalizeWsfeVoucherInput(data);
       return Promise.resolve(outcome);
     }),
@@ -109,7 +109,7 @@ describe("vouchers.issue", () => {
     const auth = { representedTaxId: "20304050607", forceRefresh: true };
     const result = await service.issue(input, {
       ...auth,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(result).toMatchObject({
       kind: "authorized",
@@ -181,7 +181,7 @@ describe("vouchers.issue", () => {
     const result = await service.issue(input, {
       representedTaxId: 20_304_050_607,
       forceRefresh: false,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(result).toMatchObject({
       kind: "authorized",
@@ -262,14 +262,14 @@ describe("vouchers.issue", () => {
   it.each([
     undefined,
     { raw: false },
-    { exactInput: false },
+    { sent: false },
     { raw: true },
-    { exactInput: true },
-    { raw: true, exactInput: true },
-  ])("controls evidence and exact input with include %j", async (include) => {
+    { sent: true },
+    { raw: true, sent: true },
+  ])("controls evidence and the sent request with include %j", async (include) => {
     const { service } = fake();
     const result = await service.issue(input, { include });
-    expect(Object.hasOwn(result, "sent")).toBe(include?.exactInput === true);
+    expect(Object.hasOwn(result, "sent")).toBe(include?.sent === true);
     if (result.kind !== "authorized" || result.recoveredByMatch) {
       throw new Error("Expected direct authorization");
     }
@@ -397,7 +397,7 @@ describe("vouchers.issue", () => {
     await running;
     expect(wsfe.issue.mock.calls[0][0].data.totalAmount).toBe(121);
   });
-  it("handles authorized exact evidence without expiry conservatively", async () => {
+  it("handles authorized evidence without expiry conservatively", async () => {
     const { service, wsfe } = fake(
       { ...authorized, caeExpiry: undefined },
       found({ caeExpiry: undefined })
@@ -410,7 +410,7 @@ describe("vouchers.issue", () => {
   });
 });
 
-describe("high-level API with the real exact SOAP adapter", () => {
+describe("high-level API with the real SOAP adapter", () => {
   function createAdapter(soap: CreateWsfeServiceOptions["soap"]) {
     return createWsfeService({
       config: {

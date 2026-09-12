@@ -100,12 +100,18 @@ function fake({ coordinated = true } = {}) {
       calls.push("authorize");
       return Promise.resolve(authorized);
     }),
-    lookupVoucher: vi.fn(({ voucherType }: { voucherType: number }) => {
-      calls.push("lookup");
-      return Promise.resolve(
-        voucherType === 11 ? found() : written ? found(written, 9) : absent
-      );
-    }),
+    lookupVoucher: vi.fn(
+      ({ voucherType, number }: { voucherType: number; number: number }) => {
+        calls.push("lookup");
+        return Promise.resolve(
+          voucherType === 11
+            ? found(data, number)
+            : written
+              ? found(written, 9)
+              : absent
+        );
+      }
+    ),
   };
   return {
     wsfe,
@@ -127,7 +133,7 @@ describe("credit note orchestration", () => {
     const { service, calls } = fake();
     const result = await service.issueCreditNote(note, {
       ...(keyed ? { idempotencyKey: options.idempotencyKey } : {}),
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(calls).toEqual(["lookup", "next", "authorize"]);
     expect(result).toMatchObject({
@@ -140,7 +146,7 @@ describe("credit note orchestration", () => {
     const { service, calls, wsfe } = fake();
     const result = await service.issueCreditNote(partial, {
       ...options,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(calls).toEqual(["lookup", "next", "authorize"]);
     expect(result).toMatchObject({
@@ -159,11 +165,12 @@ describe("credit note orchestration", () => {
     });
     expect(wsfe.issue.mock.calls[0][0].data.totalAmount).toBe(0.4);
   });
-  it("returns the normalized original from linked note previews", async () => {
+  it("returns the normalized originals from linked note previews", async () => {
     const { service, calls } = fake();
     const credit = await service.previewCreditNote(partial);
     expect(calls).toEqual(["lookup"]);
-    expect(credit.original).toMatchObject({
+    expect(credit.originals).toHaveLength(1);
+    expect(credit.originals?.[0]).toMatchObject({
       number: 1,
       salesPoint: 1,
       voucherType: 11,
@@ -172,12 +179,12 @@ describe("credit note orchestration", () => {
       cae: "123",
       caeExpiry: "20260915",
     });
-    expect(credit.original).not.toHaveProperty("raw");
+    expect(credit.originals?.[0]).not.toHaveProperty("raw");
 
     calls.length = 0;
     const debit = await service.previewDebitNote(partial);
     expect(calls).toEqual(["lookup"]);
-    expect(debit.original).toEqual(credit.original);
+    expect(debit.originals).toEqual(credit.originals);
   });
   it.each([
     ["a fractional", 100.5],
@@ -471,4 +478,86 @@ it("issueCreditNote recovers concurrent keyed writes through 10016 without withL
     "authorized",
   ]);
   expect(wsfe.issue).toHaveBeenCalledTimes(2);
+});
+
+describe("notes against several originals", () => {
+  const targets = [target, { ...target, number: 2 }];
+  const several: CreditNoteInput = {
+    for: targets,
+    items: [{ amount: 150 }],
+    date: "20260905",
+  };
+  it("reads every original once, then numbers and authorizes once", async () => {
+    const { service, calls } = fake();
+    expect(
+      await service.issueCreditNote(several, {
+        ...options,
+        include: { sent: true },
+      })
+    ).toMatchObject({
+      kind: "authorized",
+      voucher: { voucherType: 13, voucherClass: "C", number: 9 },
+      sent: {
+        totalAmount: 1.5,
+        associatedVouchers: [
+          { type: 11, number: 1 },
+          { type: 11, number: 2 },
+        ],
+      },
+    });
+    expect(calls).toEqual(["lookup", "lookup", "next", "authorize"]);
+  });
+  it("replays the key without reading the originals again", async () => {
+    const { service, calls, wsfe } = fake();
+    await service.issueCreditNote(several, options);
+    calls.length = 0;
+    expect(await service.issueCreditNote(several, options)).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { number: 9 },
+    });
+    expect(calls).toEqual(["lookup"]);
+    expect(wsfe.issue).toHaveBeenCalledTimes(1);
+  });
+  it("treats a changed list of originals as a different input", async () => {
+    const { service } = fake();
+    await service.issueCreditNote(several, options);
+    await expect(
+      service.issueCreditNote(
+        { ...several, for: [target] as typeof targets },
+        options
+      )
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: "ARCA_INPUT_IDEMPOTENCY_MISMATCH" })
+    );
+  });
+  it("previews every original and refuses a full note of several", async () => {
+    const { service, calls } = fake();
+    const preview = await service.previewCreditNote(several);
+    expect(calls).toEqual(["lookup", "lookup"]);
+    expect(preview.originals?.map((one) => one.number)).toEqual([1, 2]);
+    await expect(
+      service.issueCreditNote({ for: targets, all: true })
+    ).rejects.toThrowError(
+      expect.objectContaining({
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "input.all",
+      })
+    );
+  });
+  it("recovers a list-form reservation from the store", async () => {
+    const { service, store, calls } = fake();
+    await service.issueCreditNote(several, options);
+    calls.length = 0;
+    expect(await service.recover(options.idempotencyKey)).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { number: 9, voucherType: 13 },
+    });
+    expect(calls).toEqual(["lookup"]);
+    const record = JSON.parse(
+      (await store.get(key)) as string
+    ) as ArcaAttemptRecord;
+    expect(record.sent.associatedVouchers).toHaveLength(2);
+  });
 });

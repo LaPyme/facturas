@@ -25,8 +25,6 @@ const entrypoints = [
       "createRedisStore",
       "createFileStore",
       "createMemoryStore",
-      "buildFacturaB",
-      "buildFacturaC",
       "matchWsfeVoucherIdentity",
       "toArcaSafeErrorMetadata",
       "ARCA_FINAL_CONSUMER_IDENTIFICATION_THRESHOLD_MINOR_UNITS",
@@ -41,7 +39,7 @@ const entrypoints = [
   ["facturas/errors", [...publicErrorClasses, "isArcaAuthenticationError"]],
   ["facturas/padron", ["createPadronService"]],
   ["facturas/types", []],
-  ["facturas/wsfe", ["createWsfeService", "buildFacturaB", "buildFacturaC"]],
+  ["facturas/wsfe", ["createWsfeService"]],
   ["facturas/wsmtxca", ["createWsmtxcaService"]],
 ];
 

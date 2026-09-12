@@ -2,8 +2,6 @@ import {
   ArcaAuthenticationError,
   ArcaInputError,
   type ArcaInputErrorCode,
-  buildFacturaB,
-  buildFacturaC,
   createArcaClient,
   type IssuePreview,
   isArcaAuthenticationError,
@@ -18,43 +16,37 @@ import {
   ArcaAuthenticationError as SubpathAuthenticationError,
   ArcaInputError as SubpathInputError,
 } from "facturas/errors";
-import {
-  buildFacturaB as buildFacturaBFromWsfe,
-  buildFacturaC as buildFacturaCFromWsfe,
-  type WsfeAuthorizeVoucherInput as SubpathAuthorizeVoucherInput,
-  type WsfeVoucherInput as SubpathVoucherInput,
+import type {
+  WsfeAuthorizeVoucherInput as SubpathAuthorizeVoucherInput,
+  WsfeVoucherInput as SubpathVoucherInput,
 } from "facturas/wsfe";
 
-const facturaB = buildFacturaB({
+// The transport modules take the provider request as it goes on the wire.
+const transportInput: WsfeVoucherInput = {
   salesPoint: 1,
+  voucherType: 6,
   concept: 1,
   documentType: 99,
   documentNumber: 0,
   receiverVatConditionId: 5,
   voucherDate: "2026-09-02",
-  taxableAmount: 10_000,
-  vatRate: 21,
-  currency: ISO_CURRENCIES.ARS,
-});
-const facturaC = buildFacturaCFromWsfe({
-  salesPoint: 1,
-  concept: 1,
-  documentType: 99,
-  documentNumber: 0,
-  receiverVatConditionId: 5,
-  voucherDate: "2026-09-02",
-  amount: 10_000,
-  currency: ISO_CURRENCIES.USD,
-  exchangeRate: "1095.5",
-});
-const exactInput: WsfeVoucherInput = facturaB;
-const subpathExactInput: SubpathVoucherInput = facturaC;
+  totalAmount: 121,
+  netAmount: 100,
+  vatAmount: 21,
+  exemptAmount: 0,
+  nonTaxableAmount: 0,
+  taxAmount: 0,
+  currencyId: ARCA_CURRENCY_IDS[ISO_CURRENCIES.ARS],
+  exchangeRate: "1",
+  vatRates: [{ id: 5, baseAmount: 100, amount: 21 }],
+};
+const subpathTransportInput: SubpathVoucherInput = transportInput;
 const authorizationInput: WsfeAuthorizeVoucherInput = {
-  data: exactInput,
+  data: transportInput,
   voucherNumber: 1,
 };
 const subpathAuthorizationInput: SubpathAuthorizeVoucherInput = {
-  data: subpathExactInput,
+  data: subpathTransportInput,
   voucherNumber: 2,
 };
 const inputError = new ArcaInputError("invalid date", {
@@ -89,8 +81,6 @@ const outcome: WsfeAuthorizationOutcome = {
 
 export const packageConsumerContract = {
   createArcaClient,
-  buildFacturaBFromWsfe,
-  buildFacturaC,
   authorizationInput,
   subpathAuthorizationInput,
   inputError,
@@ -160,7 +150,7 @@ export async function facadeConsumerContract(
       result satisfies never;
   }
   const included = await client.issue(input, {
-    include: { exactInput: true, raw: true },
+    include: { sent: true, raw: true },
   });
   if (included.kind === "authorized") {
     included.sent satisfies WsfeVoucherInput;
@@ -225,8 +215,16 @@ export async function creditNoteConsumerContract(
   } as const;
   const linkedPreview: NotePreview =
     await client.previewCreditNote(linkedPreviewInput);
-  linkedPreview.original?.cae satisfies string | undefined;
-  linkedPreview.original?.totalAmount satisfies number | undefined;
+  linkedPreview.originals?.[0]?.cae satisfies string | undefined;
+  linkedPreview.originals?.[0]?.totalAmount satisfies number | undefined;
+  // A note against several originals reads every one of them.
+  const manyPreview = await client.previewCreditNote({
+    for: [target, { ...target, number: 2 }],
+    items: [{ amount: 100 }],
+  });
+  manyPreview.originals?.length satisfies number | undefined;
+  // all: true against several originals is refused at runtime, before any I/O.
+  await client.issueCreditNote({ for: [target], all: true });
   const periodPreview = await client.previewCreditNote({
     issuer: "responsable_inscripto",
     salesPoint: 1,
@@ -234,7 +232,7 @@ export async function creditNoteConsumerContract(
     items: [{ net: 10_000, vat: 21 }],
     associatedPeriod: { from: "20260901", to: "20260930" },
   });
-  periodPreview.original satisfies object | undefined;
+  periodPreview.originals satisfies readonly object[] | undefined;
   // @ts-expect-error A credit note needs exactly one mode: items, amounts or all: true.
   await client.issueCreditNote({ for: target });
   await client.issueCreditNote({
@@ -308,7 +306,7 @@ export async function creditNoteConsumerContract(
       items: [{ gross: 6050, vat: 21 }],
       total: 6050,
     },
-    { idempotencyKey: "nc:1", include: { exactInput: true, raw: true } }
+    { idempotencyKey: "nc:1", include: { sent: true, raw: true } }
   );
   switch (partial.kind) {
     case "authorized":
@@ -336,20 +334,15 @@ export async function completeIssuanceConsumerContract(
     issuer: "responsable_inscripto" as const,
     salesPoint: 1,
     to: { condition: 1, cuit: "20123456789" },
-    amounts: {
-      net: 10_000,
-      vat: 2100,
-      vatRates: [{ id: 5, base: 10_000, amount: 2100 }],
-    },
-    details: [
+    // One item carries both the money and the line WSMTXCA sends.
+    items: [
       {
+        net: 10_000,
+        vat: 21 as const,
         description: "Product",
         quantity: 1,
         unit: 7,
         unitPrice: "100",
-        vatCondition: 5,
-        vatAmount: 2100,
-        amount: 12_100,
       },
     ],
   };
@@ -361,7 +354,7 @@ export async function completeIssuanceConsumerContract(
   const issued = await client.issue(input, {
     service: "wsmtxca",
     number: 42,
-    include: { exactInput: true },
+    include: { sent: true },
   });
   if (issued.kind === "authorized") {
     issued.sent.comprobanteCAERequest.importeTotal satisfies number;
@@ -369,16 +362,16 @@ export async function completeIssuanceConsumerContract(
       issued.authorization.service satisfies "wsmtxca";
     }
   }
-  const { details: _details, ...header } = input;
-  client.preview(header).request satisfies WsfeVoucherInput;
+  // WSFE ignores the line fields and derives the same header from the money.
+  client.preview(input).request satisfies WsfeVoucherInput;
   const period = {
-    ...header,
+    ...input,
     associatedPeriod: { from: "20260901" as const, to: "20260906" as const },
   };
   await client.previewDebitNote(period);
   await client.issueDebitNote(period, { idempotencyKey: "debit" });
   const recovery = await client.recover("debit", {
-    include: { exactInput: true },
+    include: { sent: true },
   });
   if (
     recovery.kind === "authorized" &&

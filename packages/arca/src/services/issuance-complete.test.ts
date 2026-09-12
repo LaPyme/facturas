@@ -126,7 +126,7 @@ describe("complete WSFE issuance", () => {
     const preview = client.preview(input);
     const result = await client.issue(input, {
       number: 42,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(preview).toMatchObject({
       voucherType: type,
@@ -153,7 +153,7 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_399,
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
@@ -232,7 +232,7 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(issued).toMatchObject({
       kind: "authorized",
@@ -245,7 +245,7 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(credited).toMatchObject({
       kind: "authorized",
@@ -308,7 +308,7 @@ describe("complete WSFE issuance", () => {
       "original"
     );
     expect(
-      await client.issueCreditNote(period, { include: { exactInput: true } })
+      await client.issueCreditNote(period, { include: { sent: true } })
     ).toMatchObject({
       kind: "authorized",
       sent: {
@@ -346,7 +346,6 @@ describe("complete WSFE issuance", () => {
     { taxes: [{ ...tax, id: 0 }] },
     { family: "fce" },
     { paidInForeignCurrency: true },
-    { details: [] },
     { to: { condition: 5, document: { type: 80, number: "1" } } },
     { amounts: { net: 10_000, vat: 2100 } },
   ])("rejects invalid extended input before any I/O: %j", async (extra) => {
@@ -370,7 +369,7 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_101,
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
@@ -519,19 +518,15 @@ function transportFixture() {
   );
   return { client, soap, calls, vouchers, config, auth, store };
 }
+const line = {
+  description: "Product",
+  quantity: 1,
+  unit: 7,
+  unitPrice: "100.000000",
+};
 const detailed: IssueInput = {
   ...invoice,
-  details: [
-    {
-      description: "Product",
-      quantity: 1,
-      unit: 7,
-      unitPrice: "100.000000",
-      vatCondition: 5,
-      vatAmount: 2100,
-      amount: 12_100,
-    },
-  ],
+  items: [{ ...line, net: 10_000, vat: 21 }],
 };
 describe("WSMTXCA high-level API through the real transport adapter", () => {
   it("omits the tribute amount together with its detail when there are no tributes", () => {
@@ -560,7 +555,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     const options = {
       service: "wsmtxca" as const,
       idempotencyKey: "invoice",
-      include: { exactInput: true },
+      include: { sent: true },
     };
     const input = { ...detailed, taxes: [tax] };
     const preview = client.preview(input, { service: "wsmtxca" });
@@ -636,7 +631,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(await client.recover("nested")).toMatchObject({
       kind: "indeterminate",
     });
-    item.precioUnitario = detailed.details?.[0]?.unitPrice;
+    item.precioUnitario = line.unitPrice;
     raw.arrayDatosAdicionales = {
       datoAdicional: [{ t: 23, c1: "unexpected" }],
     };
@@ -655,13 +650,15 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       )
     ).toMatchObject({
       service: "wsmtxca",
-      original: {
-        number: 9,
-        salesPoint: 1,
-        voucherType: 1,
-        totalAmount: 124,
-        cae: "12345678901234",
-      },
+      originals: [
+        {
+          number: 9,
+          salesPoint: 1,
+          voucherType: 1,
+          totalAmount: 124,
+          cae: "12345678901234",
+        },
+      ],
     });
     expect(
       await client.issueCreditNote(
@@ -673,8 +670,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       await client.issueDebitNote(
         {
           for: target,
-          items: [{ net: 10_000, vat: 21 }],
-          details: detailed.details,
+          items: [{ ...line, net: 10_000, vat: 21 }],
           date: "20260906",
         },
         options
@@ -766,24 +762,40 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
   });
-  it("rejects invalid details before any provider request", async () => {
+  it.each([
+    ["items[0].description", { description: "  " }],
+    ["items[0].quantity", { quantity: 0 }],
+    ["items[0].unit", { unit: 1.5 }],
+    ["items[0].unitPrice", { unitPrice: "100.0000001" }],
+    ["items[0].unitPrice", { unitPrice: undefined }],
+  ])("names %s when WSMTXCA line detail is missing or invalid", async (field, change) => {
     const { client, calls } = transportFixture();
     await expect(
       client.issue(
-        {
-          ...detailed,
-          details: [
-            {
-              ...(detailed.details?.[0] as NonNullable<
-                IssueInput["details"]
-              >[number]),
-              amount: 1,
-            },
-          ],
-        },
+        { ...invoice, items: [{ ...line, ...change, net: 10_000, vat: 21 }] },
         { service: "wsmtxca" }
       )
-    ).rejects.toMatchObject({ name: "ArcaInputError" });
+    ).rejects.toMatchObject({ name: "ArcaInputError", field });
+    expect(calls).toEqual([]);
+  });
+  it("refuses a reviewed amounts breakdown for WSMTXCA", async () => {
+    const { client, calls } = transportFixture();
+    const { items: _items, ...header } = invoice as IssueInput & {
+      items?: unknown;
+    };
+    await expect(
+      client.issue(
+        {
+          ...header,
+          amounts: {
+            net: 10_000,
+            vat: 2100,
+            vatRates: [{ id: 5, base: 10_000, amount: 2100 }],
+          },
+        } as IssueInput,
+        { service: "wsmtxca" }
+      )
+    ).rejects.toMatchObject({ name: "ArcaInputError", field: "amounts" });
     expect(calls).toEqual([]);
   });
   it("writes v2 records for WSMTXCA and refuses an unknown version", async () => {
