@@ -4,7 +4,10 @@ import {
   ArcaServiceError,
   toArcaSafeErrorMetadata,
 } from "../errors";
-import { normalizeArcaAmountToMinorUnits } from "../internal/decimal";
+import {
+  arcaMinorUnitsToNumber,
+  normalizeArcaAmountToMinorUnits,
+} from "../internal/decimal";
 import type { ArcaEnvironment } from "../internal/types";
 import {
   type ArcaAttemptRecord,
@@ -42,7 +45,7 @@ import {
   type WsfeVoucherInfo,
   type WsfeVoucherInput,
 } from "./wsfe";
-import { deriveWsmtxcaLines } from "./wsfe-amounts";
+import { deriveWsmtxcaSettlement } from "./wsfe-amounts";
 import {
   assertCreditNoteInput,
   type CreditNoteInput,
@@ -319,10 +322,18 @@ function attachLines(prepared: Prepared, options: IssueOptions): void {
       { code: "ARCA_INPUT_INVALID_VALUE", field: "amounts" }
     );
   }
-  prepared.data.lines = deriveWsmtxcaLines(
+  const settlement = deriveWsmtxcaSettlement(
     prepared.lineSource,
     prepared.amounts.vatAdjustment
   );
+  prepared.data.lines = settlement.lines;
+  prepared.data.vatRates = prepared.data.vatRates?.map((rate) => ({
+    ...rate,
+    amount: arcaMinorUnitsToNumber(
+      BigInt(settlement.vatByCondition.get(rate.id) ?? 0),
+      "vatAmount"
+    ),
+  }));
 }
 function validatePrepared(prepared: Prepared, options: IssueOptions): void {
   validateFiscalHeader(prepared.data);
@@ -1336,6 +1347,7 @@ async function prepareNote(
     });
   }
   const targets = creditNoteTargets(note);
+  validateFceAssociations(note, targets, options.service ?? "wsfe");
   const originals: WsfeVoucherInfo[] = [];
   for (const target of targets) {
     originals.push(await lookupOriginal(wsfe, target, options));
@@ -1368,6 +1380,48 @@ async function prepareNote(
   }
   validatePrepared(prepared, options);
   return { ...prepared, originals: originals.map(toVoucherSummary) };
+}
+
+/** Provider rules differ for FCE notes; ordinary multi-original notes remain valid. */
+function validateFceAssociations(
+  note: CreditNoteInput,
+  targets: readonly VoucherCoordinates[],
+  service: IssuanceService
+): void {
+  const fceTargets = targets.filter(
+    (target) => voucherFamily(target.voucherType).family === "fce"
+  );
+  if (fceTargets.length === 0) {
+    return;
+  }
+  const nonAnnulment = note.fce?.annulment === false;
+  if ((service === "wsmtxca" || nonAnnulment) && targets.length !== 1) {
+    throw new ArcaInputError(
+      service === "wsmtxca"
+        ? "WSMTXCA FCE notes require exactly one associated original."
+        : "Non-annulment FCE notes require exactly one associated invoice.",
+      {
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "input.for",
+        expected: "one FCE original",
+      }
+    );
+  }
+  const [target] = targets;
+  if (
+    nonAnnulment &&
+    target !== undefined &&
+    voucherFamily(target.voucherType).types[0] !== target.voucherType
+  ) {
+    throw new ArcaInputError(
+      "Non-annulment FCE notes must be associated to an FCE invoice.",
+      {
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "input.for.voucherType",
+        expected: "an FCE invoice type",
+      }
+    );
+  }
 }
 
 /** One read of one original, checked against the coordinates that asked for it. */

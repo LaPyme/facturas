@@ -235,6 +235,13 @@ type LineDraft = {
   amount: bigint;
   rate?: SupportedVatRate;
   field?: "net" | "gross";
+  vatFormula?: { numerator: bigint; denominator: bigint };
+  amountFormula: { numerator: bigint; denominator: bigint };
+};
+
+export type WsmtxcaSettlement = {
+  lines: WsmtxcaLine[];
+  vatByCondition: ReadonlyMap<number, number>;
 };
 
 /**
@@ -248,6 +255,14 @@ export function deriveWsmtxcaLines(
   input: WsfeAmountsInput,
   vatAdjustment: number
 ): WsmtxcaLine[] {
+  return deriveWsmtxcaSettlement(input, vatAdjustment).lines;
+}
+
+/** Also exposes the reconciled per-rate VAT needed by WSMTXCA subtotals. */
+export function deriveWsmtxcaSettlement(
+  input: WsfeAmountsInput,
+  vatAdjustment: number
+): WsmtxcaSettlement {
   if (!Array.isArray(input.items) || input.items.length === 0) {
     invalidItem("items", "a non-empty array of items");
   }
@@ -263,11 +278,23 @@ export function deriveWsmtxcaLines(
   }
   reconcileGroups(drafts, groups);
   absorbAdjustment(drafts, BigInt(vatAdjustment));
-  return drafts.map(({ line, vat, amount }) => ({
+  const lines = drafts.map(({ line, vat, amount }) => ({
     ...line,
     amount: Number(amount),
     ...(input.voucherClass === "A" ? { vatAmount: Number(vat) } : {}),
   }));
+  const vatByCondition = new Map<number, number>();
+  for (const draft of drafts) {
+    if (draft.rate === undefined) {
+      continue;
+    }
+    const condition = RATES[draft.rate].id;
+    vatByCondition.set(
+      condition,
+      (vatByCondition.get(condition) ?? 0) + Number(draft.vat)
+    );
+  }
+  return { lines, vatByCondition };
 }
 
 function lineDraft(
@@ -279,10 +306,12 @@ function lineDraft(
   const line = assertItemLine(item, path);
   if (!isVat) {
     // A class C line bears no VAT at all, so it reports the 0% condition.
+    const amount = classCAmount(item, path);
     return {
       line: { ...line, vatCondition: RATES[0].id, amount: 0 },
       vat: 0n,
-      amount: classCAmount(item, path),
+      amount,
+      amountFormula: { numerator: amount, denominator: 1n },
     };
   }
   const { amount, field, rate } = vatItemAmount(item, path);
@@ -295,6 +324,7 @@ function lineDraft(
       },
       vat: 0n,
       amount,
+      amountFormula: { numerator: amount, denominator: 1n },
     };
   }
   const { id, basisPoints } = RATES[rate];
@@ -312,6 +342,20 @@ function lineDraft(
     amount: field === "gross" ? amount : amount + vat,
     rate,
     field,
+    vatFormula:
+      field === "gross"
+        ? {
+            numerator: amount * basisPoints,
+            denominator: 10_000n + basisPoints,
+          }
+        : { numerator: amount * basisPoints, denominator: 10_000n },
+    amountFormula:
+      field === "gross"
+        ? { numerator: amount, denominator: 1n }
+        : {
+            numerator: amount * (10_000n + basisPoints),
+            denominator: 10_000n,
+          },
   };
 }
 
@@ -357,9 +401,9 @@ function sumVat(
 }
 
 /**
- * Moves `amount` cents of VAT onto the matching lines, one at a time, never
- * taking a line below zero. There is always such a line while cents remain:
- * the total being distributed is itself non-negative.
+ * Moves `amount` cents of VAT across matching lines, one at a time. A move
+ * must keep VAT non-negative and both line formulas within ARCA's absolute
+ * one-cent tolerance.
  */
 function settle(
   drafts: readonly LineDraft[],
@@ -368,32 +412,102 @@ function settle(
   movesItem: boolean
 ): void {
   let remaining = amount;
+  const targets = drafts.filter(of);
+  let cursor = 0;
   while (remaining !== 0n) {
     const step = remaining > 0n ? 1n : -1n;
-    const target = drafts.find(
-      (draft) => of(draft) && (step > 0n || draft.vat > 0n)
-    );
+    let target: LineDraft | undefined;
+    for (let offset = 0; offset < targets.length; offset++) {
+      const index = (cursor + offset) % targets.length;
+      const candidate = targets[index];
+      if (candidate && canMove(candidate, step, movesItem)) {
+        target = candidate;
+        cursor = (index + 1) % targets.length;
+        break;
+      }
+    }
     if (target === undefined) {
       throw new ArcaError(
         "The derived WSMTXCA VAT does not fit its lines. This is an SDK invariant failure.",
         "ARCA_ISSUE_INVARIANT"
       );
     }
-    target.vat += step;
-    if (movesItem) {
-      target.amount += step;
-    }
+    applyMove(target, step, movesItem);
     remaining -= step;
   }
 }
 
+function canMove(draft: LineDraft, step: bigint, movesItem: boolean): boolean {
+  const vat = draft.vat + step;
+  if (vat < 0n || (draft.rate === 0 && vat !== 0n)) {
+    return false;
+  }
+  if (
+    draft.vatFormula !== undefined &&
+    !withinAbsoluteCent(vat, draft.vatFormula)
+  ) {
+    return false;
+  }
+  return (
+    !movesItem || withinAbsoluteCent(draft.amount + step, draft.amountFormula)
+  );
+}
+
+function withinAbsoluteCent(
+  value: bigint,
+  formula: { numerator: bigint; denominator: bigint }
+): boolean {
+  const difference = value * formula.denominator - formula.numerator;
+  return (difference < 0n ? -difference : difference) <= formula.denominator;
+}
+
+function applyMove(draft: LineDraft, step: bigint, movesItem: boolean): void {
+  draft.vat += step;
+  if (movesItem) {
+    draft.amount += step;
+  }
+}
+
 /**
- * An asserted `total` shifts the header VAT by at most one cent per rate. The
- * lines carry that shift too, on lines that stay non-negative, which exist
- * because the header keeps its own VAT non-negative.
+ * An asserted `total` shifts at most one eligible line in each positive rate.
+ * A zero-rate line never absorbs VAT, and a total that cannot fit the item
+ * formulas is rejected before WSMTXCA sees it.
  */
 function absorbAdjustment(drafts: readonly LineDraft[], adjustment: bigint) {
-  settle(drafts, (draft) => draft.rate !== undefined, adjustment, true);
+  if (adjustment === 0n) {
+    return;
+  }
+  const step = adjustment > 0n ? 1n : -1n;
+  let remaining = adjustment;
+  const rates = [
+    ...new Set(
+      drafts
+        .map((draft) => draft.rate)
+        .filter(
+          (rate): rate is SupportedVatRate => rate !== undefined && rate > 0
+        )
+    ),
+  ];
+  for (const rate of rates) {
+    const target = drafts.find(
+      (draft) => draft.rate === rate && canMove(draft, step, true)
+    );
+    if (target === undefined) {
+      continue;
+    }
+    applyMove(target, step, true);
+    remaining -= step;
+    if (remaining === 0n) {
+      return;
+    }
+  }
+  throw new ArcaInputError(
+    "total cannot be reconciled with WSMTXCA item formulas within ARCA's tolerance.",
+    {
+      code: "ARCA_INPUT_AMOUNT_MISMATCH",
+      field: "total",
+    }
+  );
 }
 
 const ITEM_KEYS = [

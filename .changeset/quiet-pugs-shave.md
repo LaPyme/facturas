@@ -8,3 +8,5 @@
 - `{ service: "wsmtxca" }` requires `description`, `quantity`, `unit` and `unitPrice` on every item, and refuses a reviewed `amounts` breakdown.
 - `include: { exactInput: true }` is now `include: { sent: true }`, and `ExactIssueInput<S>` is now `IssueRequest<S>`.
 - `buildFacturaB()`, `buildFacturaC()` and their types are removed. `client.wsfe`, `client.wsmtxca` and `client.padron` are documented as the transport modules under the facade.
+- Existing WSMTXCA `v: 2` reservations with `sent.details` remain recoverable after the `items` migration, including their exact number and optional-discount default.
+- WSMTXCA line rounding is distributed within ARCA's per-line tolerance, zero-rate lines keep zero VAT, duplicate note originals are rejected, and FCE association limits follow the selected provider.

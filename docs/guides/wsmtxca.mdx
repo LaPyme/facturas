@@ -112,7 +112,10 @@ queda `indeterminate` y no se reenvía nada.
 Las reservas guardan el proveedor. Una reserva de WSMTXCA, o cualquier reserva
 con líneas de proveedor, se escribe como registro `v: 2`. La versión 0.10 no puede
 reproducirla, justamente para que no reenvíe por WSFE un comprobante que era de
-WSMTXCA. La vida de estos registros está en
+WSMTXCA. Las reservas `v: 2` escritas por versiones anteriores con
+`sent.details` siguen siendo recuperables: el SDK conserva el número y el
+request fiscal guardado, incluido el descuento cero que antes podía omitirse.
+La vida de estos registros está en
 [Evitar comprobantes duplicados](/guides/avoid-duplicates#implementar-otro-store).
 
 Para las lecturas de `client.wsmtxca`, como `getLastAuthorizedVoucher()`,

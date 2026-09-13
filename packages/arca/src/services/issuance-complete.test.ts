@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
-import { attemptKey } from "../store/types";
+import { attemptKey, sequenceKey } from "../store/types";
 import { createVouchersService } from "./vouchers";
 import {
   createWsfeService,
@@ -9,7 +9,7 @@ import {
   type WsfeVoucherInput,
   type WsfeVoucherLookupResult,
 } from "./wsfe";
-import type { IssueInput } from "./wsfe-derive";
+import { deriveWsfeInvoice, type IssueInput } from "./wsfe-derive";
 import { matchWsfeVoucherIdentity } from "./wsfe-identity";
 import { createWsmtxcaService } from "./wsmtxca";
 
@@ -243,7 +243,7 @@ describe("complete WSFE issuance", () => {
         for: { salesPoint: 1, voucherType: debit, number: 2 },
         all: true,
         date: "20260906",
-        ...(type >= 200 ? { fce: { annulment: false } } : {}),
+        ...(type >= 200 ? { fce: { annulment: true } } : {}),
       },
       { include: { sent: true } }
     );
@@ -528,6 +528,29 @@ const detailed: IssueInput = {
   ...invoice,
   items: [{ ...line, net: 10_000, vat: 21 }],
 };
+function legacyWsmtxcaRecord(amount = 12_100) {
+  return {
+    v: 2,
+    service: "wsmtxca",
+    operation: "issue",
+    salesPoint: 1,
+    voucherType: 1,
+    number: 9,
+    inputHash: "legacy-hash",
+    createdAt: "2026-09-06T12:00:00Z",
+    sent: {
+      ...deriveWsfeInvoice(detailed).data,
+      details: [
+        {
+          ...line,
+          amount,
+          vatAmount: 2100,
+          vatCondition: 5,
+        },
+      ],
+    },
+  } as const;
+}
 describe("WSMTXCA high-level API through the real transport adapter", () => {
   it("omits the tribute amount together with its detail when there are no tributes", () => {
     const { client } = transportFixture();
@@ -548,6 +571,62 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(withTax.request.comprobanteCAERequest).toMatchObject({
       importeOtrosTributos: 3,
       arrayOtrosTributos: { otroTributo: [{ codigo: 2, importe: 3 }] },
+    });
+  });
+  it("keeps adjusted class A lines and VAT subtotals consistent", () => {
+    const { client } = transportFixture();
+    const preview = client.preview(
+      {
+        ...invoice,
+        items: [
+          { ...line, net: 10_000, vat: 0 },
+          { ...line, net: 10_000, vat: 21 },
+        ],
+        total: 22_101,
+      },
+      { service: "wsmtxca" }
+    );
+    expect(preview.request.comprobanteCAERequest).toMatchObject({
+      importeTotal: 221.01,
+      arrayItems: {
+        item: [
+          { codigoCondicionIVA: 3, importeIVA: 0, importeItem: 100 },
+          { codigoCondicionIVA: 5, importeIVA: 21.01, importeItem: 121.01 },
+        ],
+      },
+      arraySubtotalesIVA: {
+        subtotalIVA: [
+          { codigo: 3, importe: 0 },
+          { codigo: 5, importe: 21.01 },
+        ],
+      },
+    });
+  });
+  it("keeps class B gross lines on their formula while grouping VAT", () => {
+    const { client } = transportFixture();
+    const preview = client.preview(
+      {
+        ...invoice,
+        to: { condition: "consumidor_final" },
+        items: Array.from({ length: 10 }, () => ({
+          ...line,
+          unitPrice: "0.02",
+          gross: 2,
+          vat: 21 as const,
+        })),
+      },
+      { service: "wsmtxca" }
+    );
+    const request = preview.request.comprobanteCAERequest;
+    expect(request.codigoTipoComprobante).toBe(6);
+    expect(request.arrayItems.item).toHaveLength(10);
+    expect(
+      request.arrayItems.item.every(
+        (item) => item.importeItem === 0.02 && !("importeIVA" in item)
+      )
+    ).toBe(true);
+    expect(request.arraySubtotalesIVA).toEqual({
+      subtotalIVA: [{ codigo: 5, importe: 0.03 }],
     });
   });
   it("previews, issues and recovers complete item and tax evidence", async () => {
@@ -591,6 +670,71 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       kind: "conflict",
     });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
+  });
+  it("recovers pre-upgrade v2 detail evidence without rewriting it", async () => {
+    const { client, store, calls, vouchers } = transportFixture();
+    const key = attemptKey("test", "20123456789", "legacy");
+    const json = JSON.stringify(legacyWsmtxcaRecord(12_099));
+    await store.set(key, json);
+    const found = structuredClone(
+      client.preview(detailed, { service: "wsmtxca" }).request
+        .comprobanteCAERequest
+    );
+    found.numeroComprobante = 9;
+    const [firstLine] = found.arrayItems.item;
+    if (!firstLine) {
+      throw new Error("fixture has no WSMTXCA line");
+    }
+    firstLine.importeItem = 120.99;
+    vouchers.set(1, found);
+    expect(
+      await client.recover("legacy", { include: { sent: true } })
+    ).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { number: 9 },
+      sent: {
+        comprobanteCAERequest: {
+          numeroComprobante: 9,
+          importeTotal: 121,
+          arrayItems: {
+            item: [{ importeBonificacion: 0, importeItem: 120.99 }],
+          },
+        },
+      },
+    });
+    expect(calls).toEqual(["consultarComprobante"]);
+    expect(await store.get(key)).toBe(json);
+  });
+  it("lets the sequence barrier consult and supersede a pre-upgrade v2 record", async () => {
+    const { client, store, calls } = transportFixture();
+    await store.set(
+      attemptKey("test", "20123456789", "legacy"),
+      JSON.stringify(legacyWsmtxcaRecord())
+    );
+    await store.set(
+      sequenceKey("test", "20123456789", 1, 1),
+      JSON.stringify({
+        v: 1,
+        key: "legacy",
+        number: 9,
+        claimedAt: "2026-09-06T12:00:00Z",
+      })
+    );
+    expect(
+      await client.issue(detailed, {
+        service: "wsmtxca",
+        idempotencyKey: "next",
+      })
+    ).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 9 },
+    });
+    expect(calls).toEqual([
+      "consultarComprobante",
+      "consultarUltimoComprobanteAutorizado",
+      "autorizarComprobante",
+    ]);
   });
   it("reports a stranger on a freshly reserved WSMTXCA number as a conflict", async () => {
     const { client, soap, vouchers, calls } = transportFixture();

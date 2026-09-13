@@ -490,9 +490,25 @@ function assertCreditNoteTargets(
         }
       );
     }
-    return value.map((target, index) =>
+    const targets = value.map((target, index) =>
       assertCreditNoteTarget(target, `for[${index}]`)
     );
+    const seen = new Set<string>();
+    for (const [index, target] of targets.entries()) {
+      const key = `${target.salesPoint}:${target.voucherType}:${target.number}`;
+      if (seen.has(key)) {
+        throw new ArcaInputError(
+          "issueCreditNote requires each original in for to be unique.",
+          {
+            code: "ARCA_INPUT_INVALID_VALUE",
+            field: `input.for[${index}]`,
+            expected: "unique voucher coordinates",
+          }
+        );
+      }
+      seen.add(key);
+    }
+    return targets;
   }
   return assertCreditNoteTarget(value as VoucherCoordinates, "for");
 }
