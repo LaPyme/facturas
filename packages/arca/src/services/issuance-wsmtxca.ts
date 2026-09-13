@@ -1,4 +1,4 @@
-import { ArcaInputError } from "../errors";
+import { ArcaError, ArcaInputError } from "../errors";
 import {
   isWithinArcaTolerance,
   normalizeArcaAmountToMinorUnits,
@@ -11,13 +11,17 @@ import {
 } from "./wsfe";
 import type { WsmtxcaService, WsmtxcaVoucherInfo } from "./wsmtxca";
 
-/** Detailed item evidence. Amounts are cents; unitPrice is a decimal major-unit string. */
-export type VoucherItemDetail = {
+/**
+ * One WSMTXCA provider line, derived from an `items` entry on the way out and
+ * read back from ARCA on the way in. Amounts are cents; `unitPrice` is a
+ * decimal major-unit string, the SDK's one monetary exception.
+ */
+export type WsmtxcaLine = {
   description: string;
   quantity: number;
   unit: number;
   unitPrice: string;
-  discount?: number;
+  discount: number;
   vatCondition: number;
   vatAmount?: number;
   amount: number;
@@ -25,9 +29,18 @@ export type VoucherItemDetail = {
   matrixCode?: string;
   matrixUnits?: number;
 };
+/** @internal Shape written by facturas 0.10 through 0.12. */
+export type LegacyWsmtxcaLine = Omit<WsmtxcaLine, "discount"> & {
+  discount?: number;
+};
 export type WsmtxcaIssueRequest = ReturnType<typeof wsmtxcaRequest>;
 export type FiscalHeader = WsfeVoucherInput & {
-  details?: readonly VoucherItemDetail[];
+  /** Derived provider lines. WSFE never reads them; WSMTXCA sends them. */
+  lines?: readonly WsmtxcaLine[];
+  /** @internal Lines mirrored from an authorized WSMTXCA consultation. */
+  authorizedLines?: readonly WsmtxcaLine[];
+  /** @internal Durable v2 reservation evidence written before `lines`. */
+  details?: readonly LegacyWsmtxcaLine[];
 };
 const iso = (value: string | undefined) => {
   if (value === undefined) {
@@ -41,71 +54,47 @@ const iso = (value: string | undefined) => {
 };
 
 export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
-  if (!data.details?.length) {
-    invalid("details", "WSMTXCA requires detailed items");
+  const legacy = data.details !== undefined;
+  const authorized = data.authorizedLines !== undefined;
+  const lines = data.lines ?? data.authorizedLines ?? data.details;
+  const sources = [data.lines, data.authorizedLines, data.details].filter(
+    (source) => source !== undefined
+  ).length;
+  if (!lines?.length || sources !== 1) {
+    invalid("items", "WSMTXCA requires items with line detail");
   }
-  const items = data.details.map((item, index) => {
-    if (
-      !item ||
-      typeof item !== "object" ||
-      Object.keys(item).some(
-        (k) =>
-          ![
-            "description",
-            "quantity",
-            "unit",
-            "unitPrice",
-            "discount",
-            "vatCondition",
-            "vatAmount",
-            "amount",
-            "code",
-            "matrixCode",
-            "matrixUnits",
-          ].includes(k)
-      )
-    ) {
-      invalid(`details[${index}]`, "Invalid detailed item fields");
-    }
-    if (
-      typeof item.description !== "string" ||
-      !(item.description.trim() && Number.isFinite(item.quantity)) ||
-      item.quantity <= 0 ||
-      !Number.isInteger(item.unit) ||
-      item.unit < 0 ||
-      typeof item.unitPrice !== "string" ||
-      !/^\d+(\.\d{1,6})?$/.test(item.unitPrice) ||
-      !Number.isInteger(item.vatCondition)
-    ) {
-      invalid(`details[${index}]`, "Invalid detailed item");
-    }
-    return {
-      unidadesMtx: item.matrixUnits,
-      codigoMtx: item.matrixCode,
-      codigo: item.code,
-      descripcion: item.description,
-      cantidad: item.quantity,
-      codigoUnidadMedida: item.unit,
-      precioUnitario: item.unitPrice,
-      importeBonificacion: minor(item.discount ?? 0, "details.discount"),
-      codigoCondicionIVA: item.vatCondition,
-      ...(item.vatAmount === undefined
-        ? {}
-        : { importeIVA: minor(item.vatAmount, "details.vatAmount") }),
-      importeItem: minor(item.amount, "details.amount"),
-    };
-  });
-  const itemTotal = data.details.reduce(
-    (sum, item) => sum + BigInt(item.amount),
-    0n
-  );
+  const items = lines.map((line) => ({
+    unidadesMtx: line.matrixUnits,
+    codigoMtx: line.matrixCode,
+    codigo: line.code,
+    descripcion: line.description,
+    cantidad: line.quantity,
+    codigoUnidadMedida: line.unit,
+    precioUnitario: line.unitPrice,
+    // Old durable records omitted a zero discount. Rebuild the exact request
+    // those releases sent without rewriting the stored fiscal evidence.
+    importeBonificacion: minor(line.discount ?? 0, "items.discount"),
+    codigoCondicionIVA: line.vatCondition,
+    ...(line.vatAmount === undefined
+      ? {}
+      : { importeIVA: minor(line.vatAmount, "items.vatAmount") }),
+    importeItem: minor(line.amount, "items.amount"),
+  }));
+  // Newly derived lines and their header come from the same items, so they
+  // must match exactly. Authorized consultations and legacy reservations can
+  // retain ARCA's historical one-cent reconciliation difference.
+  const itemTotal = lines.reduce((sum, line) => sum + BigInt(line.amount), 0n);
   const expected =
     normalizeArcaAmountToMinorUnits(data.totalAmount, "total") -
     normalizeArcaAmountToMinorUnits(data.taxAmount, "taxes");
-  if (!isWithinArcaTolerance(itemTotal, expected, 1)) {
-    invalid(
-      "details",
-      "Item totals must equal the voucher total excluding tributes"
+  if (
+    legacy || authorized
+      ? !isWithinArcaTolerance(itemTotal, expected, 1)
+      : itemTotal !== expected
+  ) {
+    throw new ArcaError(
+      "The derived WSMTXCA items do not sum to the voucher header excluding tributes. This is an SDK invariant failure.",
+      "ARCA_ISSUE_INVARIANT"
     );
   }
   // WSMTXCA error 114: the tribute amount and its detail travel together or
@@ -230,10 +219,10 @@ function rows(
 }
 export function wsmtxcaHeader(
   found: WsmtxcaVoucherInfo
-): WsfeVoucherInfo & { details?: VoucherItemDetail[] } {
+): WsfeVoucherInfo & { lines?: WsmtxcaLine[] } {
   const raw = found.raw;
   const items = rows(raw.arrayItems, "item");
-  const details = items?.map((i) => ({
+  const lines = items?.map((i) => ({
     description: String(i.descripcion ?? ""),
     quantity: Number(i.cantidad),
     unit: Number(i.codigoUnidadMedida),
@@ -276,13 +265,13 @@ export function wsmtxcaHeader(
       raw.fechaVencimientoPago === undefined
         ? undefined
         : String(raw.fechaVencimientoPago),
-    details,
+    lines,
     vatRates: rows(raw.arraySubtotalesIVA, "subtotalIVA")?.map((v) => ({
       id: Number(v.codigo),
       amount: Number(v.importe),
       baseAmount:
         Number(
-          (details ?? [])
+          (lines ?? [])
             .filter((i) => i.vatCondition === Number(v.codigo))
             .reduce((sum, i) => sum + BigInt(i.amount), 0n) -
             normalizeArcaAmountToMinorUnits(Number(v.importe), "vat")

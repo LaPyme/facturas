@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
-import { attemptKey } from "../store/types";
+import { attemptKey, sequenceKey } from "../store/types";
+import { wsmtxcaRequest } from "./issuance-wsmtxca";
 import { createVouchersService } from "./vouchers";
 import {
   createWsfeService,
@@ -9,7 +10,7 @@ import {
   type WsfeVoucherInput,
   type WsfeVoucherLookupResult,
 } from "./wsfe";
-import type { IssueInput } from "./wsfe-derive";
+import { deriveWsfeInvoice, type IssueInput } from "./wsfe-derive";
 import { matchWsfeVoucherIdentity } from "./wsfe-identity";
 import { createWsmtxcaService } from "./wsmtxca";
 
@@ -126,7 +127,7 @@ describe("complete WSFE issuance", () => {
     const preview = client.preview(input);
     const result = await client.issue(input, {
       number: 42,
-      include: { exactInput: true },
+      include: { sent: true },
     });
     expect(preview).toMatchObject({
       voucherType: type,
@@ -153,7 +154,7 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_399,
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
@@ -232,7 +233,7 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(issued).toMatchObject({
       kind: "authorized",
@@ -243,9 +244,9 @@ describe("complete WSFE issuance", () => {
         for: { salesPoint: 1, voucherType: debit, number: 2 },
         all: true,
         date: "20260906",
-        ...(type >= 200 ? { fce: { annulment: false } } : {}),
+        ...(type >= 200 ? { fce: { annulment: true } } : {}),
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(credited).toMatchObject({
       kind: "authorized",
@@ -308,7 +309,7 @@ describe("complete WSFE issuance", () => {
       "original"
     );
     expect(
-      await client.issueCreditNote(period, { include: { exactInput: true } })
+      await client.issueCreditNote(period, { include: { sent: true } })
     ).toMatchObject({
       kind: "authorized",
       sent: {
@@ -346,7 +347,6 @@ describe("complete WSFE issuance", () => {
     { taxes: [{ ...tax, id: 0 }] },
     { family: "fce" },
     { paidInForeignCurrency: true },
-    { details: [] },
     { to: { condition: 5, document: { type: 80, number: "1" } } },
     { amounts: { net: 10_000, vat: 2100 } },
   ])("rejects invalid extended input before any I/O: %j", async (extra) => {
@@ -370,7 +370,7 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_101,
       },
-      { include: { exactInput: true } }
+      { include: { sent: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
@@ -519,21 +519,57 @@ function transportFixture() {
   );
   return { client, soap, calls, vouchers, config, auth, store };
 }
+const line = {
+  description: "Product",
+  quantity: 1,
+  unit: 7,
+  unitPrice: "100.000000",
+};
 const detailed: IssueInput = {
   ...invoice,
-  details: [
-    {
-      description: "Product",
-      quantity: 1,
-      unit: 7,
-      unitPrice: "100.000000",
-      vatCondition: 5,
-      vatAmount: 2100,
-      amount: 12_100,
-    },
-  ],
+  items: [{ ...line, net: 10_000, vat: 21 }],
 };
+function legacyWsmtxcaRecord(amount = 12_100) {
+  return {
+    v: 2,
+    service: "wsmtxca",
+    operation: "issue",
+    salesPoint: 1,
+    voucherType: 1,
+    number: 9,
+    inputHash: "legacy-hash",
+    createdAt: "2026-09-06T12:00:00Z",
+    sent: {
+      ...deriveWsfeInvoice(detailed).data,
+      details: [
+        {
+          ...line,
+          amount,
+          vatAmount: 2100,
+          vatCondition: 5,
+        },
+      ],
+    },
+  } as const;
+}
 describe("WSMTXCA high-level API through the real transport adapter", () => {
+  it("keeps newly derived request lines on the exact SDK invariant", () => {
+    expect(() =>
+      wsmtxcaRequest({
+        ...deriveWsfeInvoice(detailed).data,
+        totalAmount: 121.01,
+        lines: [
+          {
+            ...line,
+            discount: 0,
+            vatCondition: 5,
+            vatAmount: 2100,
+            amount: 12_100,
+          },
+        ],
+      })
+    ).toThrowError(expect.objectContaining({ code: "ARCA_ISSUE_INVARIANT" }));
+  });
   it("omits the tribute amount together with its detail when there are no tributes", () => {
     const { client } = transportFixture();
     // ARCA rejects a zero importeOtrosTributos without arrayOtrosTributos
@@ -555,12 +591,68 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       arrayOtrosTributos: { otroTributo: [{ codigo: 2, importe: 3 }] },
     });
   });
+  it("keeps adjusted class A lines and VAT subtotals consistent", () => {
+    const { client } = transportFixture();
+    const preview = client.preview(
+      {
+        ...invoice,
+        items: [
+          { ...line, net: 10_000, vat: 0 },
+          { ...line, net: 10_000, vat: 21 },
+        ],
+        total: 22_101,
+      },
+      { service: "wsmtxca" }
+    );
+    expect(preview.request.comprobanteCAERequest).toMatchObject({
+      importeTotal: 221.01,
+      arrayItems: {
+        item: [
+          { codigoCondicionIVA: 3, importeIVA: 0, importeItem: 100 },
+          { codigoCondicionIVA: 5, importeIVA: 21.01, importeItem: 121.01 },
+        ],
+      },
+      arraySubtotalesIVA: {
+        subtotalIVA: [
+          { codigo: 3, importe: 0 },
+          { codigo: 5, importe: 21.01 },
+        ],
+      },
+    });
+  });
+  it("keeps class B gross lines on their formula while grouping VAT", () => {
+    const { client } = transportFixture();
+    const preview = client.preview(
+      {
+        ...invoice,
+        to: { condition: "consumidor_final" },
+        items: Array.from({ length: 10 }, () => ({
+          ...line,
+          unitPrice: "0.02",
+          gross: 2,
+          vat: 21 as const,
+        })),
+      },
+      { service: "wsmtxca" }
+    );
+    const request = preview.request.comprobanteCAERequest;
+    expect(request.codigoTipoComprobante).toBe(6);
+    expect(request.arrayItems.item).toHaveLength(10);
+    expect(
+      request.arrayItems.item.every(
+        (item) => item.importeItem === 0.02 && !("importeIVA" in item)
+      )
+    ).toBe(true);
+    expect(request.arraySubtotalesIVA).toEqual({
+      subtotalIVA: [{ codigo: 5, importe: 0.03 }],
+    });
+  });
   it("previews, issues and recovers complete item and tax evidence", async () => {
     const { client, calls, soap, vouchers } = transportFixture();
     const options = {
       service: "wsmtxca" as const,
       idempotencyKey: "invoice",
-      include: { exactInput: true },
+      include: { sent: true },
     };
     const input = { ...detailed, taxes: [tax] };
     const preview = client.preview(input, { service: "wsmtxca" });
@@ -596,6 +688,71 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       kind: "conflict",
     });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
+  });
+  it("recovers pre-upgrade v2 detail evidence without rewriting it", async () => {
+    const { client, store, calls, vouchers } = transportFixture();
+    const key = attemptKey("test", "20123456789", "legacy");
+    const json = JSON.stringify(legacyWsmtxcaRecord(12_099));
+    await store.set(key, json);
+    const found = structuredClone(
+      client.preview(detailed, { service: "wsmtxca" }).request
+        .comprobanteCAERequest
+    );
+    found.numeroComprobante = 9;
+    const [firstLine] = found.arrayItems.item;
+    if (!firstLine) {
+      throw new Error("fixture has no WSMTXCA line");
+    }
+    firstLine.importeItem = 120.99;
+    vouchers.set(1, found);
+    expect(
+      await client.recover("legacy", { include: { sent: true } })
+    ).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { number: 9 },
+      sent: {
+        comprobanteCAERequest: {
+          numeroComprobante: 9,
+          importeTotal: 121,
+          arrayItems: {
+            item: [{ importeBonificacion: 0, importeItem: 120.99 }],
+          },
+        },
+      },
+    });
+    expect(calls).toEqual(["consultarComprobante"]);
+    expect(await store.get(key)).toBe(json);
+  });
+  it("lets the sequence barrier consult and supersede a pre-upgrade v2 record", async () => {
+    const { client, store, calls } = transportFixture();
+    await store.set(
+      attemptKey("test", "20123456789", "legacy"),
+      JSON.stringify(legacyWsmtxcaRecord())
+    );
+    await store.set(
+      sequenceKey("test", "20123456789", 1, 1),
+      JSON.stringify({
+        v: 1,
+        key: "legacy",
+        number: 9,
+        claimedAt: "2026-09-06T12:00:00Z",
+      })
+    );
+    expect(
+      await client.issue(detailed, {
+        service: "wsmtxca",
+        idempotencyKey: "next",
+      })
+    ).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 9 },
+    });
+    expect(calls).toEqual([
+      "consultarComprobante",
+      "consultarUltimoComprobanteAutorizado",
+      "autorizarComprobante",
+    ]);
   });
   it("reports a stranger on a freshly reserved WSMTXCA number as a conflict", async () => {
     const { client, soap, vouchers, calls } = transportFixture();
@@ -636,7 +793,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(await client.recover("nested")).toMatchObject({
       kind: "indeterminate",
     });
-    item.precioUnitario = detailed.details?.[0]?.unitPrice;
+    item.precioUnitario = line.unitPrice;
     raw.arrayDatosAdicionales = {
       datoAdicional: [{ t: 23, c1: "unexpected" }],
     };
@@ -655,13 +812,15 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       )
     ).toMatchObject({
       service: "wsmtxca",
-      original: {
-        number: 9,
-        salesPoint: 1,
-        voucherType: 1,
-        totalAmount: 124,
-        cae: "12345678901234",
-      },
+      originals: [
+        {
+          number: 9,
+          salesPoint: 1,
+          voucherType: 1,
+          totalAmount: 124,
+          cae: "12345678901234",
+        },
+      ],
     });
     expect(
       await client.issueCreditNote(
@@ -673,14 +832,58 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       await client.issueDebitNote(
         {
           for: target,
-          items: [{ net: 10_000, vat: 21 }],
-          details: detailed.details,
+          items: [{ ...line, net: 10_000, vat: 21 }],
           date: "20260906",
         },
         options
       )
     ).toMatchObject({ kind: "authorized", voucher: { voucherType: 2 } });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(3);
+  });
+  it("mirrors an authorized WSMTXCA total within its historical line tolerance", async () => {
+    const { client, calls, store, vouchers } = transportFixture();
+    const options = { service: "wsmtxca" as const };
+    await client.issue(detailed, options);
+    const original = vouchers.get(1);
+    if (!original) {
+      throw new Error("fixture has no authorized WSMTXCA invoice");
+    }
+    original.importeTotal = 121.01;
+    const note = {
+      for: { salesPoint: 1, voucherType: 1, number: 9 },
+      all: true as const,
+      date: "20260907" as const,
+    };
+    expect(await client.previewCreditNote(note, options)).toMatchObject({
+      request: {
+        comprobanteCAERequest: {
+          importeTotal: 121.01,
+          arrayItems: { item: [{ importeItem: 121 }] },
+        },
+      },
+    });
+    expect(
+      await client.issueCreditNote(note, {
+        ...options,
+        idempotencyKey: "historical-line-tolerance",
+      })
+    ).toMatchObject({ kind: "authorized", voucher: { voucherType: 3 } });
+    const reservation = JSON.parse(
+      (await store.get(
+        attemptKey("test", "20123456789", "historical-line-tolerance")
+      )) ?? "{}"
+    ) as { sent?: Record<string, unknown> };
+    expect(reservation.sent).toMatchObject({
+      authorizedLines: [{ amount: 12_100, vatAmount: 2100 }],
+    });
+    expect(reservation.sent).not.toHaveProperty("lines");
+    expect(await client.recover("historical-line-tolerance")).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+    });
+    expect(
+      calls.filter((call) => call === "autorizarComprobante")
+    ).toHaveLength(2);
   });
   it("encodes FCE bank details and note annulment correctly for WSMTXCA", async () => {
     const { client, vouchers } = transportFixture();
@@ -766,24 +969,40 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
   });
-  it("rejects invalid details before any provider request", async () => {
+  it.each([
+    ["items[0].description", { description: "  " }],
+    ["items[0].quantity", { quantity: 0 }],
+    ["items[0].unit", { unit: 1.5 }],
+    ["items[0].unitPrice", { unitPrice: "100.0000001" }],
+    ["items[0].unitPrice", { unitPrice: undefined }],
+  ])("names %s when WSMTXCA line detail is missing or invalid", async (field, change) => {
     const { client, calls } = transportFixture();
     await expect(
       client.issue(
-        {
-          ...detailed,
-          details: [
-            {
-              ...(detailed.details?.[0] as NonNullable<
-                IssueInput["details"]
-              >[number]),
-              amount: 1,
-            },
-          ],
-        },
+        { ...invoice, items: [{ ...line, ...change, net: 10_000, vat: 21 }] },
         { service: "wsmtxca" }
       )
-    ).rejects.toMatchObject({ name: "ArcaInputError" });
+    ).rejects.toMatchObject({ name: "ArcaInputError", field });
+    expect(calls).toEqual([]);
+  });
+  it("refuses a reviewed amounts breakdown for WSMTXCA", async () => {
+    const { client, calls } = transportFixture();
+    const { items: _items, ...header } = invoice as IssueInput & {
+      items?: unknown;
+    };
+    await expect(
+      client.issue(
+        {
+          ...header,
+          amounts: {
+            net: 10_000,
+            vat: 2100,
+            vatRates: [{ id: 5, base: 10_000, amount: 2100 }],
+          },
+        } as IssueInput,
+        { service: "wsmtxca" }
+      )
+    ).rejects.toMatchObject({ name: "ArcaInputError", field: "amounts" });
     expect(calls).toEqual([]);
   });
   it("writes v2 records for WSMTXCA and refuses an unknown version", async () => {

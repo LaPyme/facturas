@@ -308,7 +308,7 @@ describe("keyed issue", () => {
     });
     const value = await production.issue(input, {
       idempotencyKey: "sale",
-      include: { raw: true, exactInput: true },
+      include: { raw: true, sent: true },
     });
     expect(value).toHaveProperty("sent");
     expect(value).toHaveProperty("authorization.raw");

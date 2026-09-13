@@ -43,8 +43,8 @@ ejemplos:
   comprobante y de catálogo en vivo
 - tipos de concepto para productos, servicios y productos + servicios
 - alícuotas de IVA `0`, `2.5`, `5`, `10.5`, `21` y `27`
-- monedas ISO de `buildFacturaB()` y `buildFacturaC()`, `ARS` y `USD`, con sus mapeos explícitos a `PES`
-  y `DOL` en ARCA
+- monedas ISO que acepta la fachada, `ARS` y `USD`, con sus mapeos explícitos a
+  `PES` y `DOL` en ARCA
 
 Si necesitás catálogos más amplios en tiempo de ejecución, están disponibles
 los métodos de WSFE como `getVoucherTypes()`,
@@ -69,9 +69,17 @@ esta clave y hay que emitir bajo una clave nueva. Está documentado en
 Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
-`RecoveryOptions`, `ExactIssueInput`, `IssuanceService`, `FceOptions`,
+`RecoveryOptions`, `IssueRequest`, `IssuanceService`, `FceOptions`,
 `InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
-`VoucherItemDetail` y `WsmtxcaIssueRequest`.
+`ItemLine`, `WsmtxcaLine` y `WsmtxcaIssueRequest`. `ItemLine` es el ítem de la
+fachada, con su plata y el detalle de línea que usa WSMTXCA. `WsmtxcaLine` es
+la fila que devuelven las consultas de WSMTXCA.
+
+`include: { raw: true, sent: true }` agrega la evidencia cruda y el request
+enviado a un resultado autorizado, y `NotePreview.originals` lista los
+comprobantes que una nota vinculada corrige. Los
+[módulos de transporte](/reference/arca-services) documentan `client.wsfe`,
+`client.wsmtxca` y `client.padron`.
 
 Entradas documentadas:
 
