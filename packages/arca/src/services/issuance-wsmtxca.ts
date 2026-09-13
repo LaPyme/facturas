@@ -1,5 +1,8 @@
 import { ArcaError, ArcaInputError } from "../errors";
-import { normalizeArcaAmountToMinorUnits } from "../internal/decimal";
+import {
+  isWithinArcaTolerance,
+  normalizeArcaAmountToMinorUnits,
+} from "../internal/decimal";
 import { minor } from "./issuance-fields";
 import {
   normalizeWsfeDateInput,
@@ -26,10 +29,16 @@ export type WsmtxcaLine = {
   matrixCode?: string;
   matrixUnits?: number;
 };
+/** @internal Shape written by facturas 0.10 through 0.12. */
+export type LegacyWsmtxcaLine = Omit<WsmtxcaLine, "discount"> & {
+  discount?: number;
+};
 export type WsmtxcaIssueRequest = ReturnType<typeof wsmtxcaRequest>;
 export type FiscalHeader = WsfeVoucherInput & {
   /** Derived provider lines. WSFE never reads them; WSMTXCA sends them. */
   lines?: readonly WsmtxcaLine[];
+  /** @internal Durable v2 reservation evidence written before `lines`. */
+  details?: readonly LegacyWsmtxcaLine[];
 };
 const iso = (value: string | undefined) => {
   if (value === undefined) {
@@ -43,10 +52,12 @@ const iso = (value: string | undefined) => {
 };
 
 export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
-  if (!data.lines?.length) {
+  const legacy = data.details !== undefined;
+  const lines = data.lines ?? data.details;
+  if (!lines?.length || (data.lines !== undefined && legacy)) {
     invalid("items", "WSMTXCA requires items with line detail");
   }
-  const items = data.lines.map((line) => ({
+  const items = lines.map((line) => ({
     unidadesMtx: line.matrixUnits,
     codigoMtx: line.matrixCode,
     codigo: line.code,
@@ -54,7 +65,9 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
     cantidad: line.quantity,
     codigoUnidadMedida: line.unit,
     precioUnitario: line.unitPrice,
-    importeBonificacion: minor(line.discount, "items.discount"),
+    // Old durable records omitted a zero discount. Rebuild the exact request
+    // those releases sent without rewriting the stored fiscal evidence.
+    importeBonificacion: minor(line.discount ?? 0, "items.discount"),
     codigoCondicionIVA: line.vatCondition,
     ...(line.vatAmount === undefined
       ? {}
@@ -63,14 +76,15 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
   }));
   // The lines and the header come from the same items, so this is an SDK
   // invariant, not caller input: a mismatch is a derivation bug.
-  const itemTotal = data.lines.reduce(
-    (sum, line) => sum + BigInt(line.amount),
-    0n
-  );
+  const itemTotal = lines.reduce((sum, line) => sum + BigInt(line.amount), 0n);
   const expected =
     normalizeArcaAmountToMinorUnits(data.totalAmount, "total") -
     normalizeArcaAmountToMinorUnits(data.taxAmount, "taxes");
-  if (itemTotal !== expected) {
+  if (
+    legacy
+      ? !isWithinArcaTolerance(itemTotal, expected, 1)
+      : itemTotal !== expected
+  ) {
     throw new ArcaError(
       "The derived WSMTXCA items do not sum to the voucher header excluding tributes. This is an SDK invariant failure.",
       "ARCA_ISSUE_INVARIANT"

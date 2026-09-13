@@ -152,7 +152,8 @@ pueden ser de puntos de venta distintos.
 
 `all: true` acepta un solo original: una nota total de varios comprobantes no
 tiene un total único, así que se rechaza antes de cualquier I/O. Con varios
-originales van `items` o `amounts`.
+originales van `items` o `amounts`. Repetir las mismas coordenadas en la lista
+también se rechaza antes de consultar ARCA.
 
 ## Tributos en las notas
 
@@ -225,6 +226,11 @@ const nota = await arca.issueCreditNote(
 Una nota FCE necesita un original FCE. `fce: { annulment, reference? }` informa
 la anulación de forma explícita: `all: true` no la elige por vos. El CUIT del
 emisor y la fecha del original viajan en la asociación, no en campos sueltos.
+
+Una nota FCE sin anulación lleva exactamente una factura FCE asociada. En
+WSMTXCA, toda nota FCE lleva exactamente un original, incluso cuando es de
+anulación. Esta restricción no afecta las notas ordinarias contra varios
+originales.
 
 ```ts
 const nota = await arca.issueCreditNote(

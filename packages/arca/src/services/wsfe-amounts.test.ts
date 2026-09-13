@@ -8,6 +8,7 @@ import {
   type AmountItem,
   calculateWsfeAmounts,
   deriveWsmtxcaLines,
+  deriveWsmtxcaSettlement,
   type VatItem,
 } from "./wsfe-amounts";
 
@@ -344,6 +345,27 @@ describe("WSMTXCA lines derived from the same items", () => {
         ).toBe(minor(rate.amount));
       }
       expect(lines.every((line) => (line.vatAmount ?? 0) >= 0)).toBe(true);
+      for (const [index, item] of items.entries()) {
+        const derived = lines[index];
+        if (!derived || typeof item.vat !== "number") {
+          continue;
+        }
+        const source = item.net ?? item.gross;
+        if (source === undefined) {
+          continue;
+        }
+        const isNet = item.net !== undefined;
+        const expectedVat = isNet
+          ? (source * item.vat) / 100
+          : (source * item.vat) / (100 + item.vat);
+        expect(
+          Math.abs((derived.vatAmount ?? 0) - expectedVat)
+        ).toBeLessThanOrEqual(item.vat === 0 ? 0 : 1);
+        const expectedAmount = isNet ? source + expectedVat : source;
+        expect(Math.abs(derived.amount - expectedAmount)).toBeLessThanOrEqual(
+          1
+        );
+      }
     }
   });
   it("maps each item rate to its WSMTXCA condition code", () => {
@@ -384,12 +406,92 @@ describe("WSMTXCA lines derived from the same items", () => {
       { gross: 100, vat: 21 as const },
       { gross: 100, vat: 10.5 as const },
     ]);
-    const input = { voucherClass: "A" as const, items, total: 202 };
+    const input = { voucherClass: "A" as const, items, total: 201 };
     const { data, amounts } = calculateWsfeAmounts(input);
     expect(amounts.vatAdjustment).not.toBe(0);
     const lines = deriveWsmtxcaLines(input, amounts.vatAdjustment);
     expect(lines.reduce((sum, line) => sum + line.amount, 0)).toBe(
       minor(data.totalAmount)
+    );
+    expect(() =>
+      deriveWsmtxcaLines(
+        { voucherClass: "A", items, total: 202 },
+        calculateWsfeAmounts({ voucherClass: "A", items, total: 202 }).amounts
+          .vatAdjustment
+      )
+    ).toThrowError(
+      expect.objectContaining({ code: "ARCA_INPUT_AMOUNT_MISMATCH" })
+    );
+  });
+  it("spreads grouped VAT residuals without exceeding ARCA's per-line tolerance", () => {
+    const items = Array.from({ length: 100 }, () => ({
+      description: "Product",
+      quantity: 1,
+      unit: 7,
+      unitPrice: "100.02",
+      net: 10_002,
+      vat: 21 as const,
+    }));
+    const input = { voucherClass: "A" as const, items };
+    const { data, amounts } = calculateWsfeAmounts(input);
+    const lines = deriveWsmtxcaLines(input, amounts.vatAdjustment);
+    expect(lines.filter((line) => line.vatAmount === 2101)).toHaveLength(42);
+    expect(lines.filter((line) => line.vatAmount === 2100)).toHaveLength(58);
+    expect(lines.reduce((sum, line) => sum + (line.vatAmount ?? 0), 0)).toBe(
+      minor(data.vatAmount)
+    );
+  });
+  it("distributes tiny gross-line VAT without putting the residual on one line", () => {
+    const items = Array.from({ length: 10 }, () => ({
+      description: "Product",
+      quantity: 1,
+      unit: 7,
+      unitPrice: "0.016529",
+      gross: 2,
+      vat: 21 as const,
+    }));
+    const input = { voucherClass: "A" as const, items };
+    const { amounts } = calculateWsfeAmounts(input);
+    const lines = deriveWsmtxcaLines(input, amounts.vatAdjustment);
+    expect(lines.filter((line) => line.vatAmount === 1)).toHaveLength(3);
+    expect(lines.filter((line) => line.vatAmount === 0)).toHaveLength(7);
+    expect(lines.every((line) => (line.vatAmount ?? 0) <= line.amount)).toBe(
+      true
+    );
+  });
+  it("keeps zero-rate VAT at zero and reconciles WSMTXCA rate subtotals", () => {
+    const input = {
+      voucherClass: "A" as const,
+      items: [
+        { ...LINE, net: 10_000, vat: 0 as const },
+        { ...LINE, net: 10_000, vat: 21 as const },
+      ],
+      total: 22_101,
+    };
+    const { amounts } = calculateWsfeAmounts(input);
+    const settlement = deriveWsmtxcaSettlement(input, amounts.vatAdjustment);
+    expect(settlement.lines[0]).toMatchObject({
+      vatCondition: 3,
+      vatAmount: 0,
+    });
+    expect(settlement.lines[1]).toMatchObject({
+      vatCondition: 5,
+      vatAmount: 2101,
+    });
+    expect(settlement.vatByCondition.get(3)).toBe(0);
+    expect(settlement.vatByCondition.get(5)).toBe(2101);
+    const zeroOnly = {
+      voucherClass: "A" as const,
+      items: [{ ...LINE, net: 10_000, vat: 0 as const }],
+      total: 10_001,
+    };
+    expect(() =>
+      deriveWsmtxcaLines(
+        zeroOnly,
+        calculateWsfeAmounts(zeroOnly).amounts.vatAdjustment
+      )
+    ).toThrowError(
+      expect.objectContaining({ code: "ARCA_INPUT_AMOUNT_MISMATCH" })
     );
   });
   it("copies the optional line fields and defaults the discount", () => {

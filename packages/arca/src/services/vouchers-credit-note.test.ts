@@ -16,6 +16,7 @@ import {
 } from "./wsfe";
 import type { CreditNoteInput } from "./wsfe-credit-note";
 import { deriveWsfeInvoice } from "./wsfe-derive";
+import type { WsmtxcaService } from "./wsmtxca";
 
 const data = deriveWsfeInvoice({
   issuer: "monotributo",
@@ -559,5 +560,101 @@ describe("notes against several originals", () => {
       (await store.get(key)) as string
     ) as ArcaAttemptRecord;
     expect(record.sent.associatedVouchers).toHaveLength(2);
+  });
+  it.each([
+    "issueCreditNote",
+    "issueDebitNote",
+  ] as const)("%s rejects duplicate originals before lookup", async (method) => {
+    const { service, wsfe } = fake();
+    await expect(
+      service[method](
+        { for: [target, target], items: [{ amount: 150 }] },
+        options
+      )
+    ).rejects.toMatchObject({
+      name: "ArcaInputError",
+      field: "input.for[1]",
+    });
+    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+    expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+    expect(wsfe.issue).not.toHaveBeenCalled();
+  });
+});
+
+describe("FCE association rules", () => {
+  const originals = [
+    { salesPoint: 1, voucherType: 201, number: 1 },
+    { salesPoint: 1, voucherType: 201, number: 2 },
+  ] as const;
+  const items = [{ net: 10_000, vat: 21 as const }];
+
+  it.each([
+    ["wsfe", false],
+    ["wsmtxca", true],
+  ] as const)("rejects multiple FCE originals for %s with annulment=%s before lookup", async (provider, annulment) => {
+    const { wsfe, store } = fake();
+    const service = createVouchersService(
+      wsfe,
+      { store, environment: "test", taxId: "20123456789" },
+      {} as WsmtxcaService
+    );
+    await expect(
+      service.previewCreditNote(
+        { for: originals, items, fce: { annulment } },
+        { service: provider }
+      )
+    ).rejects.toMatchObject({
+      name: "ArcaInputError",
+      field: "input.for",
+    });
+    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+  });
+
+  it("requires an invoice for a non-annulment FCE note", async () => {
+    const { service, wsfe } = fake();
+    await expect(
+      service.previewCreditNote({
+        for: { salesPoint: 1, voucherType: 202, number: 1 },
+        items,
+        fce: { annulment: false },
+      })
+    ).rejects.toMatchObject({
+      name: "ArcaInputError",
+      field: "input.for.voucherType",
+    });
+    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+  });
+
+  it("keeps several WSFE FCE originals available for annulment notes", async () => {
+    const fce = deriveWsfeInvoice({
+      issuer: "responsable_inscripto",
+      family: "fce",
+      salesPoint: 1,
+      date: "20260904",
+      dueDate: "20260930",
+      to: { condition: "responsable_inscripto", cuit: "20123456789" },
+      items: [{ net: 10_000, vat: 21 }],
+      fce: { cbu: "1234567890123456789012" },
+    }).data;
+    const { service, wsfe } = fake();
+    wsfe.lookupVoucher.mockImplementation(({ number }) =>
+      Promise.resolve(found(fce, number))
+    );
+    expect(
+      await service.previewCreditNote({
+        for: originals,
+        items,
+        fce: { annulment: true },
+      })
+    ).toMatchObject({
+      request: {
+        voucherType: 203,
+        associatedVouchers: [
+          { type: 201, number: 1 },
+          { type: 201, number: 2 },
+        ],
+      },
+    });
+    expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(2);
   });
 });
