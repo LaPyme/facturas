@@ -115,6 +115,11 @@ reproducirla, justamente para que no reenvíe por WSFE un comprobante que era de
 WSMTXCA. Las reservas `v: 2` escritas por versiones anteriores con
 `sent.details` siguen siendo recuperables: el SDK conserva el número y el
 request fiscal guardado, incluido el descuento cero que antes podía omitirse.
+Esta compatibilidad cubre las reservas del store del SDK. No migra snapshots
+que una aplicación haya guardado por su cuenta. Esos snapshots deben cambiar
+`include.exactInput` por `include.sent`, `preview.original` por
+`preview.originals` y adaptar `amounts` + `details` al nuevo input con `items`
+antes de actualizar a 0.13.
 La vida de estos registros está en
 [Evitar comprobantes duplicados](/guides/avoid-duplicates#implementar-otro-store).
 

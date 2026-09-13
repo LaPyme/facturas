@@ -22,7 +22,11 @@ import {
   storeCall,
 } from "../store/types";
 import type { ArcaAuthorizationOutcome } from "./fiscal-evidence";
-import { validateFiscalHeader, voucherFamily } from "./issuance-fields";
+import {
+  normalizedFceAnnulment,
+  validateFiscalHeader,
+  voucherFamily,
+} from "./issuance-fields";
 import {
   createWsmtxcaIssuanceService,
   type FiscalHeader,
@@ -1361,7 +1365,7 @@ async function prepareNote(
     // A full note mirrors the original, lines included, as ARCA returned them.
     const mirrored = (firstOriginal as { lines?: FiscalHeader["lines"] }).lines;
     if (mirrored !== undefined) {
-      prepared.data.lines = structuredClone(mirrored);
+      prepared.data.authorizedLines = structuredClone(mirrored);
     }
   } else {
     attachLines(prepared, options);
@@ -1394,7 +1398,7 @@ function validateFceAssociations(
   if (fceTargets.length === 0) {
     return;
   }
-  const nonAnnulment = note.fce?.annulment === false;
+  const nonAnnulment = normalizedFceAnnulment(note) === false;
   if ((service === "wsmtxca" || nonAnnulment) && targets.length !== 1) {
     throw new ArcaInputError(
       service === "wsmtxca"
