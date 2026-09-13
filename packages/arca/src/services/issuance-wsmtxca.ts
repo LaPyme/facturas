@@ -37,6 +37,8 @@ export type WsmtxcaIssueRequest = ReturnType<typeof wsmtxcaRequest>;
 export type FiscalHeader = WsfeVoucherInput & {
   /** Derived provider lines. WSFE never reads them; WSMTXCA sends them. */
   lines?: readonly WsmtxcaLine[];
+  /** @internal Lines mirrored from an authorized WSMTXCA consultation. */
+  authorizedLines?: readonly WsmtxcaLine[];
   /** @internal Durable v2 reservation evidence written before `lines`. */
   details?: readonly LegacyWsmtxcaLine[];
 };
@@ -53,8 +55,12 @@ const iso = (value: string | undefined) => {
 
 export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
   const legacy = data.details !== undefined;
-  const lines = data.lines ?? data.details;
-  if (!lines?.length || (data.lines !== undefined && legacy)) {
+  const authorized = data.authorizedLines !== undefined;
+  const lines = data.lines ?? data.authorizedLines ?? data.details;
+  const sources = [data.lines, data.authorizedLines, data.details].filter(
+    (source) => source !== undefined
+  ).length;
+  if (!lines?.length || sources !== 1) {
     invalid("items", "WSMTXCA requires items with line detail");
   }
   const items = lines.map((line) => ({
@@ -74,14 +80,15 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
       : { importeIVA: minor(line.vatAmount, "items.vatAmount") }),
     importeItem: minor(line.amount, "items.amount"),
   }));
-  // The lines and the header come from the same items, so this is an SDK
-  // invariant, not caller input: a mismatch is a derivation bug.
+  // Newly derived lines and their header come from the same items, so they
+  // must match exactly. Authorized consultations and legacy reservations can
+  // retain ARCA's historical one-cent reconciliation difference.
   const itemTotal = lines.reduce((sum, line) => sum + BigInt(line.amount), 0n);
   const expected =
     normalizeArcaAmountToMinorUnits(data.totalAmount, "total") -
     normalizeArcaAmountToMinorUnits(data.taxAmount, "taxes");
   if (
-    legacy
+    legacy || authorized
       ? !isWithinArcaTolerance(itemTotal, expected, 1)
       : itemTotal !== expected
   ) {

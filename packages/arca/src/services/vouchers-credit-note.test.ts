@@ -587,11 +587,22 @@ describe("FCE association rules", () => {
     { salesPoint: 1, voucherType: 201, number: 2 },
   ] as const;
   const items = [{ net: 10_000, vat: 21 as const }];
+  const associationCases: [
+    "wsfe" | "wsmtxca",
+    Pick<CreditNoteInput, "fce" | "optionalFields">,
+  ][] = [
+    ["wsfe", { fce: { annulment: false } }],
+    ["wsfe", { optionalFields: [{ id: "22", value: "N" }] }],
+    ["wsmtxca", { fce: { annulment: true } }],
+  ];
+  const annulmentCases: Pick<CreditNoteInput, "fce" | "optionalFields">[] = [
+    { fce: { annulment: true } },
+    { optionalFields: [{ id: "22", value: "S" }] },
+  ];
 
-  it.each([
-    ["wsfe", false],
-    ["wsmtxca", true],
-  ] as const)("rejects multiple FCE originals for %s with annulment=%s before lookup", async (provider, annulment) => {
+  it.each(
+    associationCases
+  )("rejects multiple FCE originals for %s with %j before lookup", async (provider, fields) => {
     const { wsfe, store } = fake();
     const service = createVouchersService(
       wsfe,
@@ -600,7 +611,7 @@ describe("FCE association rules", () => {
     );
     await expect(
       service.previewCreditNote(
-        { for: originals, items, fce: { annulment } },
+        { for: originals, items, ...fields },
         { service: provider }
       )
     ).rejects.toMatchObject({
@@ -610,13 +621,19 @@ describe("FCE association rules", () => {
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
   });
 
-  it("requires an invoice for a non-annulment FCE note", async () => {
+  it.each([
+    { fce: { annulment: false } },
+    { optionalFields: [{ id: "22", value: "N" }] },
+  ] as Pick<
+    CreditNoteInput,
+    "fce" | "optionalFields"
+  >[])("requires an invoice for a non-annulment FCE note: %j", async (fields) => {
     const { service, wsfe } = fake();
     await expect(
       service.previewCreditNote({
         for: { salesPoint: 1, voucherType: 202, number: 1 },
         items,
-        fce: { annulment: false },
+        ...fields,
       })
     ).rejects.toMatchObject({
       name: "ArcaInputError",
@@ -625,7 +642,9 @@ describe("FCE association rules", () => {
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
   });
 
-  it("keeps several WSFE FCE originals available for annulment notes", async () => {
+  it.each(
+    annulmentCases
+  )("keeps several WSFE FCE originals available for annulment notes: %j", async (fields) => {
     const fce = deriveWsfeInvoice({
       issuer: "responsable_inscripto",
       family: "fce",
@@ -644,7 +663,7 @@ describe("FCE association rules", () => {
       await service.previewCreditNote({
         for: originals,
         items,
-        fce: { annulment: true },
+        ...fields,
       })
     ).toMatchObject({
       request: {
@@ -656,5 +675,25 @@ describe("FCE association rules", () => {
       },
     });
     expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [false, "S"],
+    [true, "N"],
+    [false, "N"],
+  ] as const)("rejects duplicate or conflicting FCE annulment encodings before lookup: %s/%s", async (annulment, value) => {
+    const { service, wsfe } = fake();
+    await expect(
+      service.previewCreditNote({
+        for: originals[0],
+        items,
+        fce: { annulment },
+        optionalFields: [{ id: "22", value }],
+      })
+    ).rejects.toMatchObject({
+      name: "ArcaInputError",
+      field: "fce.annulment",
+    });
+    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
   });
 });

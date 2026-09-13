@@ -16,8 +16,9 @@ export type ArcaStore = {
  * Reservation record. Version 1 is a plain WSFE reservation, readable by every
  * release since 0.9. Version 2 carries a WSMTXCA provider or detailed items and
  * always names its `service`, so an older reader refuses it instead of
- * replaying a WSMTXCA reservation through WSFE. Version 2 has two compatible
- * line spellings: releases through 0.12 wrote `details`; 0.13 writes `lines`.
+ * replaying a WSMTXCA reservation through WSFE. Version 2 has three compatible
+ * line spellings: releases through 0.12 wrote `details`; 0.13 writes `lines`,
+ * or `authorizedLines` when a full note mirrors provider-authorized history.
  */
 export type ArcaAttemptRecord = {
   v: 1 | 2;
@@ -30,6 +31,7 @@ export type ArcaAttemptRecord = {
   inputHash: string;
   sent: WsfeVoucherInput & {
     lines?: readonly import("../services/issuance-wsmtxca").WsmtxcaLine[];
+    authorizedLines?: readonly import("../services/issuance-wsmtxca").WsmtxcaLine[];
     details?: readonly import("../services/issuance-wsmtxca").LegacyWsmtxcaLine[];
   };
   createdAt: string;

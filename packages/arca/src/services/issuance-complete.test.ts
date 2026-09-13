@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey, sequenceKey } from "../store/types";
+import { wsmtxcaRequest } from "./issuance-wsmtxca";
 import { createVouchersService } from "./vouchers";
 import {
   createWsfeService,
@@ -552,6 +553,23 @@ function legacyWsmtxcaRecord(amount = 12_100) {
   } as const;
 }
 describe("WSMTXCA high-level API through the real transport adapter", () => {
+  it("keeps newly derived request lines on the exact SDK invariant", () => {
+    expect(() =>
+      wsmtxcaRequest({
+        ...deriveWsfeInvoice(detailed).data,
+        totalAmount: 121.01,
+        lines: [
+          {
+            ...line,
+            discount: 0,
+            vatCondition: 5,
+            vatAmount: 2100,
+            amount: 12_100,
+          },
+        ],
+      })
+    ).toThrowError(expect.objectContaining({ code: "ARCA_ISSUE_INVARIANT" }));
+  });
   it("omits the tribute amount together with its detail when there are no tributes", () => {
     const { client } = transportFixture();
     // ARCA rejects a zero importeOtrosTributos without arrayOtrosTributos
@@ -821,6 +839,51 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       )
     ).toMatchObject({ kind: "authorized", voucher: { voucherType: 2 } });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(3);
+  });
+  it("mirrors an authorized WSMTXCA total within its historical line tolerance", async () => {
+    const { client, calls, store, vouchers } = transportFixture();
+    const options = { service: "wsmtxca" as const };
+    await client.issue(detailed, options);
+    const original = vouchers.get(1);
+    if (!original) {
+      throw new Error("fixture has no authorized WSMTXCA invoice");
+    }
+    original.importeTotal = 121.01;
+    const note = {
+      for: { salesPoint: 1, voucherType: 1, number: 9 },
+      all: true as const,
+      date: "20260907" as const,
+    };
+    expect(await client.previewCreditNote(note, options)).toMatchObject({
+      request: {
+        comprobanteCAERequest: {
+          importeTotal: 121.01,
+          arrayItems: { item: [{ importeItem: 121 }] },
+        },
+      },
+    });
+    expect(
+      await client.issueCreditNote(note, {
+        ...options,
+        idempotencyKey: "historical-line-tolerance",
+      })
+    ).toMatchObject({ kind: "authorized", voucher: { voucherType: 3 } });
+    const reservation = JSON.parse(
+      (await store.get(
+        attemptKey("test", "20123456789", "historical-line-tolerance")
+      )) ?? "{}"
+    ) as { sent?: Record<string, unknown> };
+    expect(reservation.sent).toMatchObject({
+      authorizedLines: [{ amount: 12_100, vatAmount: 2100 }],
+    });
+    expect(reservation.sent).not.toHaveProperty("lines");
+    expect(await client.recover("historical-line-tolerance")).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+    });
+    expect(
+      calls.filter((call) => call === "autorizarComprobante")
+    ).toHaveLength(2);
   });
   it("encodes FCE bank details and note annulment correctly for WSMTXCA", async () => {
     const { client, vouchers } = transportFixture();
