@@ -255,6 +255,17 @@ export function validateIssuanceFields(fields: IssuanceFields): void {
   ) {
     bad("concept");
   }
+  if (fields.fce !== undefined) {
+    objectKeys(fields.fce, "fce", [
+      "cbu",
+      "alias",
+      "transfer",
+      "annulment",
+      "reference",
+    ]);
+    validateFceOptions(fields.fce);
+  }
+  normalizedFceAnnulment(fields);
 }
 function positiveId(value: unknown, field: string): void {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
@@ -370,6 +381,7 @@ export function applyFceFields(
     bad("fce");
   }
   validateFceOptions(fce);
+  normalizedFceAnnulment({ fce, optionalFields: data.optionalFields });
   const extra = [
     ...(fce.cbu === undefined ? [] : [{ id: "2101", value: fce.cbu }]),
     ...(fce.alias === undefined ? [] : [{ id: "2102", value: fce.alias }]),
@@ -386,6 +398,34 @@ export function applyFceFields(
     bad("fce");
   }
   data.optionalFields = options;
+}
+
+/** Reads the two accepted FCE annulment encodings and rejects ambiguity. */
+export function normalizedFceAnnulment(
+  fields: Pick<IssuanceFields, "fce" | "optionalFields">
+): boolean | undefined {
+  const encoded = (fields.optionalFields ?? []).filter(
+    (field) => field.id === "22"
+  );
+  if (encoded.length > 1) {
+    bad("optionalFields");
+  }
+  const encodedValue = encoded[0]?.value;
+  if (encodedValue !== undefined && !["S", "N"].includes(encodedValue)) {
+    bad("fce.annulment");
+  }
+  const direct = fields.fce?.annulment;
+  if (direct !== undefined && encodedValue !== undefined) {
+    throw new ArcaInputError(
+      direct === (encodedValue === "S")
+        ? "FCE annulment is duplicated in fce and optionalFields."
+        : "FCE annulment conflicts between fce and optionalFields.",
+      { code: "ARCA_INPUT_INVALID_VALUE", field: "fce.annulment" }
+    );
+  }
+  return (
+    direct ?? (encodedValue === undefined ? undefined : encodedValue === "S")
+  );
 }
 
 function validateFceHeader(data: WsfeVoucherInput): void {

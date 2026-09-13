@@ -1,18 +1,38 @@
 import { ARCA_VAT_RATES, type VoucherClass } from "../constants";
-import { ArcaInputError } from "../errors";
+import { ArcaError, ArcaInputError } from "../errors";
 import {
   arcaMinorUnitsToNumber,
   assertArcaMinorUnits,
   roundHalfEvenRatio,
   type SupportedVatRate,
 } from "../internal/decimal";
+import type { WsmtxcaLine } from "./issuance-wsmtxca";
 import type { WsfeVatRate, WsfeVoucherInput } from "./wsfe";
 
+/**
+ * The line an item describes. WSFE ignores every field here and derives its
+ * header from the money alone; WSMTXCA requires `description`, `quantity`,
+ * `unit` and `unitPrice` and sends the line as it is. The line never carries
+ * its own VAT amount: that follows from the item's `vat` and its money.
+ */
+export type ItemLine = {
+  description?: string;
+  quantity?: number;
+  unit?: number;
+  /** A major-unit decimal string with up to six decimals, unlike every other amount. */
+  unitPrice?: string;
+  discount?: number;
+  code?: string;
+  matrixCode?: string;
+  matrixUnits?: number;
+};
 export type VatRate = SupportedVatRate | "exempt" | "untaxed";
-export type VatItem =
-  | { net: number; gross?: never; amount?: never; vat: VatRate }
-  | { gross: number; net?: never; amount?: never; vat: VatRate };
-export type AmountItem = {
+export type VatItem = ItemLine &
+  (
+    | { net: number; gross?: never; amount?: never; vat: VatRate }
+    | { gross: number; net?: never; amount?: never; vat: VatRate }
+  );
+export type AmountItem = ItemLine & {
   amount: number;
   vat?: never;
   net?: never;
@@ -50,7 +70,7 @@ const RATES: Record<SupportedVatRate, { id: number; basisPoints: bigint }> = {
 };
 
 /**
- * Pure integer money core. Amount fields are exact-API major units.
+ * Pure integer money core. Amount fields are provider major units.
  * Invoices and credit notes share it: both resolve a class first.
  */
 export function calculateWsfeAmounts(input: WsfeAmountsInput): {
@@ -203,4 +223,361 @@ function invalidItem(field: string, expected: string): never {
     field,
     expected,
   });
+}
+
+/** WSMTXCA condition codes for the item rates WSFE has no rate id for. */
+const UNTAXED_CONDITION = 1;
+const EXEMPT_CONDITION = 2;
+
+type LineDraft = {
+  line: WsmtxcaLine;
+  vat: bigint;
+  amount: bigint;
+  rate?: SupportedVatRate;
+  field?: "net" | "gross";
+  vatFormula?: { numerator: bigint; denominator: bigint };
+  amountFormula: { numerator: bigint; denominator: bigint };
+};
+
+export type WsmtxcaSettlement = {
+  lines: WsmtxcaLine[];
+  vatByCondition: ReadonlyMap<number, number>;
+};
+
+/**
+ * Derives the WSMTXCA provider lines from the same items the header came from,
+ * so the two can never describe different money. Per-line VAT is reconciled
+ * against the grouped Half Even arithmetic of `calculateWsfeAmounts()`: the
+ * rounding residual of a rate, and the header's VAT adjustment, land on lines
+ * of that rate, so the lines sum to the header exactly.
+ */
+export function deriveWsmtxcaLines(
+  input: WsfeAmountsInput,
+  vatAdjustment: number
+): WsmtxcaLine[] {
+  return deriveWsmtxcaSettlement(input, vatAdjustment).lines;
+}
+
+/** Also exposes the reconciled per-rate VAT needed by WSMTXCA subtotals. */
+export function deriveWsmtxcaSettlement(
+  input: WsfeAmountsInput,
+  vatAdjustment: number
+): WsmtxcaSettlement {
+  if (!Array.isArray(input.items) || input.items.length === 0) {
+    invalidItem("items", "a non-empty array of items");
+  }
+  const isVat = input.voucherClass === "A" || input.voucherClass === "B";
+  const drafts: LineDraft[] = [];
+  const groups = new Map<SupportedVatRate, { net: bigint; gross: bigint }>();
+  for (const [index, item] of input.items.entries()) {
+    const path = `items[${index}]`;
+    if (item === null || typeof item !== "object" || Array.isArray(item)) {
+      invalidItem(path, "an item object");
+    }
+    drafts.push(lineDraft(item, path, isVat, groups));
+  }
+  reconcileGroups(drafts, groups);
+  absorbAdjustment(drafts, BigInt(vatAdjustment));
+  const lines = drafts.map(({ line, vat, amount }) => ({
+    ...line,
+    amount: Number(amount),
+    ...(input.voucherClass === "A" ? { vatAmount: Number(vat) } : {}),
+  }));
+  const vatByCondition = new Map<number, number>();
+  for (const draft of drafts) {
+    if (draft.rate === undefined) {
+      continue;
+    }
+    const condition = RATES[draft.rate].id;
+    vatByCondition.set(
+      condition,
+      (vatByCondition.get(condition) ?? 0) + Number(draft.vat)
+    );
+  }
+  return { lines, vatByCondition };
+}
+
+function lineDraft(
+  item: VatItem | AmountItem,
+  path: string,
+  isVat: boolean,
+  groups: Map<SupportedVatRate, { net: bigint; gross: bigint }>
+): LineDraft {
+  const line = assertItemLine(item, path);
+  if (!isVat) {
+    // A class C line bears no VAT at all, so it reports the 0% condition.
+    const amount = classCAmount(item, path);
+    return {
+      line: { ...line, vatCondition: RATES[0].id, amount: 0 },
+      vat: 0n,
+      amount,
+      amountFormula: { numerator: amount, denominator: 1n },
+    };
+  }
+  const { amount, field, rate } = vatItemAmount(item, path);
+  if (rate === "exempt" || rate === "untaxed") {
+    return {
+      line: {
+        ...line,
+        vatCondition: rate === "exempt" ? EXEMPT_CONDITION : UNTAXED_CONDITION,
+        amount: 0,
+      },
+      vat: 0n,
+      amount,
+      amountFormula: { numerator: amount, denominator: 1n },
+    };
+  }
+  const { id, basisPoints } = RATES[rate];
+  const group = groups.get(rate) ?? { net: 0n, gross: 0n };
+  group[field] += amount;
+  groups.set(rate, group);
+  // A gross line already includes its VAT; a net line adds it.
+  const vat =
+    field === "gross"
+      ? amount - roundHalfEvenRatio(amount * 10_000n, 10_000n + basisPoints)
+      : roundHalfEvenRatio(amount * basisPoints, 10_000n);
+  return {
+    line: { ...line, vatCondition: id, amount: 0 },
+    vat,
+    amount: field === "gross" ? amount : amount + vat,
+    rate,
+    field,
+    vatFormula:
+      field === "gross"
+        ? {
+            numerator: amount * basisPoints,
+            denominator: 10_000n + basisPoints,
+          }
+        : { numerator: amount * basisPoints, denominator: 10_000n },
+    amountFormula:
+      field === "gross"
+        ? { numerator: amount, denominator: 1n }
+        : {
+            numerator: amount * (10_000n + basisPoints),
+            denominator: 10_000n,
+          },
+  };
+}
+
+/**
+ * The header totalizes by rate before rounding, so the line VATs of one rate
+ * can miss the rate's VAT by cents. The difference is spread back over the
+ * lines of that rate, a cent at a time, so no line ends with negative VAT.
+ */
+function reconcileGroups(
+  drafts: readonly LineDraft[],
+  groups: ReadonlyMap<SupportedVatRate, { net: bigint; gross: bigint }>
+): void {
+  for (const [rate, group] of groups) {
+    const { basisPoints } = RATES[rate];
+    const netFromGross = roundHalfEvenRatio(
+      group.gross * 10_000n,
+      10_000n + basisPoints
+    );
+    settle(
+      drafts,
+      (draft) => draft.rate === rate && draft.field === "net",
+      roundHalfEvenRatio(group.net * basisPoints, 10_000n) -
+        sumVat(drafts, (d) => d.rate === rate && d.field === "net"),
+      true
+    );
+    // A gross line's own amount is fixed: its VAT moves inside that amount.
+    settle(
+      drafts,
+      (draft) => draft.rate === rate && draft.field === "gross",
+      group.gross -
+        netFromGross -
+        sumVat(drafts, (d) => d.rate === rate && d.field === "gross"),
+      false
+    );
+  }
+}
+
+function sumVat(
+  drafts: readonly LineDraft[],
+  of: (draft: LineDraft) => boolean
+): bigint {
+  return drafts.reduce((sum, draft) => (of(draft) ? sum + draft.vat : sum), 0n);
+}
+
+/**
+ * Moves `amount` cents of VAT across matching lines, one at a time. A move
+ * must keep VAT non-negative and both line formulas within ARCA's absolute
+ * one-cent tolerance.
+ */
+function settle(
+  drafts: readonly LineDraft[],
+  of: (draft: LineDraft) => boolean,
+  amount: bigint,
+  movesItem: boolean
+): void {
+  let remaining = amount;
+  const targets = drafts.filter(of);
+  let cursor = 0;
+  while (remaining !== 0n) {
+    const step = remaining > 0n ? 1n : -1n;
+    let target: LineDraft | undefined;
+    for (let offset = 0; offset < targets.length; offset++) {
+      const index = (cursor + offset) % targets.length;
+      const candidate = targets[index];
+      if (candidate && canMove(candidate, step, movesItem)) {
+        target = candidate;
+        cursor = (index + 1) % targets.length;
+        break;
+      }
+    }
+    if (target === undefined) {
+      throw new ArcaError(
+        "The derived WSMTXCA VAT does not fit its lines. This is an SDK invariant failure.",
+        "ARCA_ISSUE_INVARIANT"
+      );
+    }
+    applyMove(target, step, movesItem);
+    remaining -= step;
+  }
+}
+
+function canMove(draft: LineDraft, step: bigint, movesItem: boolean): boolean {
+  const vat = draft.vat + step;
+  if (vat < 0n || (draft.rate === 0 && vat !== 0n)) {
+    return false;
+  }
+  if (
+    draft.vatFormula !== undefined &&
+    !withinAbsoluteCent(vat, draft.vatFormula)
+  ) {
+    return false;
+  }
+  return (
+    !movesItem || withinAbsoluteCent(draft.amount + step, draft.amountFormula)
+  );
+}
+
+function withinAbsoluteCent(
+  value: bigint,
+  formula: { numerator: bigint; denominator: bigint }
+): boolean {
+  const difference = value * formula.denominator - formula.numerator;
+  return (difference < 0n ? -difference : difference) <= formula.denominator;
+}
+
+function applyMove(draft: LineDraft, step: bigint, movesItem: boolean): void {
+  draft.vat += step;
+  if (movesItem) {
+    draft.amount += step;
+  }
+}
+
+/**
+ * An asserted `total` shifts at most one eligible line in each positive rate.
+ * A zero-rate line never absorbs VAT, and a total that cannot fit the item
+ * formulas is rejected before WSMTXCA sees it.
+ */
+function absorbAdjustment(drafts: readonly LineDraft[], adjustment: bigint) {
+  if (adjustment === 0n) {
+    return;
+  }
+  const step = adjustment > 0n ? 1n : -1n;
+  let remaining = adjustment;
+  const rates = [
+    ...new Set(
+      drafts
+        .map((draft) => draft.rate)
+        .filter(
+          (rate): rate is SupportedVatRate => rate !== undefined && rate > 0
+        )
+    ),
+  ];
+  for (const rate of rates) {
+    const target = drafts.find(
+      (draft) => draft.rate === rate && canMove(draft, step, true)
+    );
+    if (target === undefined) {
+      continue;
+    }
+    applyMove(target, step, true);
+    remaining -= step;
+    if (remaining === 0n) {
+      return;
+    }
+  }
+  throw new ArcaInputError(
+    "total cannot be reconciled with WSMTXCA item formulas within ARCA's tolerance.",
+    {
+      code: "ARCA_INPUT_AMOUNT_MISMATCH",
+      field: "total",
+    }
+  );
+}
+
+const ITEM_KEYS = [
+  "net",
+  "gross",
+  "amount",
+  "vat",
+  "description",
+  "quantity",
+  "unit",
+  "unitPrice",
+  "discount",
+  "code",
+  "matrixCode",
+  "matrixUnits",
+];
+
+/** WSMTXCA needs the line fields on every item; the index names the offender. */
+function assertItemLine(
+  item: VatItem | AmountItem,
+  path: string
+): Omit<WsmtxcaLine, "amount" | "vatAmount" | "vatCondition"> {
+  assertRequiredLineFields(item, path);
+  for (const key of ["code", "matrixCode"] as const) {
+    if (item[key] !== undefined && typeof item[key] !== "string") {
+      invalidItem(`${path}.${key}`, "a string");
+    }
+  }
+  if (item.matrixUnits !== undefined && !Number.isFinite(item.matrixUnits)) {
+    invalidItem(`${path}.matrixUnits`, "a number");
+  }
+  return {
+    ...(item.matrixUnits === undefined
+      ? {}
+      : { matrixUnits: item.matrixUnits }),
+    ...(item.matrixCode === undefined ? {} : { matrixCode: item.matrixCode }),
+    ...(item.code === undefined ? {} : { code: item.code }),
+    description: item.description as string,
+    quantity: item.quantity as number,
+    unit: item.unit as number,
+    unitPrice: item.unitPrice as string,
+    discount: Number(
+      assertArcaMinorUnits(item.discount ?? 0, `${path}.discount`)
+    ),
+  };
+}
+
+function assertRequiredLineFields(
+  item: VatItem | AmountItem,
+  path: string
+): void {
+  for (const key of Object.keys(item)) {
+    if (!ITEM_KEYS.includes(key)) {
+      invalidItem(`${path}.${key}`, "a supported item field");
+    }
+  }
+  const { description, quantity, unit, unitPrice } = item;
+  if (typeof description !== "string" || description.trim() === "") {
+    invalidItem(`${path}.description`, "a non-empty description");
+  }
+  if (!Number.isFinite(quantity) || (quantity as number) <= 0) {
+    invalidItem(`${path}.quantity`, "a positive quantity");
+  }
+  if (!Number.isInteger(unit) || (unit as number) < 0) {
+    invalidItem(`${path}.unit`, "an ARCA unit of measure code");
+  }
+  if (typeof unitPrice !== "string" || !/^\d+(\.\d{1,6})?$/.test(unitPrice)) {
+    invalidItem(
+      `${path}.unitPrice`,
+      "a major-unit decimal string with at most six decimals"
+    );
+  }
 }

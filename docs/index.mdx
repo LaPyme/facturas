@@ -85,10 +85,10 @@ tratá los cuatro resultados fiscales posibles.
 factura, el IVA y el pedido que espera ARCA. La guía de
 [Facturas](/guides/invoices) documenta todos sus campos y resultados.
 
-Los métodos de `client.wsfe`, `client.wsmtxca` y `client.padron` siguen
-disponibles para consultas y operaciones que `issue()` no cubre. Usalos cuando
-necesites controlar un número ya reservado o enviar un campo propio del
-protocolo. Están en [Métodos directos de ARCA](/reference/arca-services).
+Debajo de la fachada, `client.wsfe`, `client.wsmtxca` y `client.padron` son los
+módulos de transporte: ahí viven las lecturas, los catálogos, el estado del
+servicio y el Padrón. No son otra forma de emitir. Están en
+[Módulos de transporte](/reference/arca-services).
 
 <Info>
   `facturas` está antes de la versión 1.0. Fijá la versión exacta y revisá el [changelog](https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md) antes de actualizar.
