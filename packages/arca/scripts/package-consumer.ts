@@ -114,8 +114,8 @@ export async function facadeConsumerContract(
   });
 
   const result = await client.issue(input);
-  // @ts-expect-error Exact input is opt-in and authorized-only.
-  result.sent;
+  // @ts-expect-error The exact request is opt-in.
+  result.request;
   switch (result.kind) {
     case "authorized":
       await client.issueCreditNote({ for: result.voucher, all: true });
@@ -125,11 +125,11 @@ export async function facadeConsumerContract(
         result.attempt.reason satisfies string;
         result.lookup.number satisfies number;
         // @ts-expect-error Raw evidence is absent by default.
-        result.lookup.raw;
+        result.lookup.rawResponse;
       } else {
         result.authorization.cae satisfies string;
         // @ts-expect-error Raw evidence is absent by default.
-        result.authorization.raw;
+        result.authorization.rawResponse;
       }
       break;
     case "rejected":
@@ -150,15 +150,19 @@ export async function facadeConsumerContract(
       result satisfies never;
   }
   const included = await client.issue(input, {
-    include: { sent: true, raw: true },
+    include: { request: true, rawResponse: true },
   });
+  included.request satisfies WsfeVoucherInput;
   if (included.kind === "authorized") {
-    included.sent satisfies WsfeVoucherInput;
     if (included.recoveredByMatch) {
-      included.lookup.raw satisfies Record<string, unknown> | undefined;
-      included.attempt.raw satisfies Record<string, unknown> | undefined;
+      included.lookup.rawResponse satisfies Record<string, unknown> | undefined;
+      included.attempt.rawResponse satisfies
+        | Record<string, unknown>
+        | undefined;
     } else {
-      included.authorization.raw satisfies Record<string, unknown> | undefined;
+      included.authorization.rawResponse satisfies
+        | Record<string, unknown>
+        | undefined;
     }
   }
   return result;
@@ -283,8 +287,8 @@ export async function creditNoteConsumerContract(
       } else {
         full.authorization.cae satisfies string;
       }
-      // @ts-expect-error Exact input remains opt-in.
-      full.sent;
+      // @ts-expect-error Exact request remains opt-in.
+      full.request;
       break;
     case "rejected":
       full.issues satisfies { message: string }[];
@@ -306,11 +310,14 @@ export async function creditNoteConsumerContract(
       items: [{ gross: 6050, vat: 21 }],
       total: 6050,
     },
-    { idempotencyKey: "nc:1", include: { sent: true, raw: true } }
+    {
+      idempotencyKey: "nc:1",
+      include: { request: true, rawResponse: true },
+    }
   );
   switch (partial.kind) {
     case "authorized":
-      partial.sent satisfies WsfeVoucherInput;
+      partial.request satisfies WsfeVoucherInput;
       partial.voucher.amounts.sentTotal satisfies number;
       break;
     case "rejected":
@@ -354,10 +361,10 @@ export async function completeIssuanceConsumerContract(
   const issued = await client.issue(input, {
     service: "wsmtxca",
     number: 42,
-    include: { sent: true },
+    include: { request: true },
   });
   if (issued.kind === "authorized") {
-    issued.sent.comprobanteCAERequest.importeTotal satisfies number;
+    issued.request.comprobanteCAERequest.importeTotal satisfies number;
     if (!issued.recoveredByMatch) {
       issued.authorization.service satisfies "wsmtxca";
     }
@@ -371,12 +378,12 @@ export async function completeIssuanceConsumerContract(
   await client.previewDebitNote(period);
   await client.issueDebitNote(period, { idempotencyKey: "debit" });
   const recovery = await client.recover("debit", {
-    include: { sent: true },
+    include: { request: true },
   });
   if (
     recovery.kind === "authorized" &&
-    "comprobanteCAERequest" in recovery.sent
+    "comprobanteCAERequest" in recovery.request
   ) {
-    recovery.sent.comprobanteCAERequest.importeTotal satisfies number;
+    recovery.request.comprobanteCAERequest.importeTotal satisfies number;
   }
 }

@@ -89,7 +89,7 @@ export type NotePreview<S extends IssuanceService = "wsfe"> =
   };
 export type RecoveryOptions = Pick<
   IssueOptions,
-  "representedTaxId" | "forceRefresh" | "include" | "signal"
+  "representedTaxId" | "forceRefresh" | "include" | "abortSignal"
 >;
 export type VouchersService = {
   /** Consults a durable reservation. Never allocates or authorizes a voucher. */
@@ -166,6 +166,7 @@ export type PreviewOptions = {
   representedTaxId?: number | string;
   service?: "wsfe" | "wsmtxca";
   forceRefresh?: boolean;
+  abortSignal?: AbortSignal;
 };
 
 type IssueWsfeService = {
@@ -454,7 +455,10 @@ async function runOperation(
         readNext: () => nextNumber(wsfe, prepared.data, options),
       });
       return "blocked" in barrier
-        ? barrier.blocked
+        ? {
+            ...barrier.blocked,
+            ...requestEvidence(prepared.data, undefined, options),
+          }
         : await claim(barrier.reserved);
     }
   );
@@ -616,7 +620,7 @@ async function recordConflict(
     kind: "conflict",
     number: outcome.attempted.number,
     found: Object.fromEntries(
-      Object.entries(outcome.found).filter(([field]) => field !== "raw")
+      Object.entries(outcome.found).filter(([field]) => field !== "rawResponse")
     ) as VoucherSummary,
     settledAt: new Date().toISOString(),
   };
@@ -662,7 +666,7 @@ async function settledOutcome(
   settledFor: (key: string) => Promise<string | null>
 ): Promise<IssueOutcome<IssueOptions>> {
   if (settled.kind === "conflict") {
-    return settledConflict(settled, reservation);
+    return settledConflict(settled, reservation, options);
   }
   const outcome = await consultReservation(select, reservation, options, true);
   const empty =
@@ -683,6 +687,11 @@ async function settledOutcome(
     },
     attempt: replayEvidence(reservation.service),
     lookup: { kind: "superseded", by: settled.by },
+    ...requestEvidence(
+      preparedFromRecord(reservation).data,
+      reservation.number,
+      { ...options, service: reservation.service ?? "wsfe" }
+    ),
   };
 }
 
@@ -713,7 +722,8 @@ async function successionDisputed(
 
 function settledConflict(
   settled: Extract<ArcaSettledRecord, { kind: "conflict" }>,
-  reservation: ArcaAttemptRecord
+  reservation: ArcaAttemptRecord,
+  options: RecoveryOptions
 ): IssueOutcome<IssueOptions> {
   return {
     kind: "conflict",
@@ -726,6 +736,11 @@ function settledConflict(
     found: settled.found,
     reason:
       "This key already recorded another voucher at the reserved number. Reconcile before issuing under a new key.",
+    ...requestEvidence(
+      preparedFromRecord(reservation).data,
+      reservation.number,
+      { ...options, service: reservation.service ?? "wsfe" }
+    ),
   };
 }
 
@@ -810,7 +825,9 @@ async function nextNumber(
   const number = await wsfe.getNextVoucherNumber({
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.abortSignal === undefined
+      ? {}
+      : { abortSignal: options.abortSignal }),
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,
   });
@@ -839,17 +856,18 @@ async function runAuthorization(
   const auth = {
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.abortSignal === undefined
+      ? {}
+      : { abortSignal: options.abortSignal }),
   };
-  const includeRaw = options.include?.raw === true;
-  const includeSent = options.include?.sent === true;
+  const includeRawResponse = options.include?.rawResponse === true;
   const number = reservedNumber ?? (await nextNumber(wsfe, data, options));
   const attempted = {
     salesPoint: data.salesPoint,
     voucherType: data.voucherType,
     number,
   };
-  const sentRequest = sentEvidence(data, number, options, includeSent);
+  const includedRequest = requestEvidence(data, number, options);
   const voucher = (cae: string, caeExpiry: string): IssuedVoucher => ({
     ...attempted,
     voucherClass,
@@ -863,8 +881,8 @@ async function runAuthorization(
     auth,
     data,
     attempted,
-    includeRaw,
-    sentRequest,
+    includeRawResponse,
+    includedRequest,
     voucher,
     service: options.service,
   };
@@ -878,9 +896,10 @@ async function runAuthorization(
         kind: "indeterminate",
         attempted,
         attempt,
-        lookup: options.signal?.aborted
+        lookup: options.abortSignal?.aborted
           ? { kind: "aborted" }
           : { kind: "failed", error: toArcaSafeErrorMetadata(error) },
+        ...includedRequest,
       };
     }
     if (lookup.kind === "found") {
@@ -902,8 +921,8 @@ async function runAuthorization(
       kind: "authorized",
       recoveredByMatch: false,
       voucher: voucher(authorization.cae, authorization.caeExpiry),
-      authorization: projectEvidence(authorization, includeRaw),
-      ...sentRequest,
+      authorization: projectEvidence(authorization, includeRawResponse),
+      ...includedRequest,
     };
   }
   if (authorization.kind === "rejected") {
@@ -911,7 +930,7 @@ async function runAuthorization(
       authorization,
       recovery,
       options,
-      includeRaw,
+      includeRawResponse,
       replay
     );
   }
@@ -927,7 +946,7 @@ async function runAuthorization(
               ? ("incomplete_response" as const)
               : ("contradictory_response" as const),
         };
-  const attempt = projectEvidence(uncertain, includeRaw);
+  const attempt = projectEvidence(uncertain, includeRawResponse);
   return recoverInvoice({
     wsfe,
     service: options.service,
@@ -935,8 +954,8 @@ async function runAuthorization(
     data,
     attempted,
     attempt,
-    includeRaw,
-    sentRequest,
+    includeRawResponse,
+    includedRequest,
     voucher,
   });
 }
@@ -951,7 +970,7 @@ async function resolveRejection(
   authorization: Extract<ArcaAuthorizationOutcome, { kind: "rejected" }>,
   recovery: Omit<RecoveryInput, "attempt">,
   options: IssueOptions,
-  includeRaw: boolean,
+  includeRawResponse: boolean,
   replay: boolean
 ): Promise<IssueOutcome<IssueOptions>> {
   const issues = [...authorization.errors, ...authorization.observations];
@@ -968,7 +987,7 @@ async function resolveRejection(
           kind: "indeterminate",
           reason: "contradictory_response",
         },
-        includeRaw
+        includeRawResponse
       ),
       strangerAtNumber: !replay,
     });
@@ -980,23 +999,24 @@ async function resolveRejection(
     kind: "rejected",
     attempted: recovery.attempted,
     issues: issues.map(projectIssue),
-    authorization: projectEvidence(authorization, includeRaw),
+    authorization: projectEvidence(authorization, includeRawResponse),
+    ...recovery.includedRequest,
   };
 }
 
 type RecoveryInput = {
   wsfe: IssueWsfeService;
   lookup?: Awaited<ReturnType<IssueWsfeService["lookupVoucher"]>>;
-  auth: Pick<IssueOptions, "representedTaxId" | "forceRefresh" | "signal">;
+  auth: Pick<IssueOptions, "representedTaxId" | "forceRefresh" | "abortSignal">;
   data: FiscalHeader;
   service?: "wsfe" | "wsmtxca";
   attempted: VoucherCoordinates;
   attempt: Omit<
     Extract<ArcaAuthorizationOutcome, { kind: "indeterminate" }>,
     "raw"
-  > & { raw?: Record<string, unknown> };
-  includeRaw: boolean;
-  sentRequest: { sent?: IssueRequest<IssuanceService> };
+  > & { rawResponse?: Record<string, unknown> };
+  includeRawResponse: boolean;
+  includedRequest: { request?: IssueRequest<IssuanceService> };
   voucher: (cae: string, caeExpiry: string) => IssuedVoucher;
   /** The reserved number was claimed in this call: any voucher on it is foreign. */
   strangerAtNumber?: boolean;
@@ -1007,20 +1027,21 @@ async function recoverInvoice({
   data,
   attempted,
   attempt,
-  includeRaw,
-  sentRequest,
+  includeRawResponse,
+  includedRequest,
   voucher,
   lookup: suppliedLookup,
   service,
   strangerAtNumber = false,
 }: RecoveryInput): Promise<IssueOutcome<IssueOptions>> {
-  if (suppliedLookup === undefined && auth.signal?.aborted) {
+  if (suppliedLookup === undefined && auth.abortSignal?.aborted) {
     // The write may have landed; the reservation stays and recover() settles it.
     return {
       kind: "indeterminate",
       attempted,
       attempt,
       lookup: { kind: "aborted" },
+      ...includedRequest,
     };
   }
   let lookup: Awaited<ReturnType<IssueWsfeService["lookupVoucher"]>>;
@@ -1032,18 +1053,20 @@ async function recoverInvoice({
       kind: "indeterminate",
       attempted,
       attempt,
-      lookup: auth.signal?.aborted
+      lookup: auth.abortSignal?.aborted
         ? { kind: "aborted" }
         : { kind: "failed", error: toArcaSafeErrorMetadata(error) },
+      ...includedRequest,
     };
   }
-  const raw = includeRaw ? { raw: lookup.raw } : {};
+  const rawResponse = includeRawResponse ? { rawResponse: lookup.raw } : {};
   if (lookup.kind === "not_found") {
     return {
       kind: "indeterminate",
       attempted,
       attempt,
-      lookup: { kind: "not_found", ...raw },
+      lookup: { kind: "not_found", ...rawResponse },
+      ...includedRequest,
     };
   }
   if (strangerAtNumber) {
@@ -1051,9 +1074,10 @@ async function recoverInvoice({
       kind: "conflict",
       attempted,
       attempt,
-      found: { ...toVoucherSummary(lookup.voucher), ...raw },
+      found: { ...toVoucherSummary(lookup.voucher), ...rawResponse },
       reason:
         "ARCA refused the number this call reserved and another voucher occupies it",
+      ...includedRequest,
     };
   }
   const detailsMatch =
@@ -1082,15 +1106,21 @@ async function recoverInvoice({
         kind: "conflict",
         attempted,
         attempt,
-        found: { ...toVoucherSummary(lookup.voucher), ...raw },
+        found: { ...toVoucherSummary(lookup.voucher), ...rawResponse },
         reason: `${matched.reason}. Configure a store and pass idempotencyKey for retries.`,
+        ...includedRequest,
       };
     }
     return {
       kind: "indeterminate",
       attempted,
       attempt,
-      lookup: { kind: "incomplete", reason: matched.reason, ...raw },
+      lookup: {
+        kind: "incomplete",
+        reason: matched.reason,
+        ...rawResponse,
+      },
+      ...includedRequest,
     };
   }
   // The matcher requires both fields before declaring a complete match.
@@ -1102,8 +1132,8 @@ async function recoverInvoice({
       lookup.voucher.caeExpiry as string
     ),
     attempt,
-    lookup: { ...toVoucherSummary(lookup.voucher), ...raw },
-    ...sentRequest,
+    lookup: { ...toVoucherSummary(lookup.voucher), ...rawResponse },
+    ...includedRequest,
   };
 }
 
@@ -1122,8 +1152,8 @@ function projectIssue(issue: ArcaAuthorizationOutcome["errors"][number]) {
 }
 function projectEvidence<T extends ArcaAuthorizationOutcome>(
   evidence: T,
-  includeRaw: boolean
-): Omit<T, "raw"> & { raw?: Record<string, unknown> } {
+  includeRawResponse: boolean
+): Omit<T, "raw"> & { rawResponse?: Record<string, unknown> } {
   const base = {
     kind: evidence.kind,
     service: evidence.service,
@@ -1141,7 +1171,9 @@ function projectEvidence<T extends ArcaAuthorizationOutcome>(
     },
     errors: evidence.errors.map(projectIssue),
     observations: evidence.observations.map(projectIssue),
-    ...(includeRaw && evidence.raw !== undefined ? { raw: evidence.raw } : {}),
+    ...(includeRawResponse && evidence.raw !== undefined
+      ? { rawResponse: evidence.raw }
+      : {}),
   };
   const projected: Record<string, unknown> = { ...base };
   for (const field of [
@@ -1164,16 +1196,18 @@ function projectEvidence<T extends ArcaAuthorizationOutcome>(
       ...(providerCode === undefined ? {} : { providerCode }),
     };
   }
-  return projected as Omit<T, "raw"> & { raw?: Record<string, unknown> };
+  return projected as Omit<T, "raw"> & {
+    rawResponse?: Record<string, unknown>;
+  };
 }
 
 /** An AbortSignal cannot be cloned, so the caller's deadline is carried over. */
 function cloneOptions<T extends IssueOptions>(options: T): T {
   assertIssueObject(options, "options");
-  const { signal, ...rest } = options;
+  const { abortSignal, ...rest } = options;
   return {
     ...(structuredClone(rest) as T),
-    ...(signal === undefined ? {} : { signal }),
+    ...(abortSignal === undefined ? {} : { abortSignal }),
   };
 }
 
@@ -1188,20 +1222,20 @@ function validateOptions(options: IssueOptions) {
       "idempotencyKey",
       "service",
       "number",
-      "signal",
+      "abortSignal",
     ],
     "options"
   );
   if (
-    options.signal !== undefined &&
-    (typeof options.signal !== "object" ||
-      options.signal === null ||
-      typeof options.signal.aborted !== "boolean" ||
-      typeof options.signal.addEventListener !== "function")
+    options.abortSignal !== undefined &&
+    (typeof options.abortSignal !== "object" ||
+      options.abortSignal === null ||
+      typeof options.abortSignal.aborted !== "boolean" ||
+      typeof options.abortSignal.addEventListener !== "function")
   ) {
-    throw new ArcaInputError("options.signal must be an AbortSignal.", {
+    throw new ArcaInputError("options.abortSignal must be an AbortSignal.", {
       code: "ARCA_INPUT_INVALID_VALUE",
-      field: "options.signal",
+      field: "options.abortSignal",
     });
   }
   if (
@@ -1244,8 +1278,12 @@ function validateOptions(options: IssueOptions) {
   }
   if (options.include !== undefined) {
     assertIssueObject(options.include, "options.include");
-    assertIssueKeys(options.include, ["raw", "sent"], "options.include");
-    for (const field of ["raw", "sent"] as const) {
+    assertIssueKeys(
+      options.include,
+      ["request", "rawResponse"],
+      "options.include"
+    );
+    for (const field of ["request", "rawResponse"] as const) {
       if (
         options.include[field] !== undefined &&
         typeof options.include[field] !== "boolean"
@@ -1317,10 +1355,10 @@ async function previewNote(
   context: StoreContext | undefined,
   kind: "creditNote" | "debitNote"
 ): Promise<NotePreview<IssuanceService>> {
-  const options = structuredClone(inputOptions);
+  const options = cloneOptions(inputOptions);
   assertIssueKeys(
     options,
-    ["representedTaxId", "service", "forceRefresh"],
+    ["representedTaxId", "service", "forceRefresh", "abortSignal"],
     "options"
   );
   const prepared = await prepareNote(wsfe, input, options, context, kind);
@@ -1437,6 +1475,9 @@ async function lookupOriginal(
   const original = await wsfe.lookupVoucher({
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
+    ...(options.abortSignal === undefined
+      ? {}
+      : { abortSignal: options.abortSignal }),
     ...target,
   });
   if (original.kind !== "found") {
@@ -1495,15 +1536,14 @@ function preparePeriodNote(
   return prepared;
 }
 
-function sentEvidence(
+function requestEvidence(
   data: FiscalHeader,
-  number: number,
-  options: IssueOptions,
-  include: boolean
-): { sent?: IssueRequest<IssuanceService> } {
-  return include
+  number: number | undefined,
+  options: IssueOptions
+): { request?: IssueRequest<IssuanceService> } {
+  return options.include?.request === true
     ? {
-        sent:
+        request:
           options.service === "wsmtxca" ? wsmtxcaRequest(data, number) : data,
       }
     : {};
@@ -1519,7 +1559,7 @@ async function recoverOperation(
   assertIssueObject(options, "options");
   assertIssueKeys(
     options,
-    ["representedTaxId", "forceRefresh", "include", "signal"],
+    ["representedTaxId", "forceRefresh", "include", "abortSignal"],
     "options"
   );
   validateOptions(options);
@@ -1612,12 +1652,11 @@ function consultReservation(
     strangerAtNumber,
     attempted,
     attempt: replayEvidence(storedOptions.service),
-    includeRaw: options.include?.raw === true,
-    sentRequest: sentEvidence(
+    includeRawResponse: options.include?.rawResponse === true,
+    includedRequest: requestEvidence(
       prepared.data,
       record.number,
-      storedOptions,
-      options.include?.sent === true
+      storedOptions
     ),
     voucher: (cae, caeExpiry) => ({
       ...attempted,
@@ -1700,7 +1739,9 @@ async function runSequenceBarrier({
     settled,
     await consultReservation(select, record, {
       forceRefresh: options.forceRefresh,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.abortSignal === undefined
+        ? {}
+        : { abortSignal: options.abortSignal }),
     })
   );
   if (outcome.kind === "authorized" || outcome.kind === "conflict") {

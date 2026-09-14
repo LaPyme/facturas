@@ -579,7 +579,7 @@ describe("deadline", () => {
     expect(
       await arca.issue(input, {
         idempotencyKey: "sale",
-        signal: controller.signal,
+        abortSignal: controller.signal,
       })
     ).toMatchObject({
       kind: "indeterminate",
@@ -593,11 +593,11 @@ describe("deadline", () => {
       voucher: { number: 77, cae: "cae-77" },
     });
   });
-  it("rejects an options.signal that is not an AbortSignal", async () => {
+  it("rejects an options.abortSignal that is not an AbortSignal", async () => {
     const { wsfe } = provider();
     const arca = service(createMemoryStore(), wsfe);
     await expect(
-      arca.issue(input, { signal: {} as AbortSignal })
+      arca.issue(input, { abortSignal: {} as AbortSignal })
     ).rejects.toMatchObject({ code: "ARCA_INPUT_INVALID_VALUE" });
     expect(wsfe.issue).not.toHaveBeenCalled();
   });

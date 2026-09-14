@@ -180,7 +180,7 @@ export function createWsaaAuthModule(
     login(service, authOptions = {}) {
       // A deduplicated login is shared: the caller stops waiting on its own
       // deadline, and the request keeps running for the other waiters.
-      return abortable(runLogin(service, authOptions), authOptions.signal);
+      return abortable(runLogin(service, authOptions), authOptions.abortSignal);
     },
   };
 

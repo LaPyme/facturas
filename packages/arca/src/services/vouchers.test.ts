@@ -104,12 +104,12 @@ describe("vouchers.issue", () => {
       }).issue
     ).toBeTypeOf("function");
   });
-  it("authorizes once, exposes the sent input only on request, and passes auth options unchanged", async () => {
+  it("authorizes once, exposes the request only when included, and passes auth options unchanged", async () => {
     const { wsfe, service } = fake();
     const auth = { representedTaxId: "20304050607", forceRefresh: true };
     const result = await service.issue(input, {
       ...auth,
-      include: { sent: true },
+      include: { request: true },
     });
     expect(result).toMatchObject({
       kind: "authorized",
@@ -135,7 +135,7 @@ describe("vouchers.issue", () => {
     if (result.kind !== "authorized") {
       throw new Error("Expected authorization");
     }
-    expect(result.sent).toEqual(wsfe.issue.mock.calls[0][0].data);
+    expect(result.request).toEqual(wsfe.issue.mock.calls[0][0].data);
     expectNoRaw(result);
   });
   it.each([
@@ -168,10 +168,13 @@ describe("vouchers.issue", () => {
       observations: [issue],
     };
     const { wsfe, service } = fake(rejection);
-    expect(await service.issue(input)).toMatchObject({
+    expect(
+      await service.issue(input, { include: { request: true } })
+    ).toMatchObject({
       kind: "rejected",
       attempted: { salesPoint: 1, voucherType: 6, number: 77 },
       issues: [issue],
+      request: deriveWsfeInvoice(input).data,
     });
     expect(wsfe.issue).toHaveBeenCalledOnce();
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
@@ -181,7 +184,7 @@ describe("vouchers.issue", () => {
     const result = await service.issue(input, {
       representedTaxId: 20_304_050_607,
       forceRefresh: false,
-      include: { sent: true },
+      include: { request: true },
     });
     expect(result).toMatchObject({
       kind: "authorized",
@@ -189,7 +192,7 @@ describe("vouchers.issue", () => {
       voucher: { number: 77 },
       attempt: { kind: "indeterminate" },
       lookup: { number: 77 },
-      sent: deriveWsfeInvoice(input).data,
+      request: deriveWsfeInvoice(input).data,
     });
     expect(wsfe.lookupVoucher).toHaveBeenCalledExactlyOnceWith({
       representedTaxId: 20_304_050_607,
@@ -261,23 +264,23 @@ describe("vouchers.issue", () => {
   });
   it.each([
     undefined,
-    { raw: false },
-    { sent: false },
-    { raw: true },
-    { sent: true },
-    { raw: true, sent: true },
-  ])("controls evidence and the sent request with include %j", async (include) => {
+    { rawResponse: false },
+    { request: false },
+    { rawResponse: true },
+    { request: true },
+    { rawResponse: true, request: true },
+  ])("controls evidence and the request with include %j", async (include) => {
     const { service } = fake();
     const result = await service.issue(input, { include });
-    expect(Object.hasOwn(result, "sent")).toBe(include?.sent === true);
+    expect(Object.hasOwn(result, "request")).toBe(include?.request === true);
     if (result.kind !== "authorized" || result.recoveredByMatch) {
       throw new Error("Expected direct authorization");
     }
-    expect(Object.hasOwn(result.authorization, "raw")).toBe(
-      include?.raw === true
+    expect(Object.hasOwn(result.authorization, "rawResponse")).toBe(
+      include?.rawResponse === true
     );
   });
-  it("exposes raw evidence across recovery paths only when requested", async () => {
+  it("exposes raw responses across recovery paths only when requested", async () => {
     for (const lookup of [
       found(),
       found({ totalAmount: 120 }),
@@ -292,18 +295,21 @@ describe("vouchers.issue", () => {
       } as const,
     ]) {
       const { service } = fake(uncertain, lookup as WsfeVoucherLookupResult);
-      const result = await service.issue(input, { include: { raw: true } });
+      const result = await service.issue(input, {
+        include: { request: true, rawResponse: true },
+      });
+      expect(result.request).toEqual(deriveWsfeInvoice(input).data);
       if (!("attempt" in result)) {
         throw new Error("Expected attempt evidence");
       }
-      expect(result.attempt.raw).toEqual(uncertain.raw);
+      expect(result.attempt.rawResponse).toEqual(uncertain.raw);
       const evidence =
         result.kind === "conflict"
           ? result.found
           : "lookup" in result
             ? result.lookup
             : undefined;
-      expect(evidence).toHaveProperty("raw", lookup.raw);
+      expect(evidence).toHaveProperty("rawResponse", lookup.raw);
     }
   });
   it.each([
@@ -328,7 +334,10 @@ describe("vouchers.issue", () => {
   it.each([
     { representedTaxId: "bad" },
     { forceRefresh: "true" },
-    { include: { raw: "true" } },
+    { include: { rawResponse: "true" } },
+    { signal: AbortSignal.abort() },
+    { include: { sent: true } },
+    { include: { raw: true } },
     { include: null },
   ])("does zero provider I/O for invalid options %j", async (options) => {
     const { service, wsfe } = fake();

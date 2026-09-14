@@ -217,7 +217,7 @@ describe("vouchers.preview", () => {
     null,
     { representedTaxId: "bad" },
     { representedTaxId: 1.5 },
-    { include: { raw: true } },
+    { include: { rawResponse: true } },
     { idempotencyKey: "key" },
     { forceRefresh: true },
   ])("rejects options it does not support: %j", (options) => {

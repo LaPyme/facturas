@@ -89,7 +89,7 @@ export type ArcaAuthOptions = {
   forceRefresh?: boolean;
   representedTaxId?: ArcaRepresentedTaxId;
   /** Aborts login, submission and consultation with the caller's deadline. */
-  signal?: AbortSignal;
+  abortSignal?: AbortSignal;
 };
 
 export type ArcaSoapExecutionOptions<TBody> = {
