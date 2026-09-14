@@ -1,5 +1,19 @@
 # facturas
 
+## 0.13.0
+
+### Minor Changes
+
+- 9baa8ef: The public cancellation option is `abortSignal`. Optional high-level fiscal evidence is selected with `include.request` and `include.rawResponse`, and exposed as `request` and `rawResponse`. The requested fiscal request is available across authorized, rejected, indeterminate, and conflict outcomes, while persisted reservations remain backward compatible.
+- 5408372: - `for` on `issueCreditNote()`, `issueDebitNote()`, `previewCreditNote()` and `previewDebitNote()` takes one original or a non-empty list, and the note's limit becomes the sum of the originals' totals. `all: true` still takes a single original.
+  - `NotePreview.original` is now `originals`, the consulted vouchers in input order.
+  - `items` carries the line detail and `details` is gone. `WsmtxcaLine` replaces `VoucherItemDetail` and `ItemLine` is the new line input type.
+  - `{ service: "wsmtxca" }` requires `description`, `quantity`, `unit` and `unitPrice` on every item, and refuses a reviewed `amounts` breakdown.
+  - `include: { exactInput: true }` is now `include: { request: true }`, the result field is `request`, and `ExactIssueInput<S>` is now `IssueRequest<S>`.
+  - `buildFacturaB()`, `buildFacturaC()` and their types are removed. The high-level API is the normal entry point, while `client.wsfe`, `client.wsmtxca` and `client.padron` remain the provider-specific modules.
+  - Existing WSMTXCA `v: 2` reservations with `sent.details` remain recoverable after the `items` migration, including their exact number and optional-discount default.
+  - WSMTXCA line rounding is distributed within ARCA's per-line tolerance, zero-rate lines keep zero VAT, full notes preserve authorized historical one-cent differences, duplicate note originals are rejected, and FCE association limits follow the selected provider for both typed and raw optional-field input.
+
 ## 0.12.4
 
 ### Patch Changes
