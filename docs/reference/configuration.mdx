@@ -148,3 +148,11 @@ genéricos de servicio nunca habilitan ese camino de recuperación.
 `wsfe.issue()` y `wsmtxca.issue()` siempre hacen un único intento de
 autorización, y cada intento SOAP de autorización va con los reintentos de
 transporte en cero.
+
+## Selección avanzada del servicio de emisión
+
+`createArcaClient()` no detecta ni configura el servicio de emisión. Los
+métodos de la fachada usan WSFE por defecto. Solo cuando el contribuyente o el
+punto de venta opere a través de WSMTXCA, pasá
+`{ service: "wsmtxca" }` en la llamada. El SDK no cambia de servicio solo.
+Revisá [WSMTXCA para casos requeridos](/guides/wsmtxca).

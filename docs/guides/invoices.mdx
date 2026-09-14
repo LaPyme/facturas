@@ -1,16 +1,14 @@
 ---
 title: "Facturas"
 description: "Emití y previsualizá facturas, y tratá cada resultado fiscal sin perder comprobantes."
-keywords: ["facturas", "issue", "preview", "idempotencia", "WSFE"]
+keywords: ["facturas", "issue", "preview", "idempotencia", "ARCA"]
 ---
 
 `issue()` es la fachada: derivá el comprobante desde datos de negocio, reservá
 el número y recuperá los reintentos. Ese input de negocio es el único input.
 Los campos que el SDK no deriva, `optionalFields`, `buyers` y `activities`,
-pasan tal cual al proveedor, y `preview().request` te muestra el comprobante
-armado antes de mandarlo. Para las lecturas, los catálogos y el Padrón que
-están por debajo, mirá los
-[módulos de transporte](/reference/arca-services).
+pasan tal cual a ARCA. `preview().request` te muestra el comprobante armado
+antes de mandarlo.
 
 ## Emitir
 
@@ -57,7 +55,7 @@ en las claves. Reusá la misma clave y el mismo input en los reintentos. Si el
 input cambia, se lanza `ARCA_INPUT_IDEMPOTENCY_MISMATCH`. Las claves están
 alcanzadas al CUIT del cliente y al entorno. `representedTaxId` también se
 controla como parte de la identidad del input. Una clave sin store lanza antes
-de cualquier I/O con el proveedor. Claves distintas identifican operaciones de
+de cualquier I/O con ARCA. Claves distintas identifican operaciones de
 negocio distintas.
 
 Con un store que provee `withLock`, como Postgres, Redis, archivos, memoria o el
@@ -79,7 +77,7 @@ El ejemplo completo, con el tratamiento de los cuatro resultados, está en
 [examples/issue-invoice.ts](https://github.com/LaPyme/facturas/blob/main/examples/issue-invoice.ts).
 
 `recover(clave, opciones)` concilia sin emitir. Solo consulta la reserva
-guardada, con el proveedor y el número que quedaron registrados: nunca autoriza
+guardada, con el servicio y el número que quedaron registrados: nunca autoriza
 ni reserva un número nuevo. Si ARCA confirma que el número está vacío, el
 resultado es `indeterminate` con `lookup.kind === "not_found"`, no una
 autorización. Para emitir, llamá a `issue()` con la misma clave. Si no hay
@@ -118,7 +116,7 @@ console.log(
   previsualizacion.voucherClass, // "B"
   previsualizacion.voucherType, // 6
   previsualizacion.amounts, // computedTotal, sentTotal y vatAdjustment
-  previsualizacion.request // El input de WSFE, sin el número de comprobante.
+  previsualizacion.request // El pedido para ARCA, sin el número de comprobante.
 );
 
 if (previsualizacion.amounts.sentTotal !== venta.totalEnCentavos) {
@@ -134,9 +132,8 @@ if (factura.kind === "authorized") {
 
 `preview()` es sincrónico y devuelve la `voucherClass` derivada, el
 `voucherType`, los mismos `amounts` que informa un resultado autorizado, y
-`request`, el input que enviaría `issue()`. Es un `WsfeVoucherInput` o el
-request de WSMTXCA si pasás `{ service: "wsmtxca" }`. El número de comprobante
-no aparece porque recién se conoce cuando se reserva el número al emitir.
+`request`, el pedido que enviaría `issue()`. El número de comprobante no aparece
+porque recién se conoce cuando se reserva al emitir.
 Previsualizar una nota sí necesita el original, así que `previewCreditNote()` y
 `previewDebitNote()` son asincrónicas y hacen esa consulta. Están en
 [Notas de crédito](/guides/credit-notes#vista-previa-de-notas).
@@ -177,7 +174,7 @@ al tipo de cambio informado), la identificación es obligatoria según la
 [RG 5866/2026](https://www.argentina.gob.ar/normativa/nacional/norma-427092/texto).
 Cuando el cliente pide el CUIT para deducir en Ganancias, informalo sin importar
 el monto. Los controles de forma del documento no verifican la inscripción ante
-el proveedor.
+ARCA.
 
 `family` elige la familia del comprobante y por defecto es `"ordinary"`
 (1, 6, 11). `"retention_legend"` es A con leyenda y existe solo en clase A
@@ -194,8 +191,8 @@ suman al total.
 no recalcula el IVA ni lo ajusta. Toma
 `{ net, vat, exempt?, untaxed?, vatRates? }` en centavos, con filas `vatRates`
 de la forma `{ id, base, amount }`. El `total` opcional afirma el total
-revisado: se controla contra las reglas de conciliación de importes del
-proveedor y no se reescribe en silencio.
+revisado. Se controla contra las reglas de conciliación de importes de ARCA y
+no se reescribe en silencio.
 
 `concept: "products_and_services"` es el concepto 3, junto a `"products"` y
 `"services"`. `dueDate` informa el vencimiento de pago. `paidInForeignCurrency`
@@ -205,13 +202,14 @@ monedas que no son `ARS` ni `USD`, pasá `currency: { id: "060" }` con un
 
 `to.condition` también acepta el número de la condición de IVA del receptor del
 catálogo de ARCA, con `cuit`, `dni` o `document: { type, number }`. Los campos
-`optionalFields`, `buyers` y `activities` pasan tal cual a WSFE y a WSMTXCA. No
-dupliques ahí lo que ya informa `fce`.
+`optionalFields`, `buyers` y `activities` pasan tal cual a ARCA. No dupliques
+ahí lo que ya informa `fce`.
 
-Cada ítem puede además describir su línea: `description`, `quantity`, `unit`,
-`unitPrice`, `discount`, `code`, `matrixCode` y `matrixUnits`. WSFE los ignora.
-WSMTXCA los necesita y arma sus filas con ellos, como explica
-[WSMTXCA](/guides/wsmtxca). El ejemplo compilado de todo esto es
+Cada ítem puede además describir su línea con `description`, `quantity`, `unit`,
+`unitPrice`, `discount`, `code`, `matrixCode` y `matrixUnits`. La emisión normal
+no usa ese detalle. Si el contribuyente o el punto de venta opera a través de
+WSMTXCA, esos campos forman las filas que requiere ese servicio. Revisá el
+[caso especial de WSMTXCA](/guides/wsmtxca). El ejemplo compilado de todo esto es
 [examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts).
 
 ## Qué hace `issue()` al emitir
@@ -235,7 +233,7 @@ consistencia y nunca autoría. La comparación de identidad queda para una
 reserva que ya existía, el único caso en el que el número puede ser una
 escritura propia anterior. Todo `conflict` se anota en el store antes de
 responder. Una repetición con esa clave, o un `recover()`, devuelve el mismo
-`conflict` sin ninguna llamada al proveedor.
+`conflict` sin ninguna llamada a ARCA.
 
 | Resultado | Qué significa y qué hacer |
 | --- | --- |
@@ -261,10 +259,14 @@ de escritura observado usa un intento indeterminado con
 `reason: "incomplete_response"`. La consulta aporta la evidencia de
 autorización.
 
-`service` elige el proveedor: `"wsfe"` por defecto, `"wsmtxca"` para el detalle
-de ítems. Nunca cambia solo. `number` es un número reservado por fuera: cuando
-lo pasás, la llamada no lee el próximo número, así que la aplicación sigue
-siendo dueña de la secuencia del punto de venta.
+No pases `service` en el uso normal. La emisión usa WSFE por defecto. Usá
+`service: "wsmtxca"` solo cuando el contribuyente o el punto de venta opere a
+través de ese servicio de ARCA. El SDK no lo descubre ni lo cambia solo. La
+[guía de WSMTXCA](/guides/wsmtxca) cubre ese caso especial.
+
+`number` es un número reservado por fuera. Cuando lo pasás, la llamada no lee
+el próximo número, así que la aplicación sigue siendo dueña de la secuencia del
+punto de venta.
 
 `issue()` cubre la emisión de CAE para facturas y notas. No cubre CAEA,
 exportación ni los demás servicios de ARCA.
@@ -275,4 +277,4 @@ tributos, campos opcionales, compradores, actividades, las asociaciones de
 notas (incluidos el CUIT emisor y la fecha informados) y el flag de pago en
 moneda extranjera. Los campos faltantes quedan incompletos y nunca cuentan como
 prueba de coincidencia. Las diferencias son conflictos. Los campos del
-proveedor que quedan fuera de ese conjunto se consideran incompletos.
+servicio de ARCA que quedan fuera de ese conjunto se consideran incompletos.
