@@ -447,12 +447,12 @@ export function createWsmtxcaIssuanceService(wsmtxca: WsmtxcaService) {
       forceRefresh?: boolean;
       data: FiscalHeader;
       voucherNumber: number;
-      signal?: AbortSignal;
+      abortSignal?: AbortSignal;
     }) =>
       wsmtxca.issue({
         representedTaxId: input.representedTaxId,
         forceRefresh: input.forceRefresh,
-        signal: input.signal,
+        abortSignal: input.abortSignal,
         data: wsmtxcaRequest(input.data, input.voucherNumber),
       }),
     lookupVoucher: async (

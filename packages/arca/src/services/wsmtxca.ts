@@ -27,7 +27,7 @@ export type WsmtxcaAuthorizeVoucherInput = {
   data: Record<string, unknown>;
   forceRefresh?: boolean;
   /** Aborts login, submission and consultation with the caller's deadline. */
-  signal?: AbortSignal;
+  abortSignal?: AbortSignal;
 };
 
 /** Structured evidence from one exact WSMTXCA authorization attempt. */
@@ -105,7 +105,7 @@ export type WsmtxcaService = {
     voucherType: number;
     salesPoint: number;
     forceRefresh?: boolean;
-    signal?: AbortSignal;
+    abortSignal?: AbortSignal;
   }): Promise<WsmtxcaLastAuthorizedVoucherResult>;
   /** Returns the points of sale enabled for WSMTXCA. */
   getSalesPoints(input: {
@@ -119,7 +119,7 @@ export type WsmtxcaService = {
     salesPoint: number;
     voucherNumber: number;
     forceRefresh?: boolean;
-    signal?: AbortSignal;
+    abortSignal?: AbortSignal;
   }): Promise<WsmtxcaVoucherLookupOutcome>;
   /** Retrieves details for a specific voucher. */
   getVoucher(input: {
@@ -146,7 +146,7 @@ export function createWsmtxcaService(
     input: {
       representedTaxId?: ArcaRepresentedTaxId;
       forceRefresh?: boolean;
-      signal?: AbortSignal;
+      abortSignal?: AbortSignal;
     },
     body: Record<string, unknown> = {},
     retries?: number
@@ -154,7 +154,7 @@ export function createWsmtxcaService(
     const auth = await options.auth.login("wsmtxca", {
       representedTaxId: input.representedTaxId,
       forceRefresh: input.forceRefresh,
-      signal: input.signal,
+      abortSignal: input.abortSignal,
     });
     const response = await options.soap.execute<
       Record<string, unknown>,
@@ -163,7 +163,7 @@ export function createWsmtxcaService(
       service: "wsmtxca",
       operation,
       ...(retries === undefined ? {} : { retries }),
-      signal: input.signal,
+      signal: input.abortSignal,
       bodyElementName: `${operation}Request`,
       bodyElementNamespaceMode: "prefix",
       body: {
@@ -184,7 +184,7 @@ export function createWsmtxcaService(
     representedTaxId,
     data,
     forceRefresh,
-    signal,
+    abortSignal,
   }: WsmtxcaAuthorizeVoucherInput): Promise<{
     outcome: WsmtxcaAuthorizationOutcome;
     error?: unknown;
@@ -203,7 +203,7 @@ export function createWsmtxcaService(
     try {
       const raw = await executeWsmtxcaAuthenticatedOperation(
         "autorizarComprobante",
-        { representedTaxId, forceRefresh, signal },
+        { representedTaxId, forceRefresh, abortSignal },
         data,
         0
       );
@@ -227,13 +227,13 @@ export function createWsmtxcaService(
     voucherType,
     salesPoint,
     forceRefresh,
-    signal,
+    abortSignal,
   }: {
     representedTaxId?: ArcaRepresentedTaxId;
     voucherType: number;
     salesPoint: number;
     forceRefresh?: boolean;
-    signal?: AbortSignal;
+    abortSignal?: AbortSignal;
   }): Promise<WsmtxcaLastAuthorizedVoucherResult> {
     return executeWithAuthenticationRecovery({
       service: "wsmtxca",
@@ -245,7 +245,7 @@ export function createWsmtxcaService(
           voucherType,
           salesPoint,
           forceRefresh: attemptForceRefresh,
-          signal,
+          abortSignal,
         }),
     });
   }
@@ -255,18 +255,18 @@ export function createWsmtxcaService(
     voucherType,
     salesPoint,
     forceRefresh,
-    signal,
+    abortSignal,
   }: {
     representedTaxId?: ArcaRepresentedTaxId;
     voucherType: number;
     salesPoint: number;
     forceRefresh?: boolean;
-    signal?: AbortSignal;
+    abortSignal?: AbortSignal;
   }): Promise<WsmtxcaLastAuthorizedVoucherResult> {
     const operation = "consultarUltimoComprobanteAutorizado";
     const raw = await executeWsmtxcaAuthenticatedOperation(
       operation,
-      { representedTaxId, forceRefresh, signal },
+      { representedTaxId, forceRefresh, abortSignal },
       {
         consultaUltimoComprobanteAutorizadoRequest: {
           codigoTipoComprobante: voucherType,
@@ -356,14 +356,14 @@ export function createWsmtxcaService(
     salesPoint,
     voucherNumber,
     forceRefresh,
-    signal,
+    abortSignal,
   }: {
     representedTaxId?: ArcaRepresentedTaxId;
     voucherType: number;
     salesPoint: number;
     voucherNumber: number;
     forceRefresh?: boolean;
-    signal?: AbortSignal;
+    abortSignal?: AbortSignal;
   }): Promise<WsmtxcaVoucherLookupOutcome> {
     return executeWithAuthenticationRecovery({
       service: "wsmtxca",
@@ -376,7 +376,7 @@ export function createWsmtxcaService(
           salesPoint,
           voucherNumber,
           forceRefresh: attemptForceRefresh,
-          signal,
+          abortSignal,
         }),
     });
   }
@@ -387,19 +387,19 @@ export function createWsmtxcaService(
     salesPoint,
     voucherNumber,
     forceRefresh,
-    signal,
+    abortSignal,
   }: {
     representedTaxId?: ArcaRepresentedTaxId;
     voucherType: number;
     salesPoint: number;
     voucherNumber: number;
     forceRefresh?: boolean;
-    signal?: AbortSignal;
+    abortSignal?: AbortSignal;
   }): Promise<WsmtxcaVoucherLookupOutcome> {
     const operation = "consultarComprobante";
     const raw = await executeWsmtxcaAuthenticatedOperation(
       operation,
-      { representedTaxId, forceRefresh, signal },
+      { representedTaxId, forceRefresh, abortSignal },
       {
         consultaComprobanteRequest: {
           codigoTipoComprobante: voucherType,

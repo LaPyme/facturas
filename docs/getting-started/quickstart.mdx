@@ -102,8 +102,8 @@ llamá a `issue()`.
 - `conflict`: hay otro comprobante en ese número. Detené el flujo e investigá.
 
 La evidencia SOAP y el request enviado no aparecen por defecto. Podés pedirlos
-con `include: { raw: true, sent: true }`. La secuencia de llamadas está en
-[Qué hace `issue()` al emitir](/guides/invoices#qué-hace-issue-al-emitir).
+con `include: { rawResponse: true, request: true }`. La secuencia de llamadas
+está en [Qué hace `issue()` al emitir](/guides/invoices#qué-hace-issue-al-emitir).
 Cuando una llamada falla, mirá [Errores](/reference/errors).
 
 ## 6. Evitá duplicados al reintentar

@@ -59,7 +59,7 @@ Los métodos normales de emisión cubiertos por semver son `issue`, `preview`,
 forman parte de la API pública.
 
 Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
-`signal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
+`abortSignal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
 consultas de esa llamada. Un corte posterior al envío devuelve `indeterminate`
 con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
 de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
@@ -76,11 +76,11 @@ Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 fachada, con su plata y el detalle de línea que usa WSMTXCA. `WsmtxcaLine` es
 la fila que devuelven las consultas de WSMTXCA.
 
-`include: { raw: true, sent: true }` agrega la evidencia cruda y el request
-enviado a un resultado autorizado, y `NotePreview.originals` lista los
-comprobantes que una nota vinculada corrige. Los
-[módulos de transporte](/reference/arca-services) documentan `client.wsfe`,
-`client.wsmtxca` y `client.padron`.
+`include: { rawResponse: true, request: true }` agrega la respuesta cruda de
+ARCA y el request fiscal a cualquiera de los cuatro resultados, y
+`NotePreview.originals` lista los comprobantes que una nota vinculada corrige.
+Los [módulos de transporte](/reference/arca-services) documentan
+`client.wsfe`, `client.wsmtxca` y `client.padron`.
 
 Entradas documentadas:
 

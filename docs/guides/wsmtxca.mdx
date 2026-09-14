@@ -25,9 +25,9 @@ const factura = await arca.issue(input, { service: "wsmtxca" });
 
 Sin `service`, la llamada usa WSFE. `issue()`,
 `issueCreditNote()`, `issueDebitNote()`, `preview()`, `previewCreditNote()` y
-`previewDebitNote()` aceptan la opción. Los tipos del resultado siguen el
-literal que pasaste: con `{ service: "wsmtxca" }` el `request` y el `sent` son
-los de WSMTXCA, sin casts.
+`previewDebitNote()` aceptan la opción. Los tipos siguen el literal que
+pasaste: con `{ service: "wsmtxca" }`, tanto el `request` de la vista previa
+como el del resultado son de WSMTXCA, sin casts.
 
 ## Detalle de ítems
 
@@ -90,9 +90,9 @@ const previsualizacion = arca.preview(input, { service: "wsmtxca" });
 previsualizacion.request.comprobanteCAERequest.importeTotal; // number
 ```
 
-Con `include: { sent: true }`, un resultado autorizado trae en `sent` el
-request de WSMTXCA que efectivamente se envió. Las llamadas a WSFE conservan
-sus tipos `WsfeVoucherInput`.
+Con `include: { request: true }`, cualquier resultado trae en `request` el
+request de WSMTXCA que el SDK envió o preparó para ese intento. Las llamadas a
+WSFE conservan sus tipos `WsfeVoucherInput`.
 
 ## FCE en los dos servicios
 
@@ -123,7 +123,7 @@ WSMTXCA. Las reservas `v: 2` escritas por versiones anteriores con
 request fiscal guardado, incluido el descuento cero que antes podía omitirse.
 Esta compatibilidad cubre las reservas del store del SDK. No migra snapshots
 que una aplicación haya guardado por su cuenta. Esos snapshots deben cambiar
-`include.exactInput` por `include.sent`, `preview.original` por
+`include.exactInput` por `include.request`, `preview.original` por
 `preview.originals` y adaptar `amounts` + `details` al nuevo input con `items`
 antes de actualizar a 0.13.
 La vida de estos registros está en
