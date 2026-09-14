@@ -17,7 +17,7 @@ console.log(
   previsualizacion.voucherClass, // "B"
   previsualizacion.voucherType, // 6
   previsualizacion.amounts, // computedTotal, sentTotal y vatAdjustment
-  previsualizacion.request // El input de WSFE, sin el número de comprobante.
+  previsualizacion.request // El pedido para ARCA, sin el número de comprobante.
 );
 
 if (previsualizacion.amounts.sentTotal !== venta.totalEnCentavos) {

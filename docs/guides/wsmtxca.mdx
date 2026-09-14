@@ -1,23 +1,29 @@
 ---
-title: "WSMTXCA"
-description: "Emití comprobantes con detalle de ítems mediante WSMTXCA."
+title: "WSMTXCA para casos requeridos"
+sidebarTitle: "WSMTXCA"
+description: "Configurá la emisión cuando el contribuyente o el punto de venta opera mediante WSMTXCA."
 keywords: ["WSMTXCA", "detalle de ítems", "CAE", "FCE"]
 ---
 
-WSMTXCA es el otro servicio de CAE de ARCA. Su diferencia con WSFE es el
-detalle: cada comprobante lleva sus ítems, no solo la cabecera fiscal.
-`issue()`, las notas y las vistas previas funcionan con ambos servicios.
+Consultá esta guía solo cuando el contribuyente o el punto de venta opere a
+través de WSMTXCA. No es una preferencia cotidiana ni un interruptor de
+funcionalidad. Es un servicio específico de ARCA que lleva el detalle de cada
+ítem además de la cabecera fiscal.
 
-## Elegir el proveedor
+La API de negocio no cambia. Seguís usando `issue()`, `issueCreditNote()`,
+`issueDebitNote()` y las vistas previas.
 
-El proveedor es explícito y se pasa en el segundo argumento. El SDK nunca lo
-cambia solo, ni después de un rechazo ni después de un timeout.
+## Indicar el servicio requerido
+
+La selección es explícita y se pasa en el segundo argumento. El SDK no detecta
+qué servicio corresponde al contribuyente o al punto de venta. Tampoco cambia
+de servicio después de un rechazo o de un timeout.
 
 ```ts
 const factura = await arca.issue(input, { service: "wsmtxca" });
 ```
 
-Sin `service`, o con `service: "wsfe"`, la llamada va a WSFE. `issue()`,
+Sin `service`, la llamada usa WSFE. `issue()`,
 `issueCreditNote()`, `issueDebitNote()`, `preview()`, `previewCreditNote()` y
 `previewDebitNote()` aceptan la opción. Los tipos del resultado siguen el
 literal que pasaste: con `{ service: "wsmtxca" }` el `request` y el `sent` son
@@ -30,8 +36,8 @@ El detalle vive en los mismos `items`. Además de la plata, `net` o `gross` con
 `unit`, `unitPrice` y, opcionalmente, `discount`, `code`, `matrixCode` y
 `matrixUnits`. `{ service: "wsmtxca" }` necesita `description`, `quantity`,
 `unit` y `unitPrice` en todos los ítems. Si falta alguno, se lanza
-`ArcaInputError` con el índice del ítem y el campo. WSFE ignora estos campos y
-arma su cabecera igual que siempre.
+`ArcaInputError` con el índice del ítem y el campo. La emisión predeterminada
+ignora estos campos y arma la cabecera fiscal.
 
 Este bloque sale de
 [examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts):
@@ -54,7 +60,7 @@ const input = {
 } satisfies IssueInput;
 ```
 
-El SDK deriva de ahí las filas del proveedor: la condición de IVA sale de la
+El SDK deriva de ahí las filas del servicio: la condición de IVA sale de la
 alícuota del ítem (21 → 5, 10,5 → 4, 0 → 3, 2,5 → 9, 5 → 8, 27 → 6, exento → 2,
 no gravado → 1, y clase C → 3), el importe del ítem incluye el IVA, y un ítem
 de clase A además informa su importe de IVA. Como la cabecera y las líneas
@@ -68,10 +74,10 @@ necesita `items` con detalle.
 
 `unitPrice` es la única excepción monetaria del SDK: un **string decimal en
 unidades mayores** con hasta seis decimales, para no perder la precisión del
-precio unitario del proveedor. Todos los demás importes del ítem son enteros en
+precio unitario del servicio. Todos los demás importes del ítem son enteros en
 centavos.
 
-El SDK arma las dos codificaciones del proveedor. La aplicación no construye
+El SDK arma las dos codificaciones que requiere ARCA. La aplicación no construye
 listas SOAP.
 
 ## Previsualizar
@@ -88,7 +94,7 @@ Con `include: { sent: true }`, un resultado autorizado trae en `sent` el
 request de WSMTXCA que efectivamente se envió. Las llamadas a WSFE conservan
 sus tipos `WsfeVoucherInput`.
 
-## FCE en los dos proveedores
+## FCE en los dos servicios
 
 Los datos de negocio son los mismos: `fce: { cbu, alias?, transfer?, reference? }`
 en la factura y `fce: { annulment, reference? }` en la nota. La codificación,
@@ -109,8 +115,8 @@ total de cabecera, así que una reserva repetida se resuelve contra los ítems
 que ARCA tiene registrados. Si la consulta vuelve incompleta, el resultado
 queda `indeterminate` y no se reenvía nada.
 
-Las reservas guardan el proveedor. Una reserva de WSMTXCA, o cualquier reserva
-con líneas de proveedor, se escribe como registro `v: 2`. La versión 0.10 no puede
+Las reservas guardan el servicio. Una reserva de WSMTXCA, o cualquier reserva
+con líneas del servicio, se escribe como registro `v: 2`. La versión 0.10 no puede
 reproducirla, justamente para que no reenvíe por WSFE un comprobante que era de
 WSMTXCA. Las reservas `v: 2` escritas por versiones anteriores con
 `sent.details` siguen siendo recuperables: el SDK conserva el número y el
