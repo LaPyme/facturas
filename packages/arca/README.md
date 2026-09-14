@@ -4,13 +4,15 @@
 [![CI](https://github.com/LaPyme/facturas/actions/workflows/ci.yml/badge.svg)](https://github.com/LaPyme/facturas/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/LaPyme/facturas/blob/main/LICENSE)
 
-SDK de Node.js para ARCA / AFIP: facturas, notas de crédito y Padrón, con
-integración directa a WSFE y WSMTXCA.
+SDK de Node.js para facturación electrónica con ARCA / AFIP. Emití facturas,
+notas de crédito y notas de débito, y consultá el Padrón con una sola API.
 
 - **Solo ESM**, Node.js **>= 20**
 - **CLI incluido**: `npx facturas init` genera la clave y el CSR, y
   `npx facturas check` nombra la capa de ARCA que falla
 - **Integración directa con ARCA**, sin proxy ni dependencia alojada
+- **Una API de emisión**: el SDK deriva el pedido fiscal y mantiene los detalles
+  de cada servicio fuera del flujo normal
 - **Login WSAA resuelto**: caché en memoria, stores de sesión persistentes,
   deduplicación de logins en vuelo y recuperación de `coe.alreadyAuthenticated`
 - **API pública en TypeScript estricto**, con nombres al estilo JS mapeados a
@@ -103,8 +105,7 @@ const nota = await arca.issueCreditNote(
 
 Con `all: true` acreditás el original completo. El modo es explícito y
 obligatorio. También podés emitir [notas de débito y por
-período](./docs/guides/credit-notes.mdx), tributos, FCE y [comprobantes con
-detalle de ítems por WSMTXCA](./docs/guides/wsmtxca.mdx). `recover()` concilia
+período](./docs/guides/credit-notes.mdx), tributos y FCE. `recover()` concilia
 una reserva sin emitir.
 
 ## Documentación
@@ -120,6 +121,8 @@ una reserva sin emitir.
   parcial y modo total.
 - [Evitar comprobantes duplicados](./docs/guides/avoid-duplicates.mdx): claves para
   reintentos, Postgres, Redis, archivos y memoria.
+- [WSMTXCA para casos requeridos](./docs/guides/wsmtxca.mdx): configuración
+  avanzada para contribuyentes o puntos de venta que operan con ese servicio.
 - [Configuración](./docs/reference/configuration.mdx): variables de entorno, opciones del
   cliente, sesiones WSAA, logs, reintentos y límites de tiempo.
 - [Módulos de transporte](./docs/reference/arca-services.mdx): `client.wsfe`,

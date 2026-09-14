@@ -164,7 +164,7 @@ un reintento podría no volver a ver.
 
 Cada registro lleva su versión. `v: 1` es una reserva de WSFE sin detalle y la
 lee cualquier versión desde la 0.9. `v: 2` es una reserva de WSMTXCA o con
-detalle de ítems. Siempre nombra su proveedor, y la 0.10 no puede reproducirla,
+detalle de ítems. Siempre nombra su servicio, y la 0.10 no puede reproducirla,
 justamente para que volver a la versión anterior no reenvíe por WSFE un comprobante que era de
 WSMTXCA. Preservá las dos versiones.
 
@@ -175,7 +175,7 @@ escribe antes que la reserva que nombra.
 coordinación, no evidencia fiscal. Se reescriben en cada reclamo y se pueden
 borrar si hacen falta, siempre que ninguna reserva quede sin conciliar. Repetir
 una clave con otro input, otra
-operación, otro proveedor u otro `number` explícito es una incompatibilidad de
+operación, otro servicio u otro `number` explícito es una incompatibilidad de
 idempotencia y lanza `ARCA_INPUT_IDEMPOTENCY_MISMATCH`.
 
 **No podés borrar, vencer ni reescribir los registros de reserva.** El SDK solo

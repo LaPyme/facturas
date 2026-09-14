@@ -1,13 +1,16 @@
 ---
 title: "facturas"
-description: "SDK de Node.js para emitir comprobantes electrónicos con ARCA mediante WSFE y WSMTXCA."
+description: "SDK de Node.js para emitir facturas y notas electrónicas con ARCA."
 keywords: ["ARCA", "AFIP", "facturación electrónica", "Node.js", "TypeScript"]
 mode: "wide"
 ---
 
 # Facturación electrónica ARCA desde Node.js
 
-`facturas` es un SDK TypeScript para emitir facturas, notas de crédito y notas de débito, consultar el Padrón y trabajar directamente con WSFE y WSMTXCA.
+`facturas` es un SDK TypeScript para emitir facturas, notas de crédito y notas
+de débito, y consultar el Padrón. Aprendé una API. El SDK arma los pedidos que
+espera ARCA y preserva la evidencia necesaria para reintentar sin perder el
+estado fiscal.
 
 <Note>
   El paquete es solo ESM y requiere Node.js 20 o posterior. Se conecta directo a ARCA, sin proxy ni servicio alojado.
@@ -79,16 +82,18 @@ tratá los cuatro resultados fiscales posibles.
   A diferencia de Stripe, ARCA no recibe una clave de idempotencia para reconocer un reintento. `facturas` te permite asociar una clave de tu aplicación a un store compartido. Así puede recuperar el número reservado y evitar una segunda emisión.
 </Warning>
 
-## Empezá con `issue()`
+## Una API para emitir y recuperar
 
 `issue()` es el camino normal para emitir. Recibe datos de tu negocio y arma la
 factura, el IVA y el pedido que espera ARCA. La guía de
 [Facturas](/guides/invoices) documenta todos sus campos y resultados.
+`preview()` permite revisar ese pedido antes de enviarlo. Para corregir un
+comprobante usá `issueCreditNote()` o `issueDebitNote()`. Si una respuesta queda
+incierta, `recover()` consulta la reserva sin emitir otra vez.
 
-Debajo de la fachada, `client.wsfe`, `client.wsmtxca` y `client.padron` son los
-módulos de transporte: ahí viven las lecturas, los catálogos, el estado del
-servicio y el Padrón. No son otra forma de emitir. Están en
-[Módulos de transporte](/reference/arca-services).
+Para mantenimiento, diagnósticos y consultas técnicas, la referencia documenta
+los [servicios de ARCA](/reference/arca-services) que usa el cliente por debajo.
+La emisión normal siempre entra por los métodos de la fachada.
 
 <Info>
   `facturas` está antes de la versión 1.0. Fijá la versión exacta y revisá el [changelog](https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md) antes de actualizar.

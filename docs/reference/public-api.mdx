@@ -46,16 +46,17 @@ ejemplos:
 - monedas ISO que acepta la fachada, `ARS` y `USD`, con sus mapeos explícitos a
   `PES` y `DOL` en ARCA
 
-Si necesitás catálogos más amplios en tiempo de ejecución, están disponibles
-los métodos de WSFE como `getVoucherTypes()`,
+Si necesitás catálogos más amplios en tiempo de ejecución, la referencia técnica
+incluye métodos de WSFE como `getVoucherTypes()`,
 `getDocumentTypes()`, `getCurrencyTypes()` y `getVatRates()`.
 `getCurrencyTypes()` devuelve identificadores en vivo de ARCA, no códigos ISO.
 
 ## API pública (semver)
 
-Métodos del cliente cubiertos por semver: `issue`, `preview`, `recover`,
-`issueCreditNote`, `issueDebitNote`, `previewCreditNote`, `previewDebitNote`, y
-los módulos `wsfe`, `wsmtxca` y `padron`.
+Los métodos normales de emisión cubiertos por semver son `issue`, `preview`,
+`recover`, `issueCreditNote`, `issueDebitNote`, `previewCreditNote` y
+`previewDebitNote`. Los módulos técnicos `wsfe`, `wsmtxca` y `padron` también
+forman parte de la API pública.
 
 Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
 `signal` toma un `AbortSignal` y corta el login WSAA, la escritura y las

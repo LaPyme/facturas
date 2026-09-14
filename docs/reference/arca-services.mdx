@@ -1,15 +1,23 @@
 ---
 title: "Módulos de transporte"
-description: "Usá client.wsfe, client.wsmtxca y client.padron para lecturas, catálogos, estado del servicio y Padrón."
+description: "Consultá los clientes técnicos de ARCA para mantenimiento, diagnósticos y casos avanzados."
 keywords: ["WSFE", "WSMTXCA", "Padrón", "catálogos", "consultas"]
 ---
 
-`client.wsfe`, `client.wsmtxca` y `client.padron` son la capa que la fachada
-usa por debajo. Ahí viven las lecturas, los catálogos, el estado del servicio y
-el Padrón, y son la costura que los tests de integración reemplazan por un
-doble. No son otra forma de emitir: la emisión entra por `issue()`,
-`issueCreditNote()`, `issueDebitNote()` y sus vistas previas, que derivan el
-comprobante, reservan el número y recuperan los reintentos.
+`client.wsfe`, `client.wsmtxca` y `client.padron` son clientes técnicos que la
+fachada usa por debajo. Ahí viven las lecturas, los catálogos, el estado de los
+servicios y el Padrón. También son la costura que los tests de integración
+pueden reemplazar por un doble.
+
+Para toda emisión normal, usá `issue()`, `issueCreditNote()`,
+`issueDebitNote()` y sus vistas previas. Esos métodos reciben un único input de
+negocio, derivan el pedido fiscal, reservan el número y recuperan los
+reintentos.
+
+Los métodos de emisión de bajo nivel existen y son públicos. No ofrecen esas
+garantías de la fachada. Usalos solo si mantenés una integración avanzada que
+ya controla el pedido exacto, el número fiscal y la recuperación de resultados
+inciertos.
 
 Los inputs usan nombres al estilo JS y el SDK los mapea internamente a los
 campos SOAP de ARCA. Los campos de fecha aceptan `YYYY-MM-DD` o `YYYYMMDD`.
@@ -43,8 +51,9 @@ cacheado y pedir un Token Authorization nuevo para ese servicio.
   de WSMTXCA no es ausencia de comprobante y sigue siendo un error.
 - `getSalesPoints()` para los puntos de venta habilitados en WSMTXCA.
 
-Para emitir por WSMTXCA con detalle de ítems, pasá `{ service: "wsmtxca" }` a
-la fachada: ver [WSMTXCA](/guides/wsmtxca).
+Si el contribuyente o el punto de venta opera a través de WSMTXCA, pasá
+`{ service: "wsmtxca" }` a la fachada. Revisá
+[WSMTXCA para casos requeridos](/guides/wsmtxca).
 
 ## `client.padron`
 
@@ -58,7 +67,8 @@ códigos.
 
 ## Un intento por llamada
 
-`wsfe.issue()` y `wsmtxca.issue()` fuerzan un único intento de transporte SOAP,
+Los métodos de bajo nivel `wsfe.issue()` y `wsmtxca.issue()` fuerzan un único
+intento de transporte SOAP,
 incluso cuando el cliente tiene configurados reintentos generales. Nunca
 refrescan credenciales ni reenvían de forma automática. Un rechazo de
 autenticación explícito del proveedor vuelve como
