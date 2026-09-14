@@ -110,36 +110,39 @@ describe("complete WSFE issuance", () => {
     ["fce", "responsable_inscripto", "responsable_inscripto", 201],
     ["fce", "responsable_inscripto", "consumidor_final", 206],
     ["fce", "monotributo", "consumidor_final", 211],
-  ] as const)("previews and issues %s %s to %s as %s", async (family, issuer, condition, type) => {
-    const { client, wsfe } = fixture();
-    const input = {
-      ...invoice,
-      family,
-      issuer,
-      to: { condition, cuit: "20123456789" },
-      items:
-        issuer === "monotributo"
-          ? [{ amount: 12_100 }]
-          : [{ net: 10_000, vat: 21 }],
-      dueDate: "20260930",
-      ...(family === "fce" ? { fce: { cbu: "1234567890123456789012" } } : {}),
-    } as IssueInput;
-    const preview = client.preview(input);
-    const result = await client.issue(input, {
-      number: 42,
-      include: { request: true },
-    });
-    expect(preview).toMatchObject({
-      voucherType: type,
-      amounts: { sentTotal: 12_100 },
-    });
-    expect(result).toMatchObject({
-      kind: "authorized",
-      request: preview.request,
-      voucher: { number: 42, voucherType: type },
-    });
-    expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    "previews and issues %s %s to %s as %s",
+    async (family, issuer, condition, type) => {
+      const { client, wsfe } = fixture();
+      const input = {
+        ...invoice,
+        family,
+        issuer,
+        to: { condition, cuit: "20123456789" },
+        items:
+          issuer === "monotributo"
+            ? [{ amount: 12_100 }]
+            : [{ net: 10_000, vat: 21 }],
+        dueDate: "20260930",
+        ...(family === "fce" ? { fce: { cbu: "1234567890123456789012" } } : {}),
+      } as IssueInput;
+      const preview = client.preview(input);
+      const result = await client.issue(input, {
+        number: 42,
+        include: { request: true },
+      });
+      expect(preview).toMatchObject({
+        voucherType: type,
+        amounts: { sentTotal: 12_100 },
+      });
+      expect(result).toMatchObject({
+        kind: "authorized",
+        request: preview.request,
+        voucher: { number: 42, voucherType: type },
+      });
+      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+    }
+  );
   it("preserves reviewed amounts and tributes, including nonstandard historical VAT", async () => {
     const { client } = fixture();
     const result = await client.issue(
@@ -167,17 +170,18 @@ describe("complete WSFE issuance", () => {
       },
     });
   });
-  it.each([
-    1, 4, 5, 6, 7, 8, 9, 10, 13, 15, 16,
-  ])("supports numeric receiver condition %s", (condition) => {
-    const { client } = fixture();
-    expect(
-      client.preview({
-        ...invoice,
-        to: { condition, document: { type: 80, number: "20123456789" } },
-      }).request.receiverVatConditionId
-    ).toBe(condition);
-  });
+  it.each([1, 4, 5, 6, 7, 8, 9, 10, 13, 15, 16])(
+    "supports numeric receiver condition %s",
+    (condition) => {
+      const { client } = fixture();
+      expect(
+        client.preview({
+          ...invoice,
+          to: { condition, document: { type: 80, number: "20123456789" } },
+        }).request.receiverVatConditionId
+      ).toBe(condition);
+    }
+  );
   it("preserves mixed services and payment in foreign currency", () => {
     const { client } = fixture();
     expect(
@@ -205,62 +209,65 @@ describe("complete WSFE issuance", () => {
     [201, 202, 203],
     [206, 207, 208],
     [211, 212, 213],
-  ])("issues credit and debit notes in family %s/%s/%s", async (type, debit, credit) => {
-    const { client, records, wsfe } = fixture();
-    const isC = [11, 211].includes(type);
-    const data = client.preview(
-      isC
-        ? { ...invoice, issuer: "monotributo", items: [{ amount: 12_100 }] }
-        : invoice
-    ).request;
-    records.set(`${type}:1`, found({ ...data, voucherType: type }, 1));
-    records.set(`${debit}:2`, found({ ...data, voucherType: debit }, 2));
-    const items = isC
-      ? [{ amount: 6050 }]
-      : ([{ net: 5000, vat: 21 }] as const);
-    const preview = await client.previewDebitNote({
-      for: { salesPoint: 1, voucherType: type, number: 1 },
-      items,
-      date: "20260906",
-      ...(type >= 200 ? { fce: { annulment: false } } : {}),
-    });
-    expect(wsfe.issue).not.toHaveBeenCalled();
-    expect(preview.voucherType).toBe(debit);
-    const issued = await client.issueDebitNote(
-      {
+  ])(
+    "issues credit and debit notes in family %s/%s/%s",
+    async (type, debit, credit) => {
+      const { client, records, wsfe } = fixture();
+      const isC = [11, 211].includes(type);
+      const data = client.preview(
+        isC
+          ? { ...invoice, issuer: "monotributo", items: [{ amount: 12_100 }] }
+          : invoice
+      ).request;
+      records.set(`${type}:1`, found({ ...data, voucherType: type }, 1));
+      records.set(`${debit}:2`, found({ ...data, voucherType: debit }, 2));
+      const items = isC
+        ? [{ amount: 6050 }]
+        : ([{ net: 5000, vat: 21 }] as const);
+      const preview = await client.previewDebitNote({
         for: { salesPoint: 1, voucherType: type, number: 1 },
         items,
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
-      },
-      { include: { request: true } }
-    );
-    expect(issued).toMatchObject({
-      kind: "authorized",
-      request: { voucherType: debit, totalAmount: 60.5 },
-    });
-    const credited = await client.issueCreditNote(
-      {
-        for: { salesPoint: 1, voucherType: debit, number: 2 },
-        all: true,
-        date: "20260906",
-        ...(type >= 200 ? { fce: { annulment: true } } : {}),
-      },
-      { include: { request: true } }
-    );
-    expect(credited).toMatchObject({
-      kind: "authorized",
-      request: {
-        voucherType: credit,
-        associatedVouchers: [{ type: debit, number: 2 }],
-      },
-    });
-    if (type >= 200 && credited.kind === "authorized") {
-      expect(credited.request.associatedVouchers?.[0]?.taxId).toBe(
-        "20123456789"
+      });
+      expect(wsfe.issue).not.toHaveBeenCalled();
+      expect(preview.voucherType).toBe(debit);
+      const issued = await client.issueDebitNote(
+        {
+          for: { salesPoint: 1, voucherType: type, number: 1 },
+          items,
+          date: "20260906",
+          ...(type >= 200 ? { fce: { annulment: false } } : {}),
+        },
+        { include: { request: true } }
       );
+      expect(issued).toMatchObject({
+        kind: "authorized",
+        request: { voucherType: debit, totalAmount: 60.5 },
+      });
+      const credited = await client.issueCreditNote(
+        {
+          for: { salesPoint: 1, voucherType: debit, number: 2 },
+          all: true,
+          date: "20260906",
+          ...(type >= 200 ? { fce: { annulment: true } } : {}),
+        },
+        { include: { request: true } }
+      );
+      expect(credited).toMatchObject({
+        kind: "authorized",
+        request: {
+          voucherType: credit,
+          associatedVouchers: [{ type: debit, number: 2 }],
+        },
+      });
+      if (type >= 200 && credited.kind === "authorized") {
+        expect(credited.request.associatedVouchers?.[0]?.taxId).toBe(
+          "20123456789"
+        );
+      }
     }
-  });
+  );
   it("mirrors tributes on full notes and uses explicit tributes for partial notes", async () => {
     const { client, records } = fixture();
     records.set(
@@ -977,16 +984,19 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     ["items[0].unit", { unit: 1.5 }],
     ["items[0].unitPrice", { unitPrice: "100.0000001" }],
     ["items[0].unitPrice", { unitPrice: undefined }],
-  ])("names %s when WSMTXCA line detail is missing or invalid", async (field, change) => {
-    const { client, calls } = transportFixture();
-    await expect(
-      client.issue(
-        { ...invoice, items: [{ ...line, ...change, net: 10_000, vat: 21 }] },
-        { service: "wsmtxca" }
-      )
-    ).rejects.toMatchObject({ name: "ArcaInputError", field });
-    expect(calls).toEqual([]);
-  });
+  ])(
+    "names %s when WSMTXCA line detail is missing or invalid",
+    async (field, change) => {
+      const { client, calls } = transportFixture();
+      await expect(
+        client.issue(
+          { ...invoice, items: [{ ...line, ...change, net: 10_000, vat: 21 }] },
+          { service: "wsmtxca" }
+        )
+      ).rejects.toMatchObject({ name: "ArcaInputError", field });
+      expect(calls).toEqual([]);
+    }
+  );
   it("refuses a reviewed amounts breakdown for WSMTXCA", async () => {
     const { client, calls } = transportFixture();
     const { items: _items, ...header } = invoice as IssueInput & {

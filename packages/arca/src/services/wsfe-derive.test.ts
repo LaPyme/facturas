@@ -65,21 +65,19 @@ describe("WSFE invoice derivation", () => {
       ).toMatchObject({ documentType: 96, documentNumber: Number(dni) });
     }
   });
-  it.each([
-    "responsable_inscripto",
-    "monotributo",
-    "exento",
-    "no_alcanzado",
-  ])("requires CUIT for %s", (condition) => {
-    expect(() =>
-      derive({ ...base, to: { condition, dni: 12_345_678 } })
-    ).toThrowError(
-      expect.objectContaining({
-        code: "ARCA_INPUT_MISSING_FIELD",
-        field: "to.cuit",
-      })
-    );
-  });
+  it.each(["responsable_inscripto", "monotributo", "exento", "no_alcanzado"])(
+    "requires CUIT for %s",
+    (condition) => {
+      expect(() =>
+        derive({ ...base, to: { condition, dni: 12_345_678 } })
+      ).toThrowError(
+        expect.objectContaining({
+          code: "ARCA_INPUT_MISSING_FIELD",
+          field: "to.cuit",
+        })
+      );
+    }
+  );
   it.each([
     { cuit: "" },
     { cuit: 0 },
@@ -153,21 +151,14 @@ describe("WSFE invoice derivation", () => {
       }).data
     ).toMatchObject({ currencyId: "DOL", exchangeRate: "1200.5" });
   });
-  it.each([
-    undefined,
-    "0",
-    "-1",
-    "1.0000001",
-    "10000",
-    "1e3",
-    "",
-    1000,
-    null,
-  ])("rejects missing or invalid USD exchange rate %s", (exchangeRate) => {
-    expect(() =>
-      derive({ ...base, currency: "USD", exchangeRate })
-    ).toThrowError(expect.objectContaining({ field: "exchangeRate" }));
-  });
+  it.each([undefined, "0", "-1", "1.0000001", "10000", "1e3", "", 1000, null])(
+    "rejects missing or invalid USD exchange rate %s",
+    (exchangeRate) => {
+      expect(() =>
+        derive({ ...base, currency: "USD", exchangeRate })
+      ).toThrowError(expect.objectContaining({ field: "exchangeRate" }));
+    }
+  );
   it.each([
     ["2026-09-04T23:30:00Z", "20260904"],
     ["2026-09-04T00:30:00Z", "20260903"],
@@ -229,20 +220,15 @@ describe("WSFE invoice derivation", () => {
       expect.objectContaining({ field })
     );
   });
-  it.each([
-    undefined,
-    0,
-    -1,
-    1.5,
-    100_000,
-    Number.NaN,
-    "1",
-  ])("rejects invalid sales point %s", (salesPoint) => {
-    expect(() => derive({ ...base, salesPoint })).toThrowError(
-      expect.objectContaining({
-        code: "ARCA_INPUT_INVALID_VALUE",
-        field: "salesPoint",
-      })
-    );
-  });
+  it.each([undefined, 0, -1, 1.5, 100_000, Number.NaN, "1"])(
+    "rejects invalid sales point %s",
+    (salesPoint) => {
+      expect(() => derive({ ...base, salesPoint })).toThrowError(
+        expect.objectContaining({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "salesPoint",
+        })
+      );
+    }
+  );
 });

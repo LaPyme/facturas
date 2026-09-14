@@ -514,24 +514,23 @@ describe("createWsfeService", () => {
       code: "ARCA_INPUT_AMOUNT_PRECISION",
       field: "taxes[0].rate",
     },
-  ])("rejects invalid exact amount precision before authentication", ({
-    overrides,
-    code,
-    field,
-  }) => {
-    const options = createBaseOptions();
+  ])(
+    "rejects invalid exact amount precision before authentication",
+    ({ overrides, code, field }) => {
+      const options = createBaseOptions();
 
-    expect(() =>
-      createWsfeService(options).issue({
-        data: createBaseVoucherInput(overrides),
-        voucherNumber: 42,
-      })
-    ).toThrowError(
-      expect.objectContaining({ name: "ArcaInputError", code, field })
-    );
-    expect(options.auth.login).not.toHaveBeenCalled();
-    expect(options.soap.execute).not.toHaveBeenCalled();
-  });
+      expect(() =>
+        createWsfeService(options).issue({
+          data: createBaseVoucherInput(overrides),
+          voucherNumber: 42,
+        })
+      ).toThrowError(
+        expect.objectContaining({ name: "ArcaInputError", code, field })
+      );
+      expect(options.auth.login).not.toHaveBeenCalled();
+      expect(options.soap.execute).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     {
@@ -554,77 +553,79 @@ describe("createWsfeService", () => {
       },
       field: "taxAmount",
     },
-  ])("rejects exact amount mismatches at $field before authentication", ({
-    overrides,
-    field,
-  }) => {
-    const options = createBaseOptions();
+  ])(
+    "rejects exact amount mismatches at $field before authentication",
+    ({ overrides, field }) => {
+      const options = createBaseOptions();
 
-    expect(() =>
-      createWsfeService(options).issue({
-        data: createBaseVoucherInput(overrides),
-        voucherNumber: 42,
-      })
-    ).toThrowError(
-      expect.objectContaining({
-        name: "ArcaInputError",
-        code: "ARCA_INPUT_AMOUNT_MISMATCH",
-        field,
-      })
-    );
-    expect(options.auth.login).not.toHaveBeenCalled();
-    expect(options.soap.execute).not.toHaveBeenCalled();
-  });
+      expect(() =>
+        createWsfeService(options).issue({
+          data: createBaseVoucherInput(overrides),
+          voucherNumber: 42,
+        })
+      ).toThrowError(
+        expect.objectContaining({
+          name: "ArcaInputError",
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field,
+        })
+      );
+      expect(options.auth.login).not.toHaveBeenCalled();
+      expect(options.soap.execute).not.toHaveBeenCalled();
+    }
+  );
 
-  it.each([
-    2, 3, 7, 8, 52, 53, 202, 203, 207, 208, 211, 212, 213,
-  ])("allows voucher type %s to use ARCA's exempt VAT-base reconciliation", async (voucherType) => {
-    const options = createBaseOptions();
-    options.soap.execute.mockResolvedValueOnce(
-      createWsfeOperationResult("FECAESolicitar", {
-        FeDetResp: {
-          FECAEDetResponse: {
-            Resultado: "A",
-            CAE: "1",
-            CAEFchVto: "20260501",
+  it.each([2, 3, 7, 8, 52, 53, 202, 203, 207, 208, 211, 212, 213])(
+    "allows voucher type %s to use ARCA's exempt VAT-base reconciliation",
+    async (voucherType) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce(
+        createWsfeOperationResult("FECAESolicitar", {
+          FeDetResp: {
+            FECAEDetResponse: {
+              Resultado: "A",
+              CAE: "1",
+              CAEFchVto: "20260501",
+            },
           },
-        },
-      })
-    );
+        })
+      );
 
-    await expect(
-      createWsfeService(options).issue({
-        data: createBaseVoucherInput({
-          voucherType,
-          vatRates: [{ id: 5, baseAmount: 90, amount: 21 }],
-        }),
-        voucherNumber: 42,
-      })
-    ).resolves.toMatchObject({ cae: "1" });
-  });
+      await expect(
+        createWsfeService(options).issue({
+          data: createBaseVoucherInput({
+            voucherType,
+            vatRates: [{ id: 5, baseAmount: 90, amount: 21 }],
+          }),
+          voucherNumber: 42,
+        })
+      ).resolves.toMatchObject({ cae: "1" });
+    }
+  );
 
-  it.each([
-    1, 6, 51, 201, 206,
-  ])("still reconciles the VAT base for invoice type %s", (voucherType) => {
-    const options = createBaseOptions();
+  it.each([1, 6, 51, 201, 206])(
+    "still reconciles the VAT base for invoice type %s",
+    (voucherType) => {
+      const options = createBaseOptions();
 
-    expect(() =>
-      createWsfeService(options).issue({
-        data: createBaseVoucherInput({
-          voucherType,
-          vatRates: [{ id: 5, baseAmount: 90, amount: 21 }],
-        }),
-        voucherNumber: 42,
-      })
-    ).toThrowError(
-      expect.objectContaining({
-        code: "ARCA_INPUT_AMOUNT_MISMATCH",
-        field: "netAmount",
-      })
-    );
-    expect(options.auth.login).not.toHaveBeenCalled();
-    expect(options.soap.execute).not.toHaveBeenCalled();
-  });
+      expect(() =>
+        createWsfeService(options).issue({
+          data: createBaseVoucherInput({
+            voucherType,
+            vatRates: [{ id: 5, baseAmount: 90, amount: 21 }],
+          }),
+          voucherNumber: 42,
+        })
+      ).toThrowError(
+        expect.objectContaining({
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field: "netAmount",
+        })
+      );
+      expect(options.auth.login).not.toHaveBeenCalled();
+      expect(options.soap.execute).not.toHaveBeenCalled();
+    }
+  );
 
   it("still reconciles VAT totals for voucher types exempt from VAT-base reconciliation", () => {
     const options = createBaseOptions();
@@ -1388,50 +1389,47 @@ describe("createWsfeService", () => {
       rawEntry: { Id: "27", Desc: "Referencia comercial" },
       expected: [{ id: 27, description: "Referencia comercial" }],
     },
-  ])("retrieves %s", async ({
-    method,
-    operation,
-    resultKey,
-    rawEntry,
-    expected,
-  }) => {
-    const options = createBaseOptions();
-    options.soap.execute.mockResolvedValueOnce(
-      createWsfeOperationResult(operation, {
-        ResultGet: {
-          [resultKey]: rawEntry,
-        },
-      })
-    );
+  ])(
+    "retrieves %s",
+    async ({ method, operation, resultKey, rawEntry, expected }) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce(
+        createWsfeOperationResult(operation, {
+          ResultGet: {
+            [resultKey]: rawEntry,
+          },
+        })
+      );
 
-    const service = createWsfeService(options);
-    const execute = service[method as keyof typeof service] as (input: {
-      representedTaxId?: number | string;
-      forceRefresh?: boolean;
-    }) => Promise<unknown>;
+      const service = createWsfeService(options);
+      const execute = service[method as keyof typeof service] as (input: {
+        representedTaxId?: number | string;
+        forceRefresh?: boolean;
+      }) => Promise<unknown>;
 
-    await expect(
-      execute({
+      await expect(
+        execute({
+          representedTaxId: "20304050607",
+          forceRefresh: true,
+        })
+      ).resolves.toEqual(expected);
+      expect(options.auth.login).toHaveBeenCalledWith("wsfe", {
         representedTaxId: "20304050607",
         forceRefresh: true,
-      })
-    ).resolves.toEqual(expected);
-    expect(options.auth.login).toHaveBeenCalledWith("wsfe", {
-      representedTaxId: "20304050607",
-      forceRefresh: true,
-    });
-    expect(options.soap.execute).toHaveBeenCalledWith({
-      service: "wsfe",
-      operation,
-      body: {
-        Auth: {
-          Token: "token",
-          Sign: "sign",
-          Cuit: 20_304_050_607,
+      });
+      expect(options.soap.execute).toHaveBeenCalledWith({
+        service: "wsfe",
+        operation,
+        body: {
+          Auth: {
+            Token: "token",
+            Sign: "sign",
+            Cuit: 20_304_050_607,
+          },
         },
-      },
-    });
-  });
+      });
+    }
+  );
 
   it("retrieves currency types", async () => {
     const options = createBaseOptions();

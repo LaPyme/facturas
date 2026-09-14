@@ -97,30 +97,31 @@ describe("full credit note derivation", () => {
     }
     expect(data.vatRates).not.toBe(invoice.vatRates);
   });
-  it.each([
-    2, 3,
-  ])("preserves service dates and raises due date for concept %s", (concept) => {
-    const service = {
-      ...invoice,
-      concept,
-      serviceStartDate: "20260901",
-      serviceEndDate: "20260904",
-      paymentDueDate: "20260904",
-    };
-    const { data } = deriveWsfeFullCreditNote(service, full("20260905"));
-    expect(data).toMatchObject({
-      concept,
-      serviceStartDate: "20260901",
-      serviceEndDate: "20260904",
-      paymentDueDate: "20260905",
-    });
-    expect(
-      deriveWsfeFullCreditNote(
-        { ...service, paymentDueDate: "20260930" },
-        full("20260905")
-      ).data.paymentDueDate
-    ).toBe("20260930");
-  });
+  it.each([2, 3])(
+    "preserves service dates and raises due date for concept %s",
+    (concept) => {
+      const service = {
+        ...invoice,
+        concept,
+        serviceStartDate: "20260901",
+        serviceEndDate: "20260904",
+        paymentDueDate: "20260904",
+      };
+      const { data } = deriveWsfeFullCreditNote(service, full("20260905"));
+      expect(data).toMatchObject({
+        concept,
+        serviceStartDate: "20260901",
+        serviceEndDate: "20260904",
+        paymentDueDate: "20260905",
+      });
+      expect(
+        deriveWsfeFullCreditNote(
+          { ...service, paymentDueDate: "20260930" },
+          full("20260905")
+        ).data.paymentDueDate
+      ).toBe("20260930");
+    }
+  );
   it.each([
     ["taxes", "Tributos"],
     ["optionalFields", "Opcionales"],
@@ -228,39 +229,42 @@ describe("partial credit note derivation", () => {
   it.each([
     ["A", classA, 3],
     ["B", invoice, 8],
-  ] as const)("credits VAT items against a class %s original", (voucherClass, source, voucherType) => {
-    const items: VatItem[] = [
-      { gross: 6050, vat: 21 },
-      { net: 1000, vat: 10.5 },
-      { gross: 500, vat: "exempt" },
-    ];
-    const result = deriveWsfePartialCreditNote([source], partial(items));
-    expect(result.voucherClass).toBe(voucherClass);
-    expect(result.data.voucherType).toBe(voucherType);
-    expect(result.amounts).toEqual({
-      computedTotal: 7655,
-      sentTotal: 7655,
-      vatAdjustment: 0,
-    });
-    // The amount pipeline is the invoice's: same items, same numbers.
-    expect(result.data.vatRates).toEqual(
-      deriveWsfeInvoice({
-        issuer: "responsable_inscripto",
-        salesPoint: 1,
-        date: "20260905",
-        to: { condition: "consumidor_final" },
-        items,
-      }).data.vatRates
-    );
-    expect(result.data).toMatchObject({
-      totalAmount: 76.55,
-      exemptAmount: 5,
-      documentType: source.documentType,
-      documentNumber: Number(source.documentNumber),
-      receiverVatConditionId: source.receiverVatConditionId,
-    });
-    normalizeWsfeVoucherInput(result.data);
-  });
+  ] as const)(
+    "credits VAT items against a class %s original",
+    (voucherClass, source, voucherType) => {
+      const items: VatItem[] = [
+        { gross: 6050, vat: 21 },
+        { net: 1000, vat: 10.5 },
+        { gross: 500, vat: "exempt" },
+      ];
+      const result = deriveWsfePartialCreditNote([source], partial(items));
+      expect(result.voucherClass).toBe(voucherClass);
+      expect(result.data.voucherType).toBe(voucherType);
+      expect(result.amounts).toEqual({
+        computedTotal: 7655,
+        sentTotal: 7655,
+        vatAdjustment: 0,
+      });
+      // The amount pipeline is the invoice's: same items, same numbers.
+      expect(result.data.vatRates).toEqual(
+        deriveWsfeInvoice({
+          issuer: "responsable_inscripto",
+          salesPoint: 1,
+          date: "20260905",
+          to: { condition: "consumidor_final" },
+          items,
+        }).data.vatRates
+      );
+      expect(result.data).toMatchObject({
+        totalAmount: 76.55,
+        exemptAmount: 5,
+        documentType: source.documentType,
+        documentNumber: Number(source.documentNumber),
+        receiverVatConditionId: source.receiverVatConditionId,
+      });
+      normalizeWsfeVoucherInput(result.data);
+    }
+  );
   it("derives amounts exactly as issue() does, including the total tolerance", () => {
     const items: VatItem[] = [
       { net: 3333, vat: 21 },
@@ -322,25 +326,25 @@ describe("partial credit note derivation", () => {
     });
     normalizeWsfeVoucherInput(result.data);
   });
-  it.each([
-    100.5,
-    Number.NaN,
-  ])("rejects the reviewed total %s before reading the original", (total) => {
-    expect(() =>
-      deriveWsfePartialCreditNote([invoice], {
-        for: target,
-        date: "20260905",
-        amounts: { net: 10_000, vat: 2100 },
-        total,
-      })
-    ).toThrowError(
-      expect.objectContaining({
-        name: "ArcaInputError",
-        code: "ARCA_INPUT_INVALID_AMOUNT",
-        field: "total",
-      })
-    );
-  });
+  it.each([100.5, Number.NaN])(
+    "rejects the reviewed total %s before reading the original",
+    (total) => {
+      expect(() =>
+        deriveWsfePartialCreditNote([invoice], {
+          for: target,
+          date: "20260905",
+          amounts: { net: 10_000, vat: 2100 },
+          total,
+        })
+      ).toThrowError(
+        expect.objectContaining({
+          name: "ArcaInputError",
+          code: "ARCA_INPUT_INVALID_AMOUNT",
+          field: "total",
+        })
+      );
+    }
+  );
   it("rejects an item shape that does not match the original's class", () => {
     expect(() =>
       deriveWsfePartialCreditNote([classC], partial([{ gross: 100, vat: 21 }]))

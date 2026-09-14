@@ -7,7 +7,7 @@
 SDK de Node.js para facturación electrónica con ARCA / AFIP. Emití facturas,
 notas de crédito y notas de débito, y consultá el Padrón con una sola API.
 
-- **Solo ESM**, Node.js **>= 20**
+- **Solo ESM**, Node.js **>= 22**
 - **CLI incluido**: `npx facturas init` genera la clave y el CSR, y
   `npx facturas check` nombra la capa de ARCA que falla
 - **Integración directa con ARCA**, sin proxy ni dependencia alojada

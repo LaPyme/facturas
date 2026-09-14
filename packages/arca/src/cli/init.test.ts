@@ -173,25 +173,25 @@ describe("runInit", () => {
     `);
   });
 
-  it.each([
-    "test",
-    "production",
-  ] as const)("keeps every %s line under 80 columns and names one environment only", async (environment) => {
-    const { io, stdout, directory } = createTestIo();
+  it.each(["test", "production"] as const)(
+    "keeps every %s line under 80 columns and names one environment only",
+    async (environment) => {
+      const { io, stdout, directory } = createTestIo();
 
-    await runInit(
-      io,
-      { cuit: "20123456786", env: environment, dir: directory },
-      createWriter(io.stdout, { color: false })
-    );
+      await runInit(
+        io,
+        { cuit: "20123456786", env: environment, dir: directory },
+        createWriter(io.stdout, { color: false })
+      );
 
-    const output = stdout();
-    for (const line of output.split("\n")) {
-      expect(line.length, line).toBeLessThanOrEqual(80);
+      const output = stdout();
+      for (const line of output.split("\n")) {
+        expect(line.length, line).toBeLessThanOrEqual(80);
+      }
+      expect(output).not.toContain("Homologación:");
+      expect(output).not.toContain("Producción:");
     }
-    expect(output).not.toContain("Homologación:");
-    expect(output).not.toContain("Producción:");
-  });
+  );
 
   it("refuses to overwrite an existing file", async () => {
     const { io, directory, stderr } = createTestIo();
