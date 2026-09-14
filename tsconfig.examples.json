@@ -1,7 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "facturas": ["./packages/arca/src/index.ts"],
       "facturas/constants": ["./packages/arca/src/constants.ts"],

@@ -67,9 +67,12 @@ describe("ARCA decimal helpers", () => {
     [10.5, 10_000n, 1050n],
     [21, 10_000n, 2100n],
     [27, 10_000n, 2700n],
-  ] as const)("calculates %s%% VAT with integer basis points", (rate, net, vat) => {
-    expect(calculateVatMinorUnits(net, rate, "vatRate")).toBe(vat);
-  });
+  ] as const)(
+    "calculates %s%% VAT with integer basis points",
+    (rate, net, vat) => {
+      expect(calculateVatMinorUnits(net, rate, "vatRate")).toBe(vat);
+    }
+  );
 
   it("rounds exact half-cent VAT boundaries to the even cent", () => {
     expect(calculateVatMinorUnits(10n, 5, "vatRate")).toBe(0n);
@@ -89,9 +92,12 @@ describe("ARCA decimal helpers", () => {
     [7n, 4n, 2n],
     [9n, 4n, 2n],
     [11n, 4n, 3n],
-  ] as const)("roundHalfEvenRatio(%s, %s) = %s", (numerator, denominator, expected) => {
-    expect(roundHalfEvenRatio(numerator, denominator)).toBe(expected);
-  });
+  ] as const)(
+    "roundHalfEvenRatio(%s, %s) = %s",
+    (numerator, denominator, expected) => {
+      expect(roundHalfEvenRatio(numerator, denominator)).toBe(expected);
+    }
+  );
 
   it("rejects an invalid ratio", () => {
     expect(() => roundHalfEvenRatio(-1n, 4n)).toThrowError(RangeError);

@@ -168,27 +168,24 @@ describe("runIssue", () => {
 
   // The prompt reads the answer the way `--sales-point` reads its value: a
   // number the answer only starts with is a typo, never a sales point.
-  it.each([
-    "tres",
-    "3foo",
-    "3.5",
-    "1e2",
-    "0",
-  ])("exits 2 when the answered sales point is %j", async (answer) => {
-    const context = createContext({ tty: true });
+  it.each(["tres", "3foo", "3.5", "1e2", "0"])(
+    "exits 2 when the answered sales point is %j",
+    async (answer) => {
+      const context = createContext({ tty: true });
 
-    const running = runIssue(
-      context.io,
-      {},
-      createWriter(context.io.stdout, { color: false }),
-      false
-    );
-    context.stdin.write(`${answer}\n`);
+      const running = runIssue(
+        context.io,
+        {},
+        createWriter(context.io.stdout, { color: false }),
+        false
+      );
+      context.stdin.write(`${answer}\n`);
 
-    expect(await running).toBe(2);
-    expect(context.stderr()).toContain("Falta el punto de venta.");
-    expect(context.issue).not.toHaveBeenCalled();
-  });
+      expect(await running).toBe(2);
+      expect(context.stderr()).toContain("Falta el punto de venta.");
+      expect(context.issue).not.toHaveBeenCalled();
+    }
+  );
 
   // The layers pass, then WSFE falls over on the next number or the
   // authorization. Before this was caught the rejection escaped runIssue and

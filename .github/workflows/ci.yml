@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [20, 22, 24]
+        node-version: [22, 24]
 
     steps:
       - uses: actions/checkout@v4
@@ -46,7 +46,6 @@ jobs:
         run: pnpm test:coverage
 
       - name: Check package exports
-        if: matrix.node-version == 20 || matrix.node-version == 24
         run: pnpm --filter facturas check:exports
 
       - name: Pack check

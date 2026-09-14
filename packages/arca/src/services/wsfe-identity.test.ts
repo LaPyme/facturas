@@ -105,41 +105,45 @@ describe("WSFE identity matcher", () => {
     Number.NEGATIVE_INFINITY,
     100_000_000,
     Number.MAX_SAFE_INTEGER + 1,
-  ])("treats invalid voucher number %s as incomplete evidence", (voucherNumber) => {
-    expect(
-      matchWsfeVoucherIdentity(sent, 77, { ...voucher(), voucherNumber })
-    ).toEqual({
-      matches: false,
-      evidence: "incomplete",
-      reason: "Cannot verify number",
-    });
-  });
-
-  it.each([
-    1, 99_999_999,
-  ])("matches valid voucher number boundary %s", (number) => {
-    expect(
-      matchWsfeVoucherIdentity(sent, number, {
-        ...voucher(),
-        voucherNumber: number,
-      })
-    ).toEqual({ matches: true });
-  });
-
-  it.each([
-    "baseAmount",
-    "amount",
-  ] as const)("detects a one-cent VAT %s mismatch", (field) => {
-    const found = voucher();
-    const rate = found.vatRates?.[0];
-    if (rate) {
-      rate[field] += 0.01;
+  ])(
+    "treats invalid voucher number %s as incomplete evidence",
+    (voucherNumber) => {
+      expect(
+        matchWsfeVoucherIdentity(sent, 77, { ...voucher(), voucherNumber })
+      ).toEqual({
+        matches: false,
+        evidence: "incomplete",
+        reason: "Cannot verify number",
+      });
     }
-    expect(matchWsfeVoucherIdentity(sent, 77, found)).toMatchObject({
-      evidence: "conflict",
-      reason: expect.stringContaining(field),
-    });
-  });
+  );
+
+  it.each([1, 99_999_999])(
+    "matches valid voucher number boundary %s",
+    (number) => {
+      expect(
+        matchWsfeVoucherIdentity(sent, number, {
+          ...voucher(),
+          voucherNumber: number,
+        })
+      ).toEqual({ matches: true });
+    }
+  );
+
+  it.each(["baseAmount", "amount"] as const)(
+    "detects a one-cent VAT %s mismatch",
+    (field) => {
+      const found = voucher();
+      const rate = found.vatRates?.[0];
+      if (rate) {
+        rate[field] += 0.01;
+      }
+      expect(matchWsfeVoucherIdentity(sent, 77, found)).toMatchObject({
+        evidence: "conflict",
+        reason: expect.stringContaining(field),
+      });
+    }
+  );
 
   it("requires complete rate details and rejects missing, extra and duplicate ids", () => {
     expect(
