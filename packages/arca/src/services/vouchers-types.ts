@@ -15,14 +15,14 @@ export type IssueOptions = {
   idempotencyKey?: string;
   representedTaxId?: number | string;
   forceRefresh?: boolean;
-  include?: { raw?: boolean; sent?: boolean };
+  include?: { request?: boolean; rawResponse?: boolean };
   /**
    * The caller's deadline. It aborts the WSAA login, the submission and every
    * consultation of this call. An abort after the write was sent answers
    * `indeterminate` with `lookup.kind === "aborted"`: the reservation stays and
    * `recover()` settles it.
    */
-  signal?: AbortSignal;
+  abortSignal?: AbortSignal;
 };
 
 export type IssuedVoucher = VoucherCoordinates & {
@@ -58,44 +58,44 @@ export type IssuePreview<S extends IssuanceService = "wsfe"> = {
   service?: S;
 };
 
-type WithRaw<T, O extends IssueOptions> = T &
-  (true extends NonNullable<O["include"]>["raw"]
-    ? { raw?: Record<string, unknown> }
+type WithRawResponse<T, O extends IssueOptions> = T &
+  (true extends NonNullable<O["include"]>["rawResponse"]
+    ? { rawResponse?: Record<string, unknown> }
     : unknown);
-type WithSent<O extends IssueOptions> = O extends {
-  include: { sent: true };
+type WithRequest<O extends IssueOptions> = O extends {
+  include: { request: true };
 }
   ? {
-      sent: IssueRequest<ServiceFor<O>>;
+      request: IssueRequest<ServiceFor<O>>;
     }
-  : true extends NonNullable<O["include"]>["sent"]
+  : true extends NonNullable<O["include"]>["request"]
     ? {
-        sent?: IssueRequest<ServiceFor<O>>;
+        request?: IssueRequest<ServiceFor<O>>;
       }
     : unknown;
 type Evidence<
   K extends ArcaAuthorizationOutcome["kind"],
   O extends IssueOptions,
-> = WithRaw<
+> = WithRawResponse<
   Omit<Extract<ArcaAuthorizationOutcome<ServiceFor<O>>, { kind: K }>, "raw">,
   O
 >;
 
 /** Fiscal outcomes are returned. Keyed replays authorize only after not_found. */
-export type IssueOutcome<O extends IssueOptions = { include?: never }> =
-  | ({
+export type IssueOutcome<O extends IssueOptions = { include?: never }> = (
+  | {
       kind: "authorized";
       recoveredByMatch: false;
       voucher: IssuedVoucher;
       authorization: Evidence<"authorized", O>;
-    } & WithSent<O>)
-  | ({
+    }
+  | {
       kind: "authorized";
       recoveredByMatch: true;
       voucher: IssuedVoucher;
       attempt: Evidence<"indeterminate", O>;
-      lookup: WithRaw<VoucherSummary, O>;
-    } & WithSent<O>)
+      lookup: WithRawResponse<VoucherSummary, O>;
+    }
   | {
       kind: "rejected";
       attempted: VoucherCoordinates;
@@ -107,8 +107,8 @@ export type IssueOutcome<O extends IssueOptions = { include?: never }> =
       attempted: VoucherCoordinates;
       attempt: Evidence<"indeterminate", O>;
       lookup:
-        | WithRaw<{ kind: "not_found" }, O>
-        | WithRaw<{ kind: "incomplete"; reason: string }, O>
+        | WithRawResponse<{ kind: "not_found" }, O>
+        | WithRawResponse<{ kind: "incomplete"; reason: string }, O>
         | { kind: "failed"; error: ArcaSafeErrorMetadata }
         /** The caller's deadline fired; the reservation stays for recover(). */
         | { kind: "aborted" }
@@ -121,6 +121,8 @@ export type IssueOutcome<O extends IssueOptions = { include?: never }> =
       kind: "conflict";
       attempted: VoucherCoordinates;
       attempt: Evidence<"indeterminate", O>;
-      found: WithRaw<VoucherSummary, O>;
+      found: WithRawResponse<VoucherSummary, O>;
       reason: string;
-    };
+    }
+) &
+  WithRequest<O>;

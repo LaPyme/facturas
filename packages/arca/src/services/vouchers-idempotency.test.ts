@@ -308,10 +308,10 @@ describe("keyed issue", () => {
     });
     const value = await production.issue(input, {
       idempotencyKey: "sale",
-      include: { raw: true, sent: true },
+      include: { rawResponse: true, request: true },
     });
-    expect(value).toHaveProperty("sent");
-    expect(value).toHaveProperty("authorization.raw");
+    expect(value).toHaveProperty("request");
+    expect(value).toHaveProperty("authorization.rawResponse");
     expect(
       await store.get(attemptKey("production", "20123456789", "sale"))
     ).not.toBeNull();

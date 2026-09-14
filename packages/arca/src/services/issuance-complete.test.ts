@@ -127,7 +127,7 @@ describe("complete WSFE issuance", () => {
     const preview = client.preview(input);
     const result = await client.issue(input, {
       number: 42,
-      include: { sent: true },
+      include: { request: true },
     });
     expect(preview).toMatchObject({
       voucherType: type,
@@ -135,7 +135,7 @@ describe("complete WSFE issuance", () => {
     });
     expect(result).toMatchObject({
       kind: "authorized",
-      sent: preview.request,
+      request: preview.request,
       voucher: { number: 42, voucherType: type },
     });
     expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
@@ -154,11 +154,11 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_399,
       },
-      { include: { sent: true } }
+      { include: { request: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
-      sent: {
+      request: {
         netAmount: 100,
         vatAmount: 20.99,
         taxAmount: 3,
@@ -233,11 +233,11 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: false } } : {}),
       },
-      { include: { sent: true } }
+      { include: { request: true } }
     );
     expect(issued).toMatchObject({
       kind: "authorized",
-      sent: { voucherType: debit, totalAmount: 60.5 },
+      request: { voucherType: debit, totalAmount: 60.5 },
     });
     const credited = await client.issueCreditNote(
       {
@@ -246,17 +246,19 @@ describe("complete WSFE issuance", () => {
         date: "20260906",
         ...(type >= 200 ? { fce: { annulment: true } } : {}),
       },
-      { include: { sent: true } }
+      { include: { request: true } }
     );
     expect(credited).toMatchObject({
       kind: "authorized",
-      sent: {
+      request: {
         voucherType: credit,
         associatedVouchers: [{ type: debit, number: 2 }],
       },
     });
     if (type >= 200 && credited.kind === "authorized") {
-      expect(credited.sent.associatedVouchers?.[0]?.taxId).toBe("20123456789");
+      expect(credited.request.associatedVouchers?.[0]?.taxId).toBe(
+        "20123456789"
+      );
     }
   });
   it("mirrors tributes on full notes and uses explicit tributes for partial notes", async () => {
@@ -309,10 +311,10 @@ describe("complete WSFE issuance", () => {
       "original"
     );
     expect(
-      await client.issueCreditNote(period, { include: { sent: true } })
+      await client.issueCreditNote(period, { include: { request: true } })
     ).toMatchObject({
       kind: "authorized",
-      sent: {
+      request: {
         voucherType: 3,
         associatedPeriod: { startDate: "20260801", endDate: "20260831" },
       },
@@ -370,11 +372,11 @@ describe("complete WSFE issuance", () => {
         },
         total: 12_101,
       },
-      { include: { sent: true } }
+      { include: { request: true } }
     );
     expect(result).toMatchObject({
       kind: "authorized",
-      sent: { totalAmount: 121.01, vatAmount: 21 },
+      request: { totalAmount: 121.01, vatAmount: 21 },
       voucher: {
         amounts: { sentTotal: 12_101, computedTotal: 12_100, vatAdjustment: 0 },
       },
@@ -652,7 +654,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     const options = {
       service: "wsmtxca" as const,
       idempotencyKey: "invoice",
-      include: { sent: true },
+      include: { request: true },
     };
     const input = { ...detailed, taxes: [tax] };
     const preview = client.preview(input, { service: "wsmtxca" });
@@ -706,12 +708,12 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     firstLine.importeItem = 120.99;
     vouchers.set(1, found);
     expect(
-      await client.recover("legacy", { include: { sent: true } })
+      await client.recover("legacy", { include: { request: true } })
     ).toMatchObject({
       kind: "authorized",
       recoveredByMatch: true,
       voucher: { number: 9 },
-      sent: {
+      request: {
         comprobanteCAERequest: {
           numeroComprobante: 9,
           importeTotal: 121,

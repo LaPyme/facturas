@@ -134,20 +134,20 @@ describe("credit note orchestration", () => {
     const { service, calls } = fake();
     const result = await service.issueCreditNote(note, {
       ...(keyed ? { idempotencyKey: options.idempotencyKey } : {}),
-      include: { sent: true },
+      include: { request: true },
     });
     expect(calls).toEqual(["lookup", "next", "authorize"]);
     expect(result).toMatchObject({
       kind: "authorized",
       voucher: { voucherType: 13, voucherClass: "C", number: 9 },
-      sent: { associatedVouchers: [{ type: 11, number: 1 }] },
+      request: { associatedVouchers: [{ type: 11, number: 1 }] },
     });
   });
   it("credits chosen items with the same single-write sequence", async () => {
     const { service, calls, wsfe } = fake();
     const result = await service.issueCreditNote(partial, {
       ...options,
-      include: { sent: true },
+      include: { request: true },
     });
     expect(calls).toEqual(["lookup", "next", "authorize"]);
     expect(result).toMatchObject({
@@ -158,7 +158,7 @@ describe("credit note orchestration", () => {
         number: 9,
         amounts: { computedTotal: 40, sentTotal: 40, vatAdjustment: 0 },
       },
-      sent: {
+      request: {
         totalAmount: 0.4,
         netAmount: 0.4,
         associatedVouchers: [{ type: 11, salesPoint: 1, number: 1 }],
@@ -493,12 +493,12 @@ describe("notes against several originals", () => {
     expect(
       await service.issueCreditNote(several, {
         ...options,
-        include: { sent: true },
+        include: { request: true },
       })
     ).toMatchObject({
       kind: "authorized",
       voucher: { voucherType: 13, voucherClass: "C", number: 9 },
-      sent: {
+      request: {
         totalAmount: 1.5,
         associatedVouchers: [
           { type: 11, number: 1 },
