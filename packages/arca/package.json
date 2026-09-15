@@ -1,6 +1,6 @@
 {
   "name": "facturas",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "description": "Node.js client for ARCA services including WSFE, WSMTXCA, and padron lookups.",
   "type": "module",
   "license": "Apache-2.0",
