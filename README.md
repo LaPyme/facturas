@@ -1,8 +1,12 @@
-# facturas
+<div align="center">
+  <h1>facturas</h1>
 
-[![npm version](https://img.shields.io/npm/v/facturas.svg)](https://www.npmjs.com/package/facturas)
-[![CI](https://github.com/LaPyme/facturas/actions/workflows/ci.yml/badge.svg)](https://github.com/LaPyme/facturas/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/LaPyme/facturas/blob/main/LICENSE)
+<a href="https://lapyme.com.ar"><img alt="Creado por LaPyme" src="https://img.shields.io/badge/Creado%20por%20LaPyme-000000.svg?style=for-the-badge&labelColor=000000"></a>
+<a href="https://www.npmjs.com/package/facturas"><img alt="Versión en npm" src="https://img.shields.io/npm/v/facturas.svg?style=for-the-badge&labelColor=000000"></a>
+<a href="https://github.com/LaPyme/facturas/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/LaPyme/facturas/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=000000"></a>
+<a href="https://github.com/LaPyme/facturas/blob/main/LICENSE"><img alt="Licencia" src="https://img.shields.io/npm/l/facturas.svg?style=for-the-badge&labelColor=000000"></a>
+
+</div>
 
 SDK de Node.js para facturación electrónica con ARCA / AFIP. Emití facturas,
 notas de crédito y notas de débito, y consultá el Padrón con una sola API.
@@ -133,13 +137,24 @@ una reserva sin emitir.
   seguridad.
 - [Ejemplos](./docs/reference/examples.mdx): índice de [examples/](./examples).
 
+## Contribuir
+
+Las contribuciones son bienvenidas. [CONTRIBUTING.md](./CONTRIBUTING.md)
+explica cómo levantar el repositorio y proponer un cambio. Usá los
+[issues](https://github.com/LaPyme/facturas/issues) para reportar errores y
+conversar propuestas.
+
+## Seguridad
+
+No abras issues públicos para reportar vulnerabilidades. Seguí
+[SECURITY.md](./SECURITY.md) y escribinos a
+[tomas@lapyme.com.ar](mailto:tomas@lapyme.com.ar).
+
 ## Estado del proyecto
 
 Pre-1.0. Mientras la versión empiece en `0.`, un minor puede cambiar o quitar
 partes de la API pública. Fijá la versión exacta y leé el
 [changelog](./packages/arca/CHANGELOG.md) antes de actualizar.
-
-Para contribuir, mirá [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Licencia
 
