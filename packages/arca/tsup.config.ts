@@ -11,12 +11,13 @@ export default defineConfig({
     wsfe: "src/wsfe.ts",
     wsmtxca: "src/wsmtxca.ts",
   },
-  target: "node20",
+  target: "node22",
   format: ["esm"],
   outExtension() {
     return { js: ".mjs" };
   },
-  dts: true,
+  // tsup injects `baseUrl` into the declaration build, which TypeScript 6 deprecates.
+  dts: { compilerOptions: { ignoreDeprecations: "6.0" } },
   sourcemap: true,
   clean: true,
   splitting: true,

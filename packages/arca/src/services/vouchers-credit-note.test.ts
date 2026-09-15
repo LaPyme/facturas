@@ -127,22 +127,22 @@ function fake({ coordinated = true } = {}) {
 }
 
 describe("credit note orchestration", () => {
-  it.each([
-    false,
-    true,
-  ])("looks up original before numbering; keyed=%s", async (keyed) => {
-    const { service, calls } = fake();
-    const result = await service.issueCreditNote(note, {
-      ...(keyed ? { idempotencyKey: options.idempotencyKey } : {}),
-      include: { request: true },
-    });
-    expect(calls).toEqual(["lookup", "next", "authorize"]);
-    expect(result).toMatchObject({
-      kind: "authorized",
-      voucher: { voucherType: 13, voucherClass: "C", number: 9 },
-      request: { associatedVouchers: [{ type: 11, number: 1 }] },
-    });
-  });
+  it.each([false, true])(
+    "looks up original before numbering; keyed=%s",
+    async (keyed) => {
+      const { service, calls } = fake();
+      const result = await service.issueCreditNote(note, {
+        ...(keyed ? { idempotencyKey: options.idempotencyKey } : {}),
+        include: { request: true },
+      });
+      expect(calls).toEqual(["lookup", "next", "authorize"]);
+      expect(result).toMatchObject({
+        kind: "authorized",
+        voucher: { voucherType: 13, voucherClass: "C", number: 9 },
+        request: { associatedVouchers: [{ type: 11, number: 1 }] },
+      });
+    }
+  );
   it("credits chosen items with the same single-write sequence", async () => {
     const { service, calls, wsfe } = fake();
     const result = await service.issueCreditNote(partial, {
@@ -190,43 +190,49 @@ describe("credit note orchestration", () => {
   it.each([
     ["a fractional", 100.5],
     ["a non-finite", Number.NaN],
-  ] as const)("rejects %s reviewed total without authorizing", async (_case, total) => {
-    const reviewed = {
-      for: target,
-      date: "20260905",
-      amounts: { net: 40, vat: 0 },
-      total,
-    } as CreditNoteInput;
-    for (const preview of [true, false]) {
-      const { service, wsfe } = fake();
-      await expect(
-        preview
-          ? service.previewCreditNote(reviewed)
-          : service.issueCreditNote(reviewed)
-      ).rejects.toMatchObject({
-        name: "ArcaInputError",
-        code: "ARCA_INPUT_INVALID_AMOUNT",
-        field: "total",
-      });
-      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
-      expect(wsfe.issue).not.toHaveBeenCalled();
+  ] as const)(
+    "rejects %s reviewed total without authorizing",
+    async (_case, total) => {
+      const reviewed = {
+        for: target,
+        date: "20260905",
+        amounts: { net: 40, vat: 0 },
+        total,
+      } as CreditNoteInput;
+      for (const preview of [true, false]) {
+        const { service, wsfe } = fake();
+        await expect(
+          preview
+            ? service.previewCreditNote(reviewed)
+            : service.issueCreditNote(reviewed)
+        ).rejects.toMatchObject({
+          name: "ArcaInputError",
+          code: "ARCA_INPUT_INVALID_AMOUNT",
+          field: "total",
+        });
+        expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+        expect(wsfe.issue).not.toHaveBeenCalled();
+      }
     }
-  });
+  );
   it.each([
     ["all", note],
     ["items", partial],
-  ] as const)("records operation creditNote for the %s mode", async (_mode, input) => {
-    const { service, store } = fake();
-    await service.issueCreditNote(input, options);
-    const record = JSON.parse((await store.get(key)) ?? "null");
-    expect(record).toMatchObject({
-      v: 1,
-      operation: "creditNote",
-      number: 9,
-      salesPoint: 1,
-      voucherType: 13,
-    });
-  });
+  ] as const)(
+    "records operation creditNote for the %s mode",
+    async (_mode, input) => {
+      const { service, store } = fake();
+      await service.issueCreditNote(input, options);
+      const record = JSON.parse((await store.get(key)) ?? "null");
+      expect(record).toMatchObject({
+        v: 1,
+        operation: "creditNote",
+        number: 9,
+        salesPoint: 1,
+        voucherType: 13,
+      });
+    }
+  );
   it("replays with only one lookup of the reserved note", async () => {
     const { service, wsfe, calls } = fake();
     await service.issueCreditNote(note, options);
@@ -371,45 +377,43 @@ describe("credit note orchestration", () => {
     });
     expect(wsfe.issue).not.toHaveBeenCalled();
   });
-  it.each([
-    "incomplete",
-    "conflict",
-    "failed",
-    "not_found",
-  ])("replay %s preserves the I/O bound", async (mode) => {
-    const { service, wsfe } = fake();
-    await service.issueCreditNote(note, options);
-    const sent = wsfe.issue.mock.calls[0][0].data;
-    const lookup = found(sent, 9);
-    if (lookup.kind !== "found") {
-      throw new Error("fixture");
-    }
-    if (mode === "incomplete") {
-      lookup.voucher.associatedVouchers = undefined;
-    }
-    if (mode === "conflict") {
-      lookup.voucher.associatedVouchers = [
-        { type: 11, salesPoint: 1, number: 2 },
-      ];
-    }
-    if (mode === "failed") {
-      wsfe.lookupVoucher.mockRejectedValue(new Error("offline"));
-    } else {
-      wsfe.lookupVoucher.mockResolvedValue(
-        mode === "not_found" ? absent : lookup
+  it.each(["incomplete", "conflict", "failed", "not_found"])(
+    "replay %s preserves the I/O bound",
+    async (mode) => {
+      const { service, wsfe } = fake();
+      await service.issueCreditNote(note, options);
+      const sent = wsfe.issue.mock.calls[0][0].data;
+      const lookup = found(sent, 9);
+      if (lookup.kind !== "found") {
+        throw new Error("fixture");
+      }
+      if (mode === "incomplete") {
+        lookup.voucher.associatedVouchers = undefined;
+      }
+      if (mode === "conflict") {
+        lookup.voucher.associatedVouchers = [
+          { type: 11, salesPoint: 1, number: 2 },
+        ];
+      }
+      if (mode === "failed") {
+        wsfe.lookupVoucher.mockRejectedValue(new Error("offline"));
+      } else {
+        wsfe.lookupVoucher.mockResolvedValue(
+          mode === "not_found" ? absent : lookup
+        );
+      }
+      const result = await service.issueCreditNote(note, options);
+      expect(result.kind).toBe(
+        mode === "not_found"
+          ? "authorized"
+          : mode === "conflict"
+            ? "conflict"
+            : "indeterminate"
       );
+      expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
+      expect(wsfe.issue).toHaveBeenCalledTimes(mode === "not_found" ? 2 : 1);
     }
-    const result = await service.issueCreditNote(note, options);
-    expect(result.kind).toBe(
-      mode === "not_found"
-        ? "authorized"
-        : mode === "conflict"
-          ? "conflict"
-          : "indeterminate"
-    );
-    expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
-    expect(wsfe.issue).toHaveBeenCalledTimes(mode === "not_found" ? 2 : 1);
-  });
+  );
   it("recovers indeterminate writes by matching associations", async () => {
     const { service, wsfe } = fake();
     wsfe.issue.mockImplementation(({ data: sent }) => {
@@ -561,24 +565,24 @@ describe("notes against several originals", () => {
     ) as ArcaAttemptRecord;
     expect(record.sent.associatedVouchers).toHaveLength(2);
   });
-  it.each([
-    "issueCreditNote",
-    "issueDebitNote",
-  ] as const)("%s rejects duplicate originals before lookup", async (method) => {
-    const { service, wsfe } = fake();
-    await expect(
-      service[method](
-        { for: [target, target], items: [{ amount: 150 }] },
-        options
-      )
-    ).rejects.toMatchObject({
-      name: "ArcaInputError",
-      field: "input.for[1]",
-    });
-    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
-    expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
-    expect(wsfe.issue).not.toHaveBeenCalled();
-  });
+  it.each(["issueCreditNote", "issueDebitNote"] as const)(
+    "%s rejects duplicate originals before lookup",
+    async (method) => {
+      const { service, wsfe } = fake();
+      await expect(
+        service[method](
+          { for: [target, target], items: [{ amount: 150 }] },
+          options
+        )
+      ).rejects.toMatchObject({
+        name: "ArcaInputError",
+        field: "input.for[1]",
+      });
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+      expect(wsfe.issue).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe("FCE association rules", () => {
@@ -600,100 +604,105 @@ describe("FCE association rules", () => {
     { optionalFields: [{ id: "22", value: "S" }] },
   ];
 
-  it.each(
-    associationCases
-  )("rejects multiple FCE originals for %s with %j before lookup", async (provider, fields) => {
-    const { wsfe, store } = fake();
-    const service = createVouchersService(
-      wsfe,
-      { store, environment: "test", taxId: "20123456789" },
-      {} as WsmtxcaService
-    );
-    await expect(
-      service.previewCreditNote(
-        { for: originals, items, ...fields },
-        { service: provider }
-      )
-    ).rejects.toMatchObject({
-      name: "ArcaInputError",
-      field: "input.for",
-    });
-    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
-  });
+  it.each(associationCases)(
+    "rejects multiple FCE originals for %s with %j before lookup",
+    async (provider, fields) => {
+      const { wsfe, store } = fake();
+      const service = createVouchersService(
+        wsfe,
+        { store, environment: "test", taxId: "20123456789" },
+        {} as WsmtxcaService
+      );
+      await expect(
+        service.previewCreditNote(
+          { for: originals, items, ...fields },
+          { service: provider }
+        )
+      ).rejects.toMatchObject({
+        name: "ArcaInputError",
+        field: "input.for",
+      });
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+    }
+  );
 
   it.each([
     { fce: { annulment: false } },
     { optionalFields: [{ id: "22", value: "N" }] },
-  ] as Pick<
-    CreditNoteInput,
-    "fce" | "optionalFields"
-  >[])("requires an invoice for a non-annulment FCE note: %j", async (fields) => {
-    const { service, wsfe } = fake();
-    await expect(
-      service.previewCreditNote({
-        for: { salesPoint: 1, voucherType: 202, number: 1 },
-        items,
-        ...fields,
-      })
-    ).rejects.toMatchObject({
-      name: "ArcaInputError",
-      field: "input.for.voucherType",
-    });
-    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
-  });
+  ] as Pick<CreditNoteInput, "fce" | "optionalFields">[])(
+    "requires an invoice for a non-annulment FCE note: %j",
+    async (fields) => {
+      const { service, wsfe } = fake();
+      await expect(
+        service.previewCreditNote({
+          for: { salesPoint: 1, voucherType: 202, number: 1 },
+          items,
+          ...fields,
+        })
+      ).rejects.toMatchObject({
+        name: "ArcaInputError",
+        field: "input.for.voucherType",
+      });
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+    }
+  );
 
-  it.each(
-    annulmentCases
-  )("keeps several WSFE FCE originals available for annulment notes: %j", async (fields) => {
-    const fce = deriveWsfeInvoice({
-      issuer: "responsable_inscripto",
-      family: "fce",
-      salesPoint: 1,
-      date: "20260904",
-      dueDate: "20260930",
-      to: { condition: "responsable_inscripto", cuit: "20123456789" },
-      items: [{ net: 10_000, vat: 21 }],
-      fce: { cbu: "1234567890123456789012" },
-    }).data;
-    const { service, wsfe } = fake();
-    wsfe.lookupVoucher.mockImplementation(({ number }) =>
-      Promise.resolve(found(fce, number))
-    );
-    expect(
-      await service.previewCreditNote({
-        for: originals,
-        items,
-        ...fields,
-      })
-    ).toMatchObject({
-      request: {
-        voucherType: 203,
-        associatedVouchers: [
-          { type: 201, number: 1 },
-          { type: 201, number: 2 },
-        ],
-      },
-    });
-    expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(2);
-  });
+  it.each(annulmentCases)(
+    "keeps several WSFE FCE originals available for annulment notes: %j",
+    async (fields) => {
+      const fce = deriveWsfeInvoice({
+        issuer: "responsable_inscripto",
+        family: "fce",
+        salesPoint: 1,
+        date: "20260904",
+        dueDate: "20260930",
+        to: { condition: "responsable_inscripto", cuit: "20123456789" },
+        items: [{ net: 10_000, vat: 21 }],
+        fce: { cbu: "1234567890123456789012" },
+      }).data;
+      const { service, wsfe } = fake();
+      wsfe.lookupVoucher.mockImplementation(({ number }) =>
+        Promise.resolve(found(fce, number))
+      );
+      expect(
+        await service.previewCreditNote({
+          for: originals,
+          items,
+          ...fields,
+        })
+      ).toMatchObject({
+        request: {
+          voucherType: 203,
+          associatedVouchers: [
+            { type: 201, number: 1 },
+            { type: 201, number: 2 },
+          ],
+        },
+      });
+      expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(2);
+    }
+  );
 
   it.each([
     [false, "S"],
     [true, "N"],
     [false, "N"],
-  ] as const)("rejects duplicate or conflicting FCE annulment encodings before lookup: %s/%s", async (annulment, value) => {
-    const { service, wsfe } = fake();
-    await expect(
-      service.previewCreditNote({
-        for: originals[0],
-        items,
-        fce: { annulment },
-        optionalFields: [{ id: "22", value }],
-      })
-    ).rejects.toMatchObject({
-      name: "ArcaInputError",
-      field: "fce.annulment",
-    });
-    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    "rejects duplicate or conflicting FCE annulment encodings before lookup: %s/%s",
+    async (annulment, value) => {
+      const { service, wsfe } = fake();
+      await expect(
+        service.previewCreditNote({
+          for: originals[0],
+          items,
+          fce: { annulment },
+          optionalFields: [{ id: "22", value }],
+        })
+      ).rejects.toMatchObject({
+        name: "ArcaInputError",
+        field: "fce.annulment",
+      });
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+    }
+  );
 });

@@ -159,35 +159,34 @@ describe("keyed issue", () => {
     expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(1);
     expect(await store.get(key)).toBe(json);
   });
-  it.each([
-    "mismatch",
-    "incomplete",
-    "failed",
-  ])("replay %s never writes", async (mode) => {
-    const { wsfe, service } = fake();
-    await service.issue(input, { idempotencyKey: "sale" });
-    const lookup = found();
-    if (lookup.kind !== "found") {
-      throw new Error("fixture");
+  it.each(["mismatch", "incomplete", "failed"])(
+    "replay %s never writes",
+    async (mode) => {
+      const { wsfe, service } = fake();
+      await service.issue(input, { idempotencyKey: "sale" });
+      const lookup = found();
+      if (lookup.kind !== "found") {
+        throw new Error("fixture");
+      }
+      if (mode === "mismatch") {
+        lookup.voucher.totalAmount = 2;
+      }
+      if (mode === "incomplete") {
+        lookup.voucher.cae = undefined;
+      }
+      if (mode === "failed") {
+        wsfe.lookupVoucher.mockRejectedValue(new Error("offline"));
+      } else {
+        wsfe.lookupVoucher.mockResolvedValue(lookup);
+      }
+      const result = await service.issue(input, { idempotencyKey: "sale" });
+      expect(result.kind).toBe(
+        mode === "mismatch" ? "conflict" : "indeterminate"
+      );
+      noPrivate(result);
+      expect(wsfe.issue).toHaveBeenCalledTimes(1);
     }
-    if (mode === "mismatch") {
-      lookup.voucher.totalAmount = 2;
-    }
-    if (mode === "incomplete") {
-      lookup.voucher.cae = undefined;
-    }
-    if (mode === "failed") {
-      wsfe.lookupVoucher.mockRejectedValue(new Error("offline"));
-    } else {
-      wsfe.lookupVoucher.mockResolvedValue(lookup);
-    }
-    const result = await service.issue(input, { idempotencyKey: "sale" });
-    expect(result.kind).toBe(
-      mode === "mismatch" ? "conflict" : "indeterminate"
-    );
-    noPrivate(result);
-    expect(wsfe.issue).toHaveBeenCalledTimes(1);
-  });
+  );
   it("retries the stored number and date after not_found across midnight", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-04T22:00:00Z"));
