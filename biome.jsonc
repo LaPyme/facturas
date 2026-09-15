@@ -1,14 +1,36 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["ultracite/biome/core"],
+  "assist": {
+    "actions": {
+      "source": {
+        // Sorting keys would reorder the SOAP bodies, and ARCA reads their elements in order.
+        "useSortedKeys": "off",
+        "useSortedPackageJson": "off"
+      }
+    }
+  },
   "linter": {
     "rules": {
+      "complexity": {
+        "noUselessUndefined": "off"
+      },
       "performance": {
+        "noAwaitInLoops": "off",
         "useTopLevelRegex": "off"
       },
       "style": {
+        "noIncrementDecrement": "off",
         "noNestedTernary": "off",
-        "useConsistentTypeDefinitions": "off"
+        "useConsistentMethodSignatures": "off",
+        "useConsistentTypeDefinitions": "off",
+        "useDestructuring": "off",
+        "useErrorCause": "off"
+      },
+      "suspicious": {
+        "noShadow": "off",
+        "noUnnecessaryConditions": "off",
+        "noUnusedExpressions": "off"
       }
     }
   },

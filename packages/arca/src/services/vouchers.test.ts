@@ -145,12 +145,15 @@ describe("vouchers.issue", () => {
       ...input,
       service: { from: "20260901", to: "20260930", dueDate: "20261001" },
     },
-  ])("constructs A, C and services through the public method: %j", async (value) => {
-    const { service, wsfe } = fake();
-    const result = await service.issue(value as IssueInput);
-    expect(result.kind).toBe("authorized");
-    expect(wsfe.issue).toHaveBeenCalledOnce();
-  });
+  ])(
+    "constructs A, C and services through the public method: %j",
+    async (value) => {
+      const { service, wsfe } = fake();
+      const result = await service.issue(value as IssueInput);
+      expect(result.kind).toBe("authorized");
+      expect(wsfe.issue).toHaveBeenCalledOnce();
+    }
+  );
   it("returns provider rejection issues and does not look up or retry", async () => {
     const issue = {
       service: "wsfe" as const,
@@ -353,22 +356,19 @@ describe("vouchers.issue", () => {
     await expect(service.issue(input)).rejects.toThrow("Read failed");
     expect(wsfe.issue).not.toHaveBeenCalled();
   });
-  it.each([
-    0,
-    -1,
-    1.5,
-    Number.NaN,
-    100_000_000,
-  ])("never writes an invalid next number %s", async (number) => {
-    const { service, wsfe } = fake();
-    wsfe.getNextVoucherNumber.mockResolvedValueOnce(number);
-    await expect(service.issue(input)).rejects.toMatchObject({
-      code: "ARCA_SERVICE_ERROR",
-      operation: "FECompUltimoAutorizado",
-    });
-    expect(wsfe.issue).not.toHaveBeenCalled();
-    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
-  });
+  it.each([0, -1, 1.5, Number.NaN, 100_000_000])(
+    "never writes an invalid next number %s",
+    async (number) => {
+      const { service, wsfe } = fake();
+      wsfe.getNextVoucherNumber.mockResolvedValueOnce(number);
+      await expect(service.issue(input)).rejects.toMatchObject({
+        code: "ARCA_SERVICE_ERROR",
+        operation: "FECompUltimoAutorizado",
+      });
+      expect(wsfe.issue).not.toHaveBeenCalled();
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+    }
+  );
   it("does not serialize concurrent calls without a store", async () => {
     const { service, wsfe } = fake();
     await Promise.all([service.issue(input), service.issue(input)]);
@@ -456,135 +456,142 @@ describe("high-level API with the real SOAP adapter", () => {
     ["matching", { CbteDesde: 77, CbteHasta: 77 }, "authorized"],
     ["matching fallback", { CbteHasta: 77 }, "authorized"],
     ["different", { CbteDesde: 78, CbteHasta: 78 }, "conflict"],
-  ] as const)("classifies lookup number (%s) after timeout", async (_name, numbers, kind) => {
-    const execute = vi.fn(async ({ operation }: { operation: string }) => {
-      await Promise.resolve();
-      if (operation === "FECompUltimoAutorizado") {
-        return { result: { FECompUltimoAutorizadoResult: { CbteNro: 76 } } };
-      }
-      if (operation === "FECAESolicitar") {
-        throw new ArcaTransportError("Timeout");
-      }
-      expect(operation).toBe("FECompConsultar");
-      return {
-        result: {
-          FECompConsultarResult: {
-            ResultGet: {
-              ...numbers,
-              CbteFch: "20260904",
-              PtoVta: 1,
-              CbteTipo: 6,
-              Concepto: 1,
-              DocTipo: 99,
-              DocNro: 0,
-              CondicionIVAReceptorId: 5,
-              MonId: "PES",
-              MonCotiz: 1,
-              ImpTotal: 121,
-              ImpNeto: 100,
-              ImpIVA: 21,
-              ImpOpEx: 0,
-              ImpTotConc: 0,
-              ImpTrib: 0,
-              Iva: { AlicIva: { Id: 5, BaseImp: 100, Importe: 21 } },
-              Resultado: "A",
-              CodAutorizacion: "74123456789012",
-              FchVto: "20260914",
-            },
-          },
-        },
-      };
-    });
-    const wsfe = createAdapter({
-      execute: vi.fn().mockImplementation(execute),
-    });
-    const result = await createVouchersService(wsfe).issue(input);
-    expect(result.kind).toBe(kind);
-    if (kind === "indeterminate") {
-      expect(result).toMatchObject({
-        lookup: { kind: "incomplete", reason: "Cannot verify number" },
-      });
-    } else if (kind === "authorized") {
-      expect(result).toMatchObject({
-        recoveredByMatch: true,
-        voucher: { number: 77 },
-      });
-    } else {
-      expect(result).toMatchObject({
-        found: { number: 78 },
-        reason: expect.stringContaining("number differs"),
-      });
-    }
-    expect(execute.mock.calls.map(([call]) => call.operation)).toEqual([
-      "FECompUltimoAutorizado",
-      "FECAESolicitar",
-      "FECompConsultar",
-    ]);
-    expectNoRaw(result);
-  });
-
-  it.each([
-    "rejection",
-    "transport",
-  ])("classifies %s without a second authorization", async (mode) => {
-    const execute = vi.fn(
-      async ({
-        operation,
-        retries,
-      }: {
-        operation: string;
-        retries?: number;
-      }) => {
+  ] as const)(
+    "classifies lookup number (%s) after timeout",
+    async (_name, numbers, kind) => {
+      const execute = vi.fn(async ({ operation }: { operation: string }) => {
         await Promise.resolve();
         if (operation === "FECompUltimoAutorizado") {
           return { result: { FECompUltimoAutorizadoResult: { CbteNro: 76 } } };
         }
-        if (operation === "FECompConsultar") {
-          return {
-            result: {
-              FECompConsultarResult: {
-                Errors: { Err: { Code: 602, Msg: "No existe comprobante" } },
-              },
-            },
-          };
-        }
-        expect(operation).toBe("FECAESolicitar");
-        expect(retries).toBe(0);
-        if (mode === "transport") {
+        if (operation === "FECAESolicitar") {
           throw new ArcaTransportError("Timeout");
         }
+        expect(operation).toBe("FECompConsultar");
         return {
           result: {
-            FECAESolicitarResult: {
-              FeCabResp: { Resultado: "R" },
-              FeDetResp: {
-                FECAEDetResponse: {
-                  Resultado: "R",
-                  Observaciones: {
-                    Obs: { Code: 10_016, Msg: "Number conflict" },
-                  },
-                },
+            FECompConsultarResult: {
+              ResultGet: {
+                ...numbers,
+                CbteFch: "20260904",
+                PtoVta: 1,
+                CbteTipo: 6,
+                Concepto: 1,
+                DocTipo: 99,
+                DocNro: 0,
+                CondicionIVAReceptorId: 5,
+                MonId: "PES",
+                MonCotiz: 1,
+                ImpTotal: 121,
+                ImpNeto: 100,
+                ImpIVA: 21,
+                ImpOpEx: 0,
+                ImpTotConc: 0,
+                ImpTrib: 0,
+                Iva: { AlicIva: { Id: 5, BaseImp: 100, Importe: 21 } },
+                Resultado: "A",
+                CodAutorizacion: "74123456789012",
+                FchVto: "20260914",
               },
             },
           },
         };
+      });
+      const wsfe = createAdapter({
+        execute: vi.fn().mockImplementation(execute),
+      });
+      const result = await createVouchersService(wsfe).issue(input);
+      expect(result.kind).toBe(kind);
+      if (kind === "indeterminate") {
+        expect(result).toMatchObject({
+          lookup: { kind: "incomplete", reason: "Cannot verify number" },
+        });
+      } else if (kind === "authorized") {
+        expect(result).toMatchObject({
+          recoveredByMatch: true,
+          voucher: { number: 77 },
+        });
+      } else {
+        expect(result).toMatchObject({
+          found: { number: 78 },
+          reason: expect.stringContaining("number differs"),
+        });
       }
-    );
-    const wsfe = createAdapter({
-      execute: vi.fn().mockImplementation(execute),
-    });
-    const result = await createVouchersService(wsfe).issue(input);
-    expect(result.kind).toBe(
-      mode === "rejection" ? "rejected" : "indeterminate"
-    );
-    expect(
-      execute.mock.calls.filter(([call]) => call.operation === "FECAESolicitar")
-    ).toHaveLength(1);
-    expect(
-      execute.mock.calls.filter(
-        ([call]) => call.operation === "FECompConsultar"
-      )
-    ).toHaveLength(mode === "transport" ? 1 : 0);
-    expectNoRaw(result);
-  });
+      expect(execute.mock.calls.map(([call]) => call.operation)).toEqual([
+        "FECompUltimoAutorizado",
+        "FECAESolicitar",
+        "FECompConsultar",
+      ]);
+      expectNoRaw(result);
+    }
+  );
+
+  it.each(["rejection", "transport"])(
+    "classifies %s without a second authorization",
+    async (mode) => {
+      const execute = vi.fn(
+        async ({
+          operation,
+          retries,
+        }: {
+          operation: string;
+          retries?: number;
+        }) => {
+          await Promise.resolve();
+          if (operation === "FECompUltimoAutorizado") {
+            return {
+              result: { FECompUltimoAutorizadoResult: { CbteNro: 76 } },
+            };
+          }
+          if (operation === "FECompConsultar") {
+            return {
+              result: {
+                FECompConsultarResult: {
+                  Errors: { Err: { Code: 602, Msg: "No existe comprobante" } },
+                },
+              },
+            };
+          }
+          expect(operation).toBe("FECAESolicitar");
+          expect(retries).toBe(0);
+          if (mode === "transport") {
+            throw new ArcaTransportError("Timeout");
+          }
+          return {
+            result: {
+              FECAESolicitarResult: {
+                FeCabResp: { Resultado: "R" },
+                FeDetResp: {
+                  FECAEDetResponse: {
+                    Resultado: "R",
+                    Observaciones: {
+                      Obs: { Code: 10_016, Msg: "Number conflict" },
+                    },
+                  },
+                },
+              },
+            },
+          };
+        }
+      );
+      const wsfe = createAdapter({
+        execute: vi.fn().mockImplementation(execute),
+      });
+      const result = await createVouchersService(wsfe).issue(input);
+      expect(result.kind).toBe(
+        mode === "rejection" ? "rejected" : "indeterminate"
+      );
+      expect(
+        execute.mock.calls.filter(
+          ([call]) => call.operation === "FECAESolicitar"
+        )
+      ).toHaveLength(1);
+      expect(
+        execute.mock.calls.filter(
+          ([call]) => call.operation === "FECompConsultar"
+        )
+      ).toHaveLength(mode === "transport" ? 1 : 0);
+      expectNoRaw(result);
+    }
+  );
 });

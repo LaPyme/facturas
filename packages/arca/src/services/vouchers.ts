@@ -632,8 +632,7 @@ function readSettledRecord(json: string): ArcaSettledRecord {
   try {
     const record = JSON.parse(json) as ArcaSettledRecord;
     if (
-      !record ||
-      record.v !== 1 ||
+      record?.v !== 1 ||
       !Number.isSafeInteger(record.number) ||
       (record.kind === "conflict"
         ? !record.found || typeof record.found !== "object"
@@ -1776,8 +1775,7 @@ function readSequenceRecord(json: string): ArcaSequenceRecord {
   try {
     const record = JSON.parse(json) as ArcaSequenceRecord;
     if (
-      !record ||
-      record.v !== 1 ||
+      record?.v !== 1 ||
       typeof record.key !== "string" ||
       !Number.isSafeInteger(record.number)
     ) {

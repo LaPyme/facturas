@@ -46,11 +46,11 @@ no se conoce.
 
 ## Postgres
 
-Usá el cliente que ya tiene tu aplicación. Neon, Supabase Postgres, Vercel
-Postgres, `pg` y `postgres` pueden proveer la función de consulta
-parametrizada. Los resultados pueden ser una lista de filas o `{ rows }`. Con
-`postgres`, adaptá `sql.unsafe(text, params)`. Creá la tabla por defecto una
-sola vez:
+Sirve cualquier Postgres, como Supabase, PlanetScale Postgres, Neon o un
+servidor propio. Usá el cliente que ya tiene tu aplicación, por ejemplo `pg` o
+`postgres`. La función de consulta recibe el SQL y sus parámetros, y puede
+devolver una lista de filas o `{ rows }`. Con `postgres`, adaptá
+`sql.unsafe(text, params)`. Creá la tabla por defecto una sola vez:
 
 ```sql
 CREATE TABLE arca_store (
@@ -61,8 +61,13 @@ CREATE TABLE arca_store (
 ```
 
 ```ts
+import { createPostgresStore } from "facturas";
+import { Pool } from "pg";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const store = createPostgresStore({
-  query: (text, params) => sql.query(text, params),
+  query: (text, params) => pool.query(text, params),
   table: "arca_store", // Identificador SQL simple opcional.
 });
 ```

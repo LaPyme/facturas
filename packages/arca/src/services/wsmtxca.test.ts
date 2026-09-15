@@ -135,49 +135,49 @@ describe("createWsmtxcaService", () => {
     expect(options.soap.execute).not.toHaveBeenCalled();
   });
 
-  it.each([
-    "A",
-    "O",
-  ])("returns structured authorized evidence for WSMTXCA result %s", async (resultado) => {
-    const options = createBaseOptions();
-    options.soap.execute.mockResolvedValueOnce({
-      result: {
-        autorizarComprobanteResponse: {
-          resultado,
-          comprobanteResponse: {
-            CAE: "12345678901234",
-            fechaVencimientoCAE: "20260301",
-            numeroComprobante: "11",
-          },
-          arrayObservaciones: {
-            codigoDescripcion: [
-              { codigo: 504, descripcion: "Observación uno" },
-              { codigo: 505, descripcion: "Observación dos" },
-            ],
+  it.each(["A", "O"])(
+    "returns structured authorized evidence for WSMTXCA result %s",
+    async (resultado) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce({
+        result: {
+          autorizarComprobanteResponse: {
+            resultado,
+            comprobanteResponse: {
+              CAE: "12345678901234",
+              fechaVencimientoCAE: "20260301",
+              numeroComprobante: "11",
+            },
+            arrayObservaciones: {
+              codigoDescripcion: [
+                { codigo: 504, descripcion: "Observación uno" },
+                { codigo: 505, descripcion: "Observación dos" },
+              ],
+            },
           },
         },
-      },
-    });
+      });
 
-    await expect(
-      createWsmtxcaService(options).issue({
-        data: {
-          comprobanteCAERequest: { numeroComprobante: 11 },
-        },
-      })
-    ).resolves.toMatchObject({
-      kind: "authorized",
-      result: resultado,
-      resultLevel: "operation",
-      results: { operation: resultado },
-      cae: "12345678901234",
-      voucherNumber: 11,
-      observations: [
-        { code: "504", message: "Observación uno" },
-        { code: "505", message: "Observación dos" },
-      ],
-    });
-  });
+      await expect(
+        createWsmtxcaService(options).issue({
+          data: {
+            comprobanteCAERequest: { numeroComprobante: 11 },
+          },
+        })
+      ).resolves.toMatchObject({
+        kind: "authorized",
+        result: resultado,
+        resultLevel: "operation",
+        results: { operation: resultado },
+        cae: "12345678901234",
+        voucherNumber: 11,
+        observations: [
+          { code: "504", message: "Observación uno" },
+          { code: "505", message: "Observación dos" },
+        ],
+      });
+    }
+  );
 
   it("treats WSMTXCA authorization 500/501/502 as business rejection evidence", async () => {
     const options = createBaseOptions();
