@@ -77,10 +77,12 @@ repetir esa clave, consulta el número reservado en vez de empezar otra emisión
 
 ```ts
 import { createArcaClient, createPostgresStore } from "facturas";
-import { sql } from "@vercel/postgres";
+import { Pool } from "pg";
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const arca = createArcaClient({
-  store: createPostgresStore({ query: (text, params) => sql.query(text, params) }),
+  store: createPostgresStore({ query: (text, params) => pool.query(text, params) }),
 });
 
 const factura = await arca.issue(input, { idempotencyKey: venta.id });
