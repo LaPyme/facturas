@@ -1,3 +1,4 @@
+import { toIsoDate } from "../internal/dates";
 import {
   normalizeArcaAmountToMinorUnits,
   serializeArcaExchangeRate,
@@ -13,6 +14,7 @@ export type VoucherCoordinates = {
 };
 
 /** Raw-free consultation evidence. Missing provider fields remain absent. */
+/** Money in minor units, dates in `YYYY-MM-DD`; absent when ARCA omits them. */
 export type VoucherSummary = {
   number: number;
   salesPoint?: number;
@@ -262,6 +264,11 @@ function compareVatRates(
   return { matches: true };
 }
 
+/**
+ * Raw-free evidence in the facade's units: money in minor units, dates in
+ * `YYYY-MM-DD`. A provider value that does not parse is left absent rather
+ * than guessed.
+ */
 export function toVoucherSummary(found: WsfeVoucherInfo): VoucherSummary {
   const summary: VoucherSummary = { number: found.voucherNumber };
   for (const field of [
@@ -273,34 +280,71 @@ export function toVoucherSummary(found: WsfeVoucherInfo): VoucherSummary {
     "receiverVatConditionId",
     "currencyId",
     "exchangeRate",
+    "result",
+    "cae",
+  ] as const) {
+    if (found[field] !== undefined) {
+      Object.assign(summary, { [field]: found[field] });
+    }
+  }
+  for (const field of [
     "totalAmount",
     "netAmount",
     "vatAmount",
     "exemptAmount",
     "nonTaxableAmount",
     "taxAmount",
+  ] as const) {
+    const minor = minorUnits(found[field]);
+    if (minor !== undefined) {
+      summary[field] = minor;
+    }
+  }
+  for (const field of [
     "serviceStartDate",
     "serviceEndDate",
     "paymentDueDate",
-    "result",
-    "cae",
     "caeExpiry",
   ] as const) {
-    if (found[field] !== undefined) {
-      Object.assign(summary, { [field]: found[field] });
+    const iso = toIsoDate(found[field]);
+    if (iso !== undefined) {
+      summary[field] = iso;
     }
   }
-  if (found.voucherDate !== undefined) {
-    summary.date = found.voucherDate;
+  const date = toIsoDate(found.voucherDate);
+  if (date !== undefined) {
+    summary.date = date;
   }
   if (found.vatRates !== undefined) {
     summary.vatRates = found.vatRates.map(({ id, baseAmount, amount }) => ({
       id,
-      baseAmount,
-      amount,
+      baseAmount: minorUnits(baseAmount) ?? baseAmount,
+      amount: minorUnits(amount) ?? amount,
     }));
   }
   return summary;
+}
+
+/** A summary recorded before 0.15 kept ARCA's units; it reads as one now. */
+export function normalizeLegacySummary(found: VoucherSummary): VoucherSummary {
+  const { number, date, ...rest } = found;
+  return toVoucherSummary({
+    ...rest,
+    voucherNumber: number,
+    ...(date === undefined ? {} : { voucherDate: date }),
+    raw: {},
+  } as WsfeVoucherInfo);
+}
+
+function minorUnits(value: number | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    return Number(normalizeArcaAmountToMinorUnits(value, "amount"));
+  } catch {
+    return undefined;
+  }
 }
 
 function compareAssociations(

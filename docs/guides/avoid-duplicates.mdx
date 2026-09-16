@@ -142,16 +142,21 @@ explícito gana para los tickets.
 
 <Accordion title="Formato y vida de los registros">
 
-Las claves usan `arca:v1:wsaa:{environment}:{service}:{fingerprint}` y
-`arca:v1:attempt:{environment}:{taxId}:{idempotencyKey}`. Los registros de
+Las claves usan `arca:v2:wsaa:{environment}:{service}:{fingerprint}` y
+`arca:v1:attempt:{environment}:{taxId}:{idempotencyKey}`. El registro de
+ticket es un JSON `{ v: 2, iv, data, tag }` cifrado con AES-256-GCM. Un
+registro `arca:v1:wsaa:` en claro de una versión anterior se ignora y provoca
+un login nuevo. Los registros de
 reserva contienen el hash del input, la operación, las coordenadas reservadas y
 el input exacto enviado. Contienen datos fiscales y de clientes. Restringí el
 acceso y protegé los backups.
 
 `arca:v1:settled:{environment}:{taxId}:{idempotencyKey}` guarda un resultado
 que tiene que sobrevivir al reintento, y se escribe una sola vez con `add`. Con
-`{ v: 1, kind: "conflict", number, found, settledAt }`, otro comprobante ocupa
-el número reservado. Una repetición con esa clave o un `recover()` devuelven el
+`{ v: 2, kind: "conflict", number, found, settledAt }`, otro comprobante ocupa
+el número reservado. `found` es un `VoucherSummary` en centavos y fechas
+`YYYY-MM-DD`. Un registro `v: 1` anterior lo guardó en las unidades de ARCA y
+se normaliza al leerlo. Una repetición con esa clave o un `recover()` devuelven el
 mismo `conflict` sin consultar al proveedor. Con
 `{ v: 1, kind: "superseded", number, by, settledAt }`, la barrera probó que el
 número estaba vacío y se lo dio a la clave `by`. La clave vieja consulta el

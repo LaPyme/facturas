@@ -826,7 +826,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
           number: 9,
           salesPoint: 1,
           voucherType: 1,
-          totalAmount: 124,
+          totalAmount: 12_400,
           cae: "12345678901234",
         },
       ],

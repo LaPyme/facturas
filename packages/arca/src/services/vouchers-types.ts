@@ -25,12 +25,15 @@ export type IssueOptions = {
   abortSignal?: AbortSignal;
 };
 
+/** Dates are `YYYY-MM-DD` and money is in minor units, like the input. */
 export type IssuedVoucher = VoucherCoordinates & {
   voucherClass: VoucherClass;
   date: string;
   cae: string;
   caeExpiry: string;
   amounts: IssueAmounts;
+  /** The URL the printed voucher's QR must encode, per ARCA's specification. */
+  qr: string;
 };
 
 /** The provider a call targets. It is chosen explicitly, never switched. */

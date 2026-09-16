@@ -49,7 +49,8 @@ export type ArcaAttemptRecord = {
  */
 export type ArcaSettledRecord =
   | {
-      v: 1;
+      /** Version 1 stored `found` in ARCA's units; version 2 stores it normalized. */
+      v: 1 | 2;
       kind: "conflict";
       number: number;
       found: import("../services/wsfe-identity").VoucherSummary;

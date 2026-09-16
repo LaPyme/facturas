@@ -255,28 +255,52 @@ it("serializes memory locks and releases after failures", async () => {
   ).rejects.toThrow("fail");
   expect(await store.withLock?.("k", () => Promise.resolve(3))).toBe(3);
 });
-it("adapts namespaced WSAA credentials and expiry", async () => {
+it("seals namespaced WSAA credentials with the private key and honors expiry", async () => {
   const store = createMemoryStore();
   const lock = vi.spyOn(store, "withLock");
-  const adapter = createWsaaStoreAdapter(store);
+  const secret = { privateKeyPem: "-----BEGIN PRIVATE KEY-----\nA" };
+  const adapter = createWsaaStoreAdapter(store, secret);
   const key = {
     environment: "test" as const,
     service: "wsfe" as const,
     certificateFingerprint: "fingerprint",
   };
   const credentials = {
-    token: "token",
-    sign: "sign",
+    token: "token-secret",
+    sign: "sign-secret",
     expiresAt: new Date(Date.now() + 120_000).toISOString(),
   };
   await adapter.set(key, credentials);
   expect(await adapter.get(key)).toEqual(credentials);
-  expect(await store.get("arca:v1:wsaa:test:wsfe:fingerprint")).toBe(
+  const stored = await store.get("arca:v2:wsaa:test:wsfe:fingerprint");
+  expect(stored).not.toBeNull();
+  expect(stored).not.toContain("token-secret");
+  expect(stored).not.toContain("sign-secret");
+  expect(JSON.parse(stored as string)).toMatchObject({ v: 2 });
+  // Another private key, another certificate or a tampered record is a miss.
+  const other = createWsaaStoreAdapter(store, {
+    privateKeyPem: "-----BEGIN PRIVATE KEY-----\nB",
+  });
+  expect(await other.get(key)).toBeNull();
+  expect(
+    await adapter.get({ ...key, certificateFingerprint: "another" })
+  ).toBeNull();
+  const record = JSON.parse(stored as string) as { data: string };
+  await store.set(
+    "arca:v2:wsaa:test:wsfe:fingerprint",
+    JSON.stringify({ ...record, data: `${record.data.slice(0, -2)}AA` })
+  );
+  expect(await adapter.get(key)).toBeNull();
+  await store.set("arca:v2:wsaa:test:wsfe:fingerprint", "not json");
+  expect(await adapter.get(key)).toBeNull();
+  await store.set(
+    "arca:v1:wsaa:test:wsfe:fingerprint",
     JSON.stringify(credentials)
   );
+  expect(await adapter.get(key)).toBeNull();
   await adapter.withLock?.(key, () => Promise.resolve());
   expect(lock).toHaveBeenCalledWith(
-    "arca:v1:wsaa:test:wsfe:fingerprint",
+    "arca:v2:wsaa:test:wsfe:fingerprint",
     expect.any(Function)
   );
   await adapter.set(key, {
@@ -284,6 +308,8 @@ it("adapts namespaced WSAA credentials and expiry", async () => {
     expiresAt: new Date(0).toISOString(),
   });
   expect(await adapter.get(key)).toBeNull();
+  await adapter.delete?.(key);
+  expect(await store.get("arca:v2:wsaa:test:wsfe:fingerprint")).toBeNull();
 });
 it("discovers credentials without mutating the environment", () => {
   vi.stubEnv("ARCA_TAX_ID", "20123456789");

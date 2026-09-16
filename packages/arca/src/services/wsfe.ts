@@ -223,16 +223,6 @@ export type WsfeService = {
     forceRefresh?: boolean;
     abortSignal?: AbortSignal;
   }): Promise<number>;
-  /**
-   * @deprecated Use `getNextVoucherNumber()` instead.
-   * Returns the next available voucher number, not the last authorized one.
-   */
-  getLastVoucher(input: {
-    representedTaxId?: number | string;
-    salesPoint: number;
-    voucherType: number;
-    forceRefresh?: boolean;
-  }): Promise<number>;
   /** Lists all configured points of sale for the taxpayer. */
   getSalesPoints(input: {
     representedTaxId?: number | string;
@@ -666,9 +656,6 @@ export function createWsfeService(
   return {
     issue,
     getNextVoucherNumber,
-    getLastVoucher(input) {
-      return getNextVoucherNumber(input);
-    },
     async getSalesPoints({ representedTaxId, forceRefresh }) {
       const operation = "FEParamGetPtosVenta";
       const result = await executeWithAuthenticationRecovery({

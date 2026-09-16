@@ -1,4 +1,4 @@
-import type { VoucherClass } from "../constants";
+import type { ReceiverCondition, VoucherClass } from "../constants";
 import { ArcaInputError } from "../errors";
 import {
   assertArcaMinorUnits,
@@ -31,6 +31,7 @@ import {
   assertIssueObject,
   buenosAiresDate,
   type IssueInput,
+  receiverConditionId,
   reviewedInvoiceAmounts,
 } from "./wsfe-derive";
 import type { VoucherCoordinates } from "./wsfe-identity";
@@ -56,6 +57,12 @@ export type CreditNoteInput = Pick<
   for: VoucherCoordinates | readonly VoucherCoordinates[];
   salesPoint?: number;
   date?: WsfeDateInput;
+  /**
+   * The receiver's IVA condition, used only when the consulted original does
+   * not report one. ARCA omits it on vouchers authorized before the field
+   * existed. When the original reports it, the two must agree.
+   */
+  to?: { condition: ReceiverCondition | number };
 } & (
     | {
         items: NonNullable<IssueInput["items"]>;
@@ -287,6 +294,36 @@ function assertInheritedHeader(
   }
 }
 
+/**
+ * The original's reported condition wins. ARCA omits it on vouchers authorized
+ * before the field existed, and only then does the caller's `to.condition`
+ * stand in for it.
+ */
+function resolveReceiverCondition(
+  original: WsfeVoucherInfo,
+  input: CreditNoteInput
+): number {
+  const supplied =
+    input.to === undefined
+      ? undefined
+      : receiverConditionId(input.to.condition, "to.condition");
+  const reported = original.receiverVatConditionId;
+  if (reported === undefined) {
+    if (supplied === undefined) {
+      invalid(
+        "original is missing receiverVatConditionId; pass to.condition with the receiver's condition"
+      );
+    }
+    return supplied;
+  }
+  if (supplied !== undefined && supplied !== reported) {
+    invalid(
+      `to.condition (${supplied}) does not match the original's receiver condition (${reported})`
+    );
+  }
+  return reported;
+}
+
 function prepareOneCreditNote(
   original: WsfeVoucherInfo,
   input: CreditNoteInput,
@@ -334,10 +371,7 @@ function prepareOneCreditNote(
     concept: required(original.concept, "concept"),
     documentType: required(original.documentType, "documentType"),
     documentNumber: Number(required(original.documentNumber, "documentNumber")),
-    receiverVatConditionId: required(
-      original.receiverVatConditionId,
-      "receiverVatConditionId"
-    ),
+    receiverVatConditionId: resolveReceiverCondition(original, input),
     currencyId: required(original.currencyId, "currencyId"),
     ...(original.sameCurrencyForeignCancellation === undefined
       ? {}
@@ -391,6 +425,7 @@ const CREDIT_NOTE_KEYS = [
   "for",
   "salesPoint",
   "date",
+  "to",
   "items",
   "total",
   "all",
@@ -404,6 +439,20 @@ const TARGET_BOUNDS = [
   ["voucherType", 999],
   ["number", 99_999_999],
 ] as const;
+
+/** Only the condition: the receiver's document always comes from the original. */
+function assertNoteReceiver(to: CreditNoteInput["to"]): void {
+  if (to === undefined) {
+    return;
+  }
+  assertIssueObject(to, "to");
+  assertIssueKeys(to, ["condition"], "to", "issueCreditNote()");
+  try {
+    receiverConditionId(to.condition, "to.condition");
+  } catch {
+    invalid("to.condition must be a supported receiver condition");
+  }
+}
 
 /** Zero I/O: rejects an ambiguous mode and copies the lines the caller owns. */
 export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
@@ -428,6 +477,7 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
     input.date === undefined
       ? undefined
       : (normalizeWsfeDateInput(input.date, "date") as WsfeDateInput);
+  assertNoteReceiver(input.to);
   const common = {
     ...(input.fce === undefined ? {} : { fce: structuredClone(input.fce) }),
     ...(input.taxes === undefined
@@ -439,6 +489,9 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
     for: target,
     ...(input.salesPoint === undefined ? {} : { salesPoint: input.salesPoint }),
     ...(date === undefined ? {} : { date }),
+    ...(input.to === undefined
+      ? {}
+      : { to: { condition: input.to.condition } }),
   };
   if (input.items !== undefined && input.amounts !== undefined) {
     invalid("use items or amounts, never both");

@@ -1003,7 +1003,7 @@ describe("createWsfeService", () => {
     expect(options.soap.execute).not.toHaveBeenCalled();
   });
 
-  it("supports both next-voucher method names", async () => {
+  it("reads the next voucher number", async () => {
     const nextNumberOptions = createBaseOptions();
     nextNumberOptions.soap.execute.mockResolvedValue({
       result: {
@@ -1019,12 +1019,6 @@ describe("createWsfeService", () => {
 
     await expect(
       service.getNextVoucherNumber({
-        salesPoint: 1,
-        voucherType: 6,
-      })
-    ).resolves.toBe(42);
-    await expect(
-      service.getLastVoucher({
         salesPoint: 1,
         voucherType: 6,
       })

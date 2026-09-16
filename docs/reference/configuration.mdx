@@ -96,11 +96,16 @@ const client = createArcaClient({
 ```
 
 La clave del store está alcanzada por entorno, servicio WSAA y huella del
-certificado. Las lecturas del store igual se controlan con el margen de
-seguridad de expiración del SDK. Un store de producción tendría que compartir
-los datos entre todos los procesos, cifrar o apoyarse en almacenamiento cifrado,
-hacer cumplir la expiración en la lectura e implementar un bloqueo con
-`advisory locks` de Postgres, bloqueos de Redis o un mecanismo equivalente.
+certificado. Con `store`, el SDK cifra cada ticket antes de guardarlo, con
+AES-256-GCM y una clave derivada de tu clave privada, así que ningún adaptador,
+incluido el tuyo, ve el ticket en claro. No hace falta configurar ningún
+secreto más: quien tiene la clave privada ya puede iniciar sesión por su cuenta.
+Un `wsaaSessionStore` propio recibe las credenciales en claro y el cifrado en
+reposo queda de tu lado. Las lecturas del store igual se controlan con el
+margen de seguridad de expiración del SDK. Un store de producción tendría que
+compartir los datos entre todos los procesos, hacer cumplir la expiración en la
+lectura e implementar un bloqueo con `advisory locks` de Postgres, bloqueos de
+Redis o un mecanismo equivalente.
 
 Para pruebas y coordinación local a través de un objeto compartido, el paquete
 también exporta `createMemoryWsaaSessionStore()`.
