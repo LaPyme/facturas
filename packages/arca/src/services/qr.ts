@@ -1,6 +1,7 @@
 import { ArcaInputError } from "../errors";
 import { toIsoDate } from "../internal/dates";
 import { assertArcaMinorUnits } from "../internal/decimal";
+import { normalizeWsfeDateInput, type WsfeDateInput } from "./wsfe";
 
 /** Where every printed voucher's QR points, per ARCA's QR specification v1. */
 export const ARCA_QR_URL = "https://www.arca.gob.ar/fe/qr/";
@@ -51,10 +52,7 @@ export function arcaQrUrl(input: ArcaQrInput): string {
 }
 
 export function arcaQrPayload(input: ArcaQrInput): ArcaQrPayload {
-  const fecha = toIsoDate(input.date);
-  if (fecha === undefined) {
-    invalid("date", "a YYYY-MM-DD or YYYYMMDD date");
-  }
+  const fecha = isoCalendarDate(input.date);
   const cuit = digits(input.taxId, "taxId", 11, 11);
   for (const [field, max] of [
     ["salesPoint", 99_999],
@@ -71,13 +69,7 @@ export function arcaQrPayload(input: ArcaQrInput): ArcaQrPayload {
   if (!/^[A-Z0-9]{3}$/.test(currency)) {
     invalid("currency", "a three-character ARCA currency id");
   }
-  const ctz =
-    currency === "PES" || input.exchangeRate === undefined
-      ? 1
-      : Number(input.exchangeRate);
-  if (!(Number.isFinite(ctz) && ctz > 0)) {
-    invalid("exchangeRate", "a positive number");
-  }
+  const ctz = currency === "PES" ? 1 : exchangeRate(input.exchangeRate);
   const codAut = digits(input.cae, "cae", 14, 14);
   const document = receiverDocument(input.document);
   return {
@@ -94,6 +86,33 @@ export function arcaQrPayload(input: ArcaQrInput): ArcaQrPayload {
     tipoCodAut: input.authorization === "CAEA" ? "A" : "E",
     codAut,
   };
+}
+
+/** `toIsoDate` only checks the shape, so the calendar is checked here too. */
+function isoCalendarDate(value: string): string {
+  let compact: string;
+  try {
+    compact = normalizeWsfeDateInput(value as WsfeDateInput, "date");
+  } catch {
+    invalid("date", "a YYYY-MM-DD or YYYYMMDD calendar date");
+  }
+  const iso = toIsoDate(compact);
+  if (iso === undefined) {
+    invalid("date", "a YYYY-MM-DD or YYYYMMDD calendar date");
+  }
+  return iso;
+}
+
+/** Pesos per unit of a non-peso currency: the specification never defaults it. */
+function exchangeRate(value: ArcaQrInput["exchangeRate"]): number {
+  if (value === undefined) {
+    invalid("exchangeRate", "a positive exchange rate for a non-peso currency");
+  }
+  const rate = Number(value);
+  if (!(Number.isFinite(rate) && rate > 0)) {
+    invalid("exchangeRate", "a positive number");
+  }
+  return rate;
 }
 
 /** Type 99 with number 0 is "unidentified"; the specification then omits both. */

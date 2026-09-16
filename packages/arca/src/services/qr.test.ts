@@ -53,10 +53,15 @@ describe("arcaQrUrl", () => {
       "A"
     );
     expect(arcaQrPayload({ ...base, exchangeRate: "65.5" }).ctz).toBe(65.5);
+    expect(
+      arcaQrPayload({ ...base, currency: "PES", exchangeRate: undefined }).ctz
+    ).toBe(1);
   });
   it("rejects malformed input before encoding", () => {
     for (const change of [
       { date: "13/10/2020" },
+      { date: "2026-02-31" },
+      { date: "20261301" },
       { taxId: "123" },
       { salesPoint: 0 },
       { number: 100_000_000 },
@@ -64,6 +69,7 @@ describe("arcaQrUrl", () => {
       { total: -1 },
       { currency: "PESOS" },
       { exchangeRate: 0 },
+      { exchangeRate: undefined },
       { cae: "1234" },
       { document: { type: 80, number: "12A" } },
     ]) {
