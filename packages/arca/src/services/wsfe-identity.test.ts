@@ -219,6 +219,12 @@ describe("WSFE identity matcher", () => {
       serviceStartDate: "2026-09-01",
     });
     expect(summary.vatRates).not.toBe(found.vatRates);
+    expect(
+      toVoucherSummary({
+        ...found,
+        vatRates: [{ id: 5, baseAmount: 100, amount: 21.001 }],
+      })
+    ).not.toHaveProperty("vatRates");
     expect(toVoucherSummary({ voucherNumber: 77, raw: {} })).toEqual({
       number: 77,
     });

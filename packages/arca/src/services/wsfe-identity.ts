@@ -13,8 +13,10 @@ export type VoucherCoordinates = {
   number: number;
 };
 
-/** Raw-free consultation evidence. Missing provider fields remain absent. */
-/** Money in minor units, dates in `YYYY-MM-DD`; absent when ARCA omits them. */
+/**
+ * Raw-free consultation evidence in the facade's units: money in minor units,
+ * dates in `YYYY-MM-DD`. A field ARCA omits or reports unparseably is absent.
+ */
 export type VoucherSummary = {
   number: number;
   salesPoint?: number;
@@ -315,12 +317,17 @@ export function toVoucherSummary(found: WsfeVoucherInfo): VoucherSummary {
   if (date !== undefined) {
     summary.date = date;
   }
-  if (found.vatRates !== undefined) {
-    summary.vatRates = found.vatRates.map(({ id, baseAmount, amount }) => ({
-      id,
-      baseAmount: minorUnits(baseAmount) ?? baseAmount,
-      amount: minorUnits(amount) ?? amount,
-    }));
+  // One rate that does not parse drops the whole list: a half-converted row
+  // would read as minor units and be off by a hundred.
+  const vatRates = found.vatRates?.map(({ id, baseAmount, amount }) => {
+    const base = minorUnits(baseAmount);
+    const minor = minorUnits(amount);
+    return base === undefined || minor === undefined
+      ? undefined
+      : { id, baseAmount: base, amount: minor };
+  });
+  if (vatRates !== undefined && vatRates.every((rate) => rate !== undefined)) {
+    summary.vatRates = vatRates as NonNullable<VoucherSummary["vatRates"]>;
   }
   return summary;
 }
