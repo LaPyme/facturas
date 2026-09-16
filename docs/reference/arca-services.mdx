@@ -66,8 +66,9 @@ Si el contribuyente o el punto de venta opera a través de WSMTXCA, pasá
 que se factura a ese contribuyente, en el mismo enum que acepta `to.condition`.
 Sale de las inscripciones activas en IVA: 30 es `responsable_inscripto`, 20
 `monotributo`, 32 `exento` y 34 `no_alcanzado`. Quien no tiene ninguna es
-`consumidor_final`. Si las inscripciones se contradicen, `condition` no viene y
-la decisión queda en tus manos. `taxes` lista cada impuesto informado con su
+`consumidor_final`. Si las inscripciones se contradicen, o la constancia trae
+un error distinto de "no existe", `condition` no viene y la decisión queda en
+tus manos. `taxes` lista cada impuesto informado con su
 id, descripción, estado y régimen, y `raw` conserva la respuesta completa.
 
 ```ts

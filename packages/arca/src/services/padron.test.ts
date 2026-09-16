@@ -198,12 +198,11 @@ describe("createPadronService", () => {
         },
       },
     });
-    await expect(
-      service.getTaxpayerDetails("20999999995")
-    ).resolves.toMatchObject({
-      taxId: "20999999995",
-      condition: "consumidor_final",
-    });
+    // Any other constancia error leaves the condition undecided: the
+    // registrations may simply be missing from the answer.
+    const blocked = await service.getTaxpayerDetails("20999999995");
+    expect(blocked).toMatchObject({ taxId: "20999999995", taxes: [] });
+    expect(blocked).not.toHaveProperty("condition");
   });
 
   it("returns null on not-found SOAP faults and rethrows other SOAP faults", async () => {

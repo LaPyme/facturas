@@ -1744,12 +1744,8 @@ function issuedVoucher(
   cae: string,
   caeExpiry: string
 ): IssuedVoucher {
-  if (taxId === undefined) {
-    throw new ArcaConfigurationError(
-      "The issuer tax ID is required to build the voucher QR"
-    );
-  }
   const date = toIsoDate(data.voucherDate) ?? data.voucherDate;
+  const qr = voucherQr({ attempted, data, taxId, date, cae });
   return {
     ...attempted,
     voucherClass,
@@ -1757,7 +1753,32 @@ function issuedVoucher(
     cae,
     caeExpiry: toIsoDate(caeExpiry) ?? caeExpiry,
     amounts,
-    qr: arcaQrUrl({
+    ...(qr === undefined ? {} : { qr }),
+  };
+}
+
+/**
+ * Runs after the fiscal write, so it never throws: the request was validated
+ * before the write and only the CAE comes from the provider.
+ */
+function voucherQr({
+  attempted,
+  data,
+  taxId,
+  date,
+  cae,
+}: {
+  attempted: VoucherCoordinates;
+  data: FiscalHeader;
+  taxId: string | undefined;
+  date: string;
+  cae: string;
+}): string | undefined {
+  if (taxId === undefined) {
+    return undefined;
+  }
+  try {
+    return arcaQrUrl({
       taxId,
       ...attempted,
       date,
@@ -1770,8 +1791,10 @@ function issuedVoucher(
         : { exchangeRate: data.exchangeRate }),
       cae,
       document: { type: data.documentType, number: data.documentNumber },
-    }),
-  };
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 type SequenceBarrier = {

@@ -146,10 +146,11 @@ Las claves usan `arca:v2:wsaa:{environment}:{service}:{fingerprint}` y
 `arca:v1:attempt:{environment}:{taxId}:{idempotencyKey}`. El registro de
 ticket es un JSON `{ v: 2, iv, data, tag }` cifrado con AES-256-GCM. Un
 ticket vigente que una versión anterior dejó en claro bajo `arca:v1:wsaa:` se
-vuelve a guardar cifrado en la primera lectura y se borra de la clave vieja,
-porque ARCA rechaza un login nuevo mientras ese ticket vive. El `withLock` de
-los tickets sigue usando la clave `arca:v1:wsaa:`, así que un despliegue con
-las dos versiones conviviendo sigue serializando sus logins. Los registros de
+vuelve a guardar cifrado en la primera lectura, porque ARCA rechaza un login
+nuevo mientras ese ticket vive. La copia en claro queda hasta que vence, para
+que los procesos de la versión anterior de un despliegue mixto la sigan
+encontrando. El `withLock` de los tickets sigue usando la clave
+`arca:v1:wsaa:`, así que las dos versiones serializan sus logins. Los registros de
 reserva contienen el hash del input, la operación, las coordenadas reservadas y
 el input exacto enviado. Contienen datos fiscales y de clientes. Restringí el
 acceso y protegé los backups.

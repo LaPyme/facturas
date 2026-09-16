@@ -25,7 +25,8 @@ export type PadronTaxpayerResult = {
    * The receiver condition to invoice this taxpayer under, derived from its
    * active IVA registrations: 30 is responsable inscripto, 20 monotributo, 32
    * exento and 34 no alcanzado. A taxpayer with none of them is a consumidor
-   * final. Absent only when the registrations contradict each other.
+   * final. Absent when the registrations contradict each other or when the
+   * constancia reports an error, because then they may be missing.
    */
   condition?: ReceiverCondition;
   taxes: PadronTax[];
@@ -83,7 +84,11 @@ export function createPadronService(
       const idPersona = record.idPersona ?? datosGenerales?.idPersona;
       const tipoPersona = record.tipoPersona ?? datosGenerales?.tipoPersona;
       const taxes = extractPadronTaxes(record);
-      const condition = deriveReceiverCondition(taxes);
+      // A constancia with an unresolved error may be missing registrations, so
+      // their absence proves nothing about the receiver's condition.
+      const condition = hasConstanciaError(record)
+        ? undefined
+        : deriveReceiverCondition(taxes);
       return {
         taxId: String(idPersona ?? taxId),
         ...(tipoPersona === undefined
@@ -138,16 +143,24 @@ const NOT_FOUND_PHRASES = [
   "no se encontro informacion para la clave",
 ];
 
-function isPadronNotFound(record: Record<string, unknown>): boolean {
+function constanciaErrors(record: Record<string, unknown>): string[] {
   const errorConstancia = record.errorConstancia as
     | { error?: unknown }
     | undefined;
   const errors = errorConstancia?.error;
-  const messages = Array.isArray(errors) ? errors : [errors];
-  return messages.some(
-    (message) =>
-      typeof message === "string" &&
-      NOT_FOUND_PHRASES.some((phrase) => plainText(message).includes(phrase))
+  return (Array.isArray(errors) ? errors : [errors]).filter(
+    (message): message is string =>
+      typeof message === "string" && message.trim() !== ""
+  );
+}
+
+function hasConstanciaError(record: Record<string, unknown>): boolean {
+  return constanciaErrors(record).length > 0;
+}
+
+function isPadronNotFound(record: Record<string, unknown>): boolean {
+  return constanciaErrors(record).some((message) =>
+    NOT_FOUND_PHRASES.some((phrase) => plainText(message).includes(phrase))
   );
 }
 

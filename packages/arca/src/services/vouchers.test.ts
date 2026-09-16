@@ -251,7 +251,7 @@ describe("vouchers.issue", () => {
     );
     const payload = JSON.parse(
       Buffer.from(
-        result.voucher.qr.split("?p=")[1] as string,
+        (result.voucher.qr as string).split("?p=")[1] as string,
         "base64"
       ).toString("utf8")
     );
@@ -278,6 +278,16 @@ describe("vouchers.issue", () => {
     expect(
       represented.kind === "authorized" && represented.voucher.qr
     ).not.toBe(result.voucher.qr);
+    // A CAE the specification cannot encode never costs the authorization.
+    const odd = fake({ ...authorized, cae: "cae-77" });
+    const kept = await odd.service.issue(input);
+    expect(kept).toMatchObject({
+      kind: "authorized",
+      voucher: { cae: "cae-77" },
+    });
+    expect(kept.kind === "authorized" && kept.voucher).not.toHaveProperty("qr");
+    const noIssuer = await createVouchersService(odd.wsfe).issue(input);
+    expect(noIssuer.kind).toBe("authorized");
   });
   it("resubmits once with a fresh ticket after a rejected one, never on a forced refresh", async () => {
     const rejectedTicket: WsfeAuthorizationOutcome = {

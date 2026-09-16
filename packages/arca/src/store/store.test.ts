@@ -300,14 +300,18 @@ it("seals namespaced WSAA credentials with the private key and honors expiry", a
     expect.any(Function)
   );
   // A valid ticket a release before 0.15 left in clear is resealed on first
-  // read: ARCA would refuse a new login while it lives.
+  // read: ARCA would refuse a new login while it lives. The clear copy stays
+  // for the older processes of a mixed rollout until it expires.
   await adapter.delete?.(key);
   await store.set(
     "arca:v1:wsaa:test:wsfe:fingerprint",
     JSON.stringify(credentials)
   );
   expect(await adapter.get(key)).toEqual(credentials);
-  expect(await store.get("arca:v1:wsaa:test:wsfe:fingerprint")).toBeNull();
+  expect(await store.get("arca:v1:wsaa:test:wsfe:fingerprint")).toBe(
+    JSON.stringify(credentials)
+  );
+  await store.delete?.("arca:v1:wsaa:test:wsfe:fingerprint");
   const resealed = await store.get("arca:v2:wsaa:test:wsfe:fingerprint");
   expect(resealed).not.toContain("token-secret");
   expect(await adapter.get(key)).toEqual(credentials);

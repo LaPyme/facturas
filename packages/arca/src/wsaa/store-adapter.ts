@@ -27,8 +27,9 @@ const KEY_PREFIX = "arca:v2:wsaa:";
 /**
  * Where releases before 0.15 kept the ticket in clear. A valid one is resealed
  * under the v2 key on first read, because ARCA refuses a second login while it
- * lives (`coe.alreadyAuthenticated`), and the lock stays on this key so a
- * mixed-version rollout still serializes its logins.
+ * lives (`coe.alreadyAuthenticated`). It is left in place until it expires so
+ * the pre-0.15 processes of a mixed rollout keep finding it, and the lock stays
+ * on this key so both versions serialize their logins.
  */
 const LEGACY_KEY_PREFIX = "arca:v1:wsaa:";
 const HKDF_SALT = "facturas:wsaa:v2";
@@ -66,7 +67,6 @@ export function createWsaaStoreAdapter(
         const legacy = usable(parseClear(await store.get(legacyKey(value))));
         if (legacy) {
           await write(value, legacy);
-          await remove?.(legacyKey(value));
         }
         return legacy;
       }),
