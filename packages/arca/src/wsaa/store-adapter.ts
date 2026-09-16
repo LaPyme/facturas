@@ -61,9 +61,13 @@ export function createWsaaStoreAdapter(
     get: (value) =>
       storeCall(async () => {
         const json = await store.get(key(value));
-        if (json !== null) {
-          return usable(open(json, cipherKey(secret, value)));
+        const sealed =
+          json === null ? null : usable(open(json, cipherKey(secret, value)));
+        if (sealed) {
+          return sealed;
         }
+        // No usable sealed ticket. A pre-0.15 process of a mixed rollout may
+        // have refreshed the clear one since, so it is checked as well.
         const legacy = usable(parseClear(await store.get(legacyKey(value))));
         if (legacy) {
           await write(value, legacy);

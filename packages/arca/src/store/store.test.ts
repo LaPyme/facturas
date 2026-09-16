@@ -315,6 +315,25 @@ it("seals namespaced WSAA credentials with the private key and honors expiry", a
   const resealed = await store.get("arca:v2:wsaa:test:wsfe:fingerprint");
   expect(resealed).not.toContain("token-secret");
   expect(await adapter.get(key)).toEqual(credentials);
+  // An expired sealed record does not hide a ticket an older process refreshed.
+  await adapter.set(key, {
+    ...credentials,
+    expiresAt: new Date(0).toISOString(),
+  });
+  await store.set(
+    "arca:v1:wsaa:test:wsfe:fingerprint",
+    JSON.stringify({ ...credentials, token: "refreshed-by-old-process" })
+  );
+  expect(await adapter.get(key)).toMatchObject({
+    token: "refreshed-by-old-process",
+  });
+  expect(await store.get("arca:v2:wsaa:test:wsfe:fingerprint")).not.toContain(
+    "refreshed-by-old-process"
+  );
+  await store.delete?.("arca:v1:wsaa:test:wsfe:fingerprint");
+  expect(await adapter.get(key)).toMatchObject({
+    token: "refreshed-by-old-process",
+  });
   // An expired or unreadable legacy record is a miss and is left alone.
   await adapter.delete?.(key);
   await store.set(
