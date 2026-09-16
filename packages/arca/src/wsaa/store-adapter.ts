@@ -24,6 +24,13 @@ import {
 export type WsaaStoreAdapterSecret = { privateKeyPem: string };
 
 const KEY_PREFIX = "arca:v2:wsaa:";
+/**
+ * Where releases before 0.15 kept the ticket in clear. A valid one is resealed
+ * under the v2 key on first read, because ARCA refuses a second login while it
+ * lives (`coe.alreadyAuthenticated`), and the lock stays on this key so a
+ * mixed-version rollout still serializes its logins.
+ */
+const LEGACY_KEY_PREFIX = "arca:v1:wsaa:";
 const HKDF_SALT = "facturas:wsaa:v2";
 const RECORD_VERSION = 2;
 
@@ -40,30 +47,30 @@ export function createWsaaStoreAdapter(
 ): ArcaWsaaSessionStore {
   const key = (value: ArcaWsaaSessionKey) =>
     `${KEY_PREFIX}${serializeWsaaSessionKey(value)}`;
+  const legacyKey = (value: ArcaWsaaSessionKey) =>
+    `${LEGACY_KEY_PREFIX}${serializeWsaaSessionKey(value)}`;
   const remove = store.delete?.bind(store);
   const lock = store.withLock?.bind(store);
+  const write = (value: ArcaWsaaSessionKey, credentials: ArcaAuthCredentials) =>
+    store.set(
+      key(value),
+      seal(JSON.stringify(credentials), cipherKey(secret, value))
+    );
   return {
     get: (value) =>
       storeCall(async () => {
         const json = await store.get(key(value));
-        if (json === null) {
-          return null;
+        if (json !== null) {
+          return usable(open(json, cipherKey(secret, value)));
         }
-        const credentials = open(json, cipherKey(secret, value));
-        return credentials &&
-          typeof credentials.token === "string" &&
-          typeof credentials.sign === "string" &&
-          isWsaaCredentialValid(credentials)
-          ? credentials
-          : null;
+        const legacy = usable(parseClear(await store.get(legacyKey(value))));
+        if (legacy) {
+          await write(value, legacy);
+          await remove?.(legacyKey(value));
+        }
+        return legacy;
       }),
-    set: (value, credentials) =>
-      storeCall(() =>
-        store.set(
-          key(value),
-          seal(JSON.stringify(credentials), cipherKey(secret, value))
-        )
-      ),
+    set: (value, credentials) => storeCall(() => write(value, credentials)),
     ...(remove
       ? {
           delete: (value: ArcaWsaaSessionKey) =>
@@ -73,10 +80,32 @@ export function createWsaaStoreAdapter(
     ...(lock
       ? {
           withLock: <T>(value: ArcaWsaaSessionKey, fn: () => Promise<T>) =>
-            lock(key(value), fn),
+            lock(legacyKey(value), fn),
         }
       : {}),
   };
+}
+
+function usable(
+  credentials: ArcaAuthCredentials | null
+): ArcaAuthCredentials | null {
+  return credentials &&
+    typeof credentials.token === "string" &&
+    typeof credentials.sign === "string" &&
+    isWsaaCredentialValid(credentials)
+    ? credentials
+    : null;
+}
+
+function parseClear(json: string | null): ArcaAuthCredentials | null {
+  if (json === null) {
+    return null;
+  }
+  try {
+    return JSON.parse(json) as ArcaAuthCredentials;
+  } catch {
+    return null;
+  }
 }
 
 /** One key per session key, so a ticket sealed for one certificate opens for no other. */

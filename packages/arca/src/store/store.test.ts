@@ -293,16 +293,35 @@ it("seals namespaced WSAA credentials with the private key and honors expiry", a
   expect(await adapter.get(key)).toBeNull();
   await store.set("arca:v2:wsaa:test:wsfe:fingerprint", "not json");
   expect(await adapter.get(key)).toBeNull();
+  // The lock stays on the pre-0.15 key so a mixed rollout still serializes.
+  await adapter.withLock?.(key, () => Promise.resolve());
+  expect(lock).toHaveBeenCalledWith(
+    "arca:v1:wsaa:test:wsfe:fingerprint",
+    expect.any(Function)
+  );
+  // A valid ticket a release before 0.15 left in clear is resealed on first
+  // read: ARCA would refuse a new login while it lives.
+  await adapter.delete?.(key);
   await store.set(
     "arca:v1:wsaa:test:wsfe:fingerprint",
     JSON.stringify(credentials)
   );
-  expect(await adapter.get(key)).toBeNull();
-  await adapter.withLock?.(key, () => Promise.resolve());
-  expect(lock).toHaveBeenCalledWith(
-    "arca:v2:wsaa:test:wsfe:fingerprint",
-    expect.any(Function)
+  expect(await adapter.get(key)).toEqual(credentials);
+  expect(await store.get("arca:v1:wsaa:test:wsfe:fingerprint")).toBeNull();
+  const resealed = await store.get("arca:v2:wsaa:test:wsfe:fingerprint");
+  expect(resealed).not.toContain("token-secret");
+  expect(await adapter.get(key)).toEqual(credentials);
+  // An expired or unreadable legacy record is a miss and is left alone.
+  await adapter.delete?.(key);
+  await store.set(
+    "arca:v1:wsaa:test:wsfe:fingerprint",
+    JSON.stringify({ ...credentials, expiresAt: new Date(0).toISOString() })
   );
+  expect(await adapter.get(key)).toBeNull();
+  expect(await store.get("arca:v2:wsaa:test:wsfe:fingerprint")).toBeNull();
+  await store.set("arca:v1:wsaa:test:wsfe:fingerprint", "not json");
+  expect(await adapter.get(key)).toBeNull();
+  await store.delete?.("arca:v1:wsaa:test:wsfe:fingerprint");
   await adapter.set(key, {
     ...credentials,
     expiresAt: new Date(0).toISOString(),
