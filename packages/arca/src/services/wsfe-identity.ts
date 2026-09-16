@@ -326,7 +326,7 @@ export function toVoucherSummary(found: WsfeVoucherInfo): VoucherSummary {
       ? undefined
       : { id, baseAmount: base, amount: minor };
   });
-  if (vatRates !== undefined && vatRates.every((rate) => rate !== undefined)) {
+  if (vatRates?.every((rate) => rate !== undefined)) {
     summary.vatRates = vatRates as NonNullable<VoucherSummary["vatRates"]>;
   }
   return summary;
