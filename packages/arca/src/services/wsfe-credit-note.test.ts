@@ -21,7 +21,7 @@ function original(input: IssueInput): WsfeVoucherInfo {
     exchangeRate: Number(data.exchangeRate),
     voucherNumber: 1,
     result: "A",
-    cae: "123",
+    cae: "74123456789012",
     caeExpiry: "20260914",
     raw: {},
   };
@@ -163,6 +163,42 @@ describe("full credit note derivation", () => {
     expect(() =>
       deriveWsfeFullCreditNote({ ...invoice, concept: 2 }, full("20260905"))
     ).toThrow("serviceStartDate");
+  });
+  it("takes to.condition only when the original reports no receiver condition", () => {
+    const unreported = { ...invoice, receiverVatConditionId: undefined };
+    expect(() =>
+      deriveWsfeFullCreditNote(unreported, full("20260905"))
+    ).toThrow("to.condition");
+    expect(
+      deriveWsfeFullCreditNote(unreported, {
+        ...full("20260905"),
+        to: { condition: "consumidor_final" },
+      }).data.receiverVatConditionId
+    ).toBe(5);
+    expect(
+      deriveWsfePartialCreditNote([unreported], {
+        ...partial([{ gross: 100, vat: 21 }]),
+        to: { condition: 5 },
+      }).data.receiverVatConditionId
+    ).toBe(5);
+    expect(
+      deriveWsfeFullCreditNote(invoice, {
+        ...full("20260905"),
+        to: { condition: invoice.receiverVatConditionId as number },
+      }).data.receiverVatConditionId
+    ).toBe(invoice.receiverVatConditionId);
+    expect(() =>
+      deriveWsfeFullCreditNote(invoice, {
+        ...full("20260905"),
+        to: { condition: "responsable_inscripto" },
+      })
+    ).toThrow("does not match");
+    expect(() =>
+      deriveWsfeFullCreditNote(unreported, {
+        ...full("20260905"),
+        to: { condition: "cliente" as never },
+      })
+    ).toThrow("to.condition");
   });
   it("uses Buenos Aires date and respects association date rules", () => {
     expect(

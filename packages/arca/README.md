@@ -17,8 +17,10 @@ notas de crédito y notas de débito, y consultá el Padrón con una sola API.
 - **Integración directa con ARCA**, sin proxy ni dependencia alojada
 - **Una API de emisión**: el SDK deriva el pedido fiscal y mantiene los detalles
   de cada servicio fuera del flujo normal
-- **Login WSAA resuelto**: caché en memoria, stores de sesión persistentes,
+- **Login WSAA resuelto**: caché en memoria, tickets cifrados en el store,
   deduplicación de logins en vuelo y recuperación de `coe.alreadyAuthenticated`
+- **QR y Padrón incluidos**: cada comprobante autorizado trae la URL de su QR,
+  y el Padrón devuelve la condición de IVA lista para facturar
 - **API pública en TypeScript estricto**, con nombres al estilo JS mapeados a
   SOAP internamente
 - **Datos de referencia comunes de ARCA** exportados como constantes, para que
@@ -60,7 +62,7 @@ Tratá siempre los cuatro resultados:
 
 | Resultado | Qué significa y qué hacer |
 | --- | --- |
-| `authorized` | Guardá el comprobante y el CAE. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada. Esto prueba consistencia, no autoría. |
+| `authorized` | Guardá el comprobante, el CAE y el `qr` para imprimir. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada. Esto prueba consistencia, no autoría. |
 | `rejected` | Revisá los `issues` de ARCA. Una clave queda ligada a su input incluso después de un rechazo. |
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |

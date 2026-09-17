@@ -494,8 +494,27 @@ function invalid(field: string, expected: string): never {
   });
 }
 
+const NUMERIC_RECEIVER_CONDITIONS = [1, 4, 5, 6, 7, 8, 9, 10, 13, 15, 16];
+
+/** The ARCA identifier for a receiver condition given by name or by number. */
+export function receiverConditionId(condition: unknown, path: string): number {
+  if (typeof condition === "number") {
+    if (!NUMERIC_RECEIVER_CONDITIONS.includes(condition)) {
+      invalid(path, "an ARCA receiver condition");
+    }
+    return condition;
+  }
+  if (
+    typeof condition !== "string" ||
+    !Object.hasOwn(ARCA_RECEIVER_CONDITION_IDS, condition)
+  ) {
+    invalid(path, "one of the five supported receiver conditions");
+  }
+  return ARCA_RECEIVER_CONDITION_IDS[condition as ReceiverCondition];
+}
+
 function deriveNumericReceiver(to: Extract<Receiver, { condition: number }>) {
-  if (![1, 4, 5, 6, 7, 8, 9, 10, 13, 15, 16].includes(to.condition)) {
+  if (!NUMERIC_RECEIVER_CONDITIONS.includes(to.condition)) {
     invalid("to.condition", "an ARCA receiver condition");
   }
   const document = "document" in to ? to.document : undefined;

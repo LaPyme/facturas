@@ -46,7 +46,7 @@ const authorized: WsfeAuthorizationOutcome = {
   kind: "authorized",
   result: "A",
   resultLevel: "detail",
-  cae: "123",
+  cae: "74123456789012",
   caeExpiry: "20260915",
   voucherNumber: 9,
 };
@@ -71,7 +71,7 @@ function found(sent = data, number = 1): WsfeVoucherLookupResult {
       exchangeRate: Number(sent.exchangeRate),
       voucherNumber: number,
       result: "A",
-      cae: "123",
+      cae: "74123456789012",
       caeExpiry: "20260915",
       raw: {},
     },
@@ -175,10 +175,10 @@ describe("credit note orchestration", () => {
       number: 1,
       salesPoint: 1,
       voucherType: 11,
-      date: "20260904",
-      totalAmount: 1,
-      cae: "123",
-      caeExpiry: "20260915",
+      date: "2026-09-04",
+      totalAmount: 100,
+      cae: "74123456789012",
+      caeExpiry: "2026-09-15",
     });
     expect(credit.originals?.[0]).not.toHaveProperty("raw");
 
@@ -298,7 +298,14 @@ describe("credit note orchestration", () => {
       { for: { ...target, voucherType: 8 }, all: true },
     ],
     ["an associated period", { for: target, all: true, associatedPeriod: {} }],
-    ["a receiver", { for: target, all: true, to: { condition: "exento" } }],
+    [
+      "a receiver document",
+      { for: target, all: true, to: { condition: "exento", cuit: "1" } },
+    ],
+    [
+      "an unknown receiver condition",
+      { for: target, all: true, to: { condition: "cliente" } },
+    ],
     ["a currency", { for: target, all: true, currency: "USD" }],
     ["an issuer", { for: target, all: true, issuer: "monotributo" }],
     ["an unknown target field", { for: { ...target, cuit: "20123456789" } }],

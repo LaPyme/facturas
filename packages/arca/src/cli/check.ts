@@ -181,7 +181,7 @@ export async function runCheckLayers(
   }
 
   const cache =
-    flags.noCache === true ? undefined : createTicketCache(io.cacheDir);
+    flags.noCache === true ? undefined : createTicketCache(io.cacheDir, config);
   const wsaa = await checkWsaa(io, config, cache);
   layers.push(wsaa.layer);
   if (!(wsaa.layer.ok && wsaa.credentials)) {
@@ -722,8 +722,11 @@ function checkSalesPoints(
  * can be run again inside the 12 hours ARCA keeps it valid. The file store
  * creates the directory 0700 and writes 0600. Nothing else is ever stored.
  */
-function createTicketCache(directory: string): TicketCache {
-  const store = createWsaaStoreAdapter(createFileStore(directory));
+function createTicketCache(
+  directory: string,
+  config: ArcaClientConfig
+): TicketCache {
+  const store = createWsaaStoreAdapter(createFileStore(directory), config);
   let reused = false;
   const remove = store.delete?.bind(store);
   return {

@@ -57,6 +57,12 @@ switch (nota.kind) {
 }
 ```
 
+El SDK consulta el original y toma de ahí la clase, el receptor, la moneda y el
+concepto. ARCA no informa la condición de IVA del receptor en comprobantes
+autorizados antes de que existiera ese campo. Para esos originales pasá
+`to: { condition: "consumidor_final" }` con la condición real del receptor. Se
+usa solo si la consulta no la trae, y si la trae tiene que coincidir.
+
 ## Nota total
 
 `all: true` acredita el original completo: espeja sus importes y sus alícuotas
@@ -251,7 +257,8 @@ emisión. A diferencia de `preview()`, que no hace ninguna I/O, estas consultan
 los originales: una lectura por original, sin escritura y sin reservar número.
 La respuesta de una nota vinculada incluye esos comprobantes en `originals`,
 `VoucherSummary` normalizados y sin la respuesta cruda, en el orden en que los
-pasaste. Una nota por período no tiene originales, así que tampoco necesita esa
+pasaste. Un `VoucherSummary` habla en las unidades del input: importes en
+centavos y fechas `YYYY-MM-DD`. Una nota por período no tiene originales, así que tampoco necesita esa
 consulta ni devuelve esa propiedad.
 
 ```ts

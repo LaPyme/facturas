@@ -1,9 +1,11 @@
+import type { VoucherClass } from "../constants";
 import {
   ArcaConfigurationError,
   ArcaInputError,
   ArcaServiceError,
   toArcaSafeErrorMetadata,
 } from "../errors";
+import { toIsoDate } from "../internal/dates";
 import {
   arcaMinorUnitsToNumber,
   normalizeArcaAmountToMinorUnits,
@@ -33,6 +35,7 @@ import {
   matchWsmtxcaDetails,
   wsmtxcaRequest,
 } from "./issuance-wsmtxca";
+import { arcaQrUrl } from "./qr";
 import type {
   IssuanceService,
   IssuedVoucher,
@@ -49,7 +52,7 @@ import {
   type WsfeVoucherInfo,
   type WsfeVoucherInput,
 } from "./wsfe";
-import { deriveWsmtxcaSettlement } from "./wsfe-amounts";
+import { deriveWsmtxcaSettlement, type IssueAmounts } from "./wsfe-amounts";
 import {
   assertCreditNoteInput,
   type CreditNoteInput,
@@ -66,6 +69,7 @@ import {
 } from "./wsfe-derive";
 import {
   matchWsfeVoucherIdentity,
+  normalizeLegacySummary,
   toVoucherSummary,
   type VoucherCoordinates,
   type VoucherSummary,
@@ -393,8 +397,9 @@ async function runOperation(
   replayAmounts?: Prepared["amounts"],
   select?: SelectService
 ): Promise<IssueOutcome<IssueOptions>> {
+  const issuer = issuerTaxId(options, context);
   if (options.idempotencyKey === undefined || !context?.store) {
-    return runAuthorization(wsfe, await prepare(), options);
+    return runAuthorization(wsfe, await prepare(), options, issuer);
   }
   const store: ArcaStore = context.store;
   const { environment, taxId } = context;
@@ -515,7 +520,7 @@ async function runOperation(
     }
     if (await storeCall(() => store.add(key, JSON.stringify(record)))) {
       const outcome = await settle(
-        runAuthorization(wsfe, prepared, options, number)
+        runAuthorization(wsfe, prepared, options, issuer, number)
       );
       if (coordinated && outcome.kind !== "indeterminate") {
         // ARCA reported this claim, so the next one needs no consultation.
@@ -564,6 +569,7 @@ async function runOperation(
           stored,
           readSettledRecord(recorded),
           options,
+          taxId,
           (other) =>
             storeCall(() => store.get(settledKey(environment, taxId, other)))
         );
@@ -576,6 +582,7 @@ async function runOperation(
             ...(replayAmounts ? { amounts: replayAmounts } : {}),
           },
           options,
+          issuer,
           stored.number,
           true
         )
@@ -616,7 +623,7 @@ async function recordConflict(
     return outcome;
   }
   const record: ArcaSettledRecord = {
-    v: 1,
+    v: 2,
     kind: "conflict",
     number: outcome.attempted.number,
     found: Object.fromEntries(
@@ -632,13 +639,17 @@ function readSettledRecord(json: string): ArcaSettledRecord {
   try {
     const record = JSON.parse(json) as ArcaSettledRecord;
     if (
-      record?.v !== 1 ||
+      (record?.v !== 1 && record?.v !== 2) ||
       !Number.isSafeInteger(record.number) ||
       (record.kind === "conflict"
         ? !record.found || typeof record.found !== "object"
         : record.kind !== "superseded" || typeof record.by !== "string")
     ) {
       throw new Error("Invalid settled structure");
+    }
+    if (record.kind === "conflict" && record.v === 1) {
+      // Version 1 kept ARCA's units. The summary is normalized on read.
+      return { ...record, v: 2, found: normalizeLegacySummary(record.found) };
     }
     return record;
   } catch (cause) {
@@ -662,12 +673,19 @@ async function settledOutcome(
   reservation: ArcaAttemptRecord,
   settled: ArcaSettledRecord,
   options: RecoveryOptions,
+  taxId: string,
   settledFor: (key: string) => Promise<string | null>
 ): Promise<IssueOutcome<IssueOptions>> {
   if (settled.kind === "conflict") {
     return settledConflict(settled, reservation, options);
   }
-  const outcome = await consultReservation(select, reservation, options, true);
+  const outcome = await consultReservation(
+    select,
+    reservation,
+    options,
+    taxId,
+    true
+  );
   const empty =
     outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found";
   if (
@@ -849,6 +867,7 @@ async function runAuthorization(
   wsfe: IssueWsfeService,
   { data, voucherClass, amounts }: Prepared,
   options: IssueOptions,
+  taxId: string | undefined,
   reservedNumber?: number,
   replay = false
 ): Promise<IssueOutcome<IssueOptions>> {
@@ -867,14 +886,12 @@ async function runAuthorization(
     number,
   };
   const includedRequest = requestEvidence(data, number, options);
-  const voucher = (cae: string, caeExpiry: string): IssuedVoucher => ({
-    ...attempted,
-    voucherClass,
-    date: data.voucherDate,
-    cae,
-    caeExpiry,
-    amounts,
-  });
+  const voucher = (cae: string, caeExpiry: string): IssuedVoucher =>
+    issuedVoucher(
+      { attempted, voucherClass, data, amounts, taxId },
+      cae,
+      caeExpiry
+    );
   const recovery = {
     wsfe,
     auth,
@@ -905,12 +922,29 @@ async function runAuthorization(
       return recoverInvoice({ ...recovery, attempt, lookup });
     }
   }
-  // This is the only authorization call, including all transport/recovery branches.
-  const authorization = await wsfe.issue({
+  // The only authorization call, across every transport and recovery branch;
+  // the one resubmission below is the sole exception and only follows a
+  // rejected ticket, never an uncertain write.
+  let authorization = await wsfe.issue({
     ...auth,
     data,
     voucherNumber: number,
   });
+  if (
+    authorization.kind === "indeterminate" &&
+    authorization.reason === "authentication_rejected" &&
+    auth.forceRefresh !== true
+  ) {
+    // The provider classifies a rejected ticket only when it returned no CAE,
+    // no result and no number: the write never reached the fiscal logic, so
+    // one resubmission with a fresh ticket cannot authorize twice.
+    authorization = await wsfe.issue({
+      ...auth,
+      forceRefresh: true,
+      data,
+      voucherNumber: number,
+    });
+  }
   if (
     authorization.kind === "authorized" &&
     authorization.caeExpiry &&
@@ -1602,6 +1636,7 @@ async function recoverOperation(
       record,
       readSettledRecord(recorded),
       options,
+      (context as StoreContext).taxId,
       (other) =>
         storeCall(() =>
           store.get(
@@ -1617,7 +1652,12 @@ async function recoverOperation(
   return await recordConflict(
     store,
     settled,
-    await consultReservation(select, record, options)
+    await consultReservation(
+      select,
+      record,
+      options,
+      (context as StoreContext).taxId
+    )
   );
 }
 
@@ -1630,6 +1670,7 @@ function consultReservation(
   select: SelectService,
   record: ArcaAttemptRecord,
   options: RecoveryOptions,
+  taxId: string,
   strangerAtNumber = false
 ): Promise<IssueOutcome<IssueOptions>> {
   const storedOptions = {
@@ -1657,15 +1698,103 @@ function consultReservation(
       record.number,
       storedOptions
     ),
-    voucher: (cae, caeExpiry) => ({
-      ...attempted,
-      voucherClass: prepared.voucherClass,
-      date: prepared.data.voucherDate,
-      amounts: prepared.amounts,
-      cae,
-      caeExpiry,
-    }),
+    voucher: (cae, caeExpiry) =>
+      issuedVoucher(
+        {
+          attempted,
+          voucherClass: prepared.voucherClass,
+          data: prepared.data,
+          amounts: prepared.amounts,
+          taxId: record.representedTaxId ?? taxId,
+        },
+        cae,
+        caeExpiry
+      ),
   });
+}
+
+/** The issuer's CUIT for this call: the represented one, else the client's. */
+function issuerTaxId(
+  options: IssueOptions,
+  context: StoreContext | undefined
+): string | undefined {
+  return options.representedTaxId === undefined
+    ? context?.taxId
+    : String(options.representedTaxId);
+}
+
+/**
+ * What the caller keeps: ISO dates, minor-unit money and the QR every printed
+ * voucher must carry. The request keeps ARCA's own shape.
+ */
+function issuedVoucher(
+  {
+    attempted,
+    voucherClass,
+    data,
+    amounts,
+    taxId,
+  }: {
+    attempted: VoucherCoordinates;
+    voucherClass: VoucherClass;
+    data: FiscalHeader;
+    amounts: IssueAmounts;
+    taxId: string | undefined;
+  },
+  cae: string,
+  caeExpiry: string
+): IssuedVoucher {
+  const date = toIsoDate(data.voucherDate) ?? data.voucherDate;
+  const qr = voucherQr({ attempted, data, taxId, date, cae });
+  return {
+    ...attempted,
+    voucherClass,
+    date,
+    cae,
+    caeExpiry: toIsoDate(caeExpiry) ?? caeExpiry,
+    amounts,
+    ...(qr === undefined ? {} : { qr }),
+  };
+}
+
+/**
+ * Runs after the fiscal write, so it never throws: the request was validated
+ * before the write and only the CAE comes from the provider.
+ */
+function voucherQr({
+  attempted,
+  data,
+  taxId,
+  date,
+  cae,
+}: {
+  attempted: VoucherCoordinates;
+  data: FiscalHeader;
+  taxId: string | undefined;
+  date: string;
+  cae: string;
+}): string | undefined {
+  if (taxId === undefined) {
+    return undefined;
+  }
+  try {
+    return arcaQrUrl({
+      taxId,
+      ...attempted,
+      date,
+      total: Number(
+        normalizeArcaAmountToMinorUnits(data.totalAmount, "totalAmount")
+      ),
+      currency: data.currencyId,
+      ...(data.exchangeRate === undefined
+        ? {}
+        : { exchangeRate: data.exchangeRate }),
+      cae,
+      document: { type: data.documentType, number: data.documentNumber },
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 type SequenceBarrier = {
@@ -1736,12 +1865,17 @@ async function runSequenceBarrier({
   const outcome = await recordConflict(
     store,
     settled,
-    await consultReservation(select, record, {
-      forceRefresh: options.forceRefresh,
-      ...(options.abortSignal === undefined
-        ? {}
-        : { abortSignal: options.abortSignal }),
-    })
+    await consultReservation(
+      select,
+      record,
+      {
+        forceRefresh: options.forceRefresh,
+        ...(options.abortSignal === undefined
+          ? {}
+          : { abortSignal: options.abortSignal }),
+      },
+      taxId
+    )
   );
   if (outcome.kind === "authorized" || outcome.kind === "conflict") {
     return {};

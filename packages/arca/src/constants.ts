@@ -59,15 +59,6 @@ export const ARCA_CURRENCY_IDS = {
   USD: "DOL",
 } as const;
 
-/**
- * Common ARCA currency identifiers.
- * @deprecated Use ISO_CURRENCIES, or ARCA_CURRENCY_IDS at the provider boundary.
- */
-export const ARCA_CURRENCIES = {
-  PES: "PES",
-  DOL: "DOL",
-} as const;
-
 /** Legal assertions supported by the invoice high-level API; never inferred from Padrón. */
 export type IssuerCondition =
   | "responsable_inscripto"

@@ -31,7 +31,6 @@ describe("barrel exports", () => {
     );
     expect(constantsBarrel.ARCA_CONCEPT_TYPES.SERVICIOS).toBe(2);
     expect(constantsBarrel.ARCA_VAT_RATES.IVA_21).toBe(5);
-    expect(constantsBarrel.ARCA_CURRENCIES.PES).toBe("PES");
     expect(constantsBarrel.ISO_CURRENCIES.ARS).toBe("ARS");
     expect(constantsBarrel.ARCA_CURRENCY_IDS.USD).toBe("DOL");
   });

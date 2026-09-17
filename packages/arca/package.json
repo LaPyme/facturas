@@ -1,7 +1,7 @@
 {
   "name": "facturas",
   "version": "0.14.0",
-  "description": "Node.js client for ARCA services including WSFE, WSMTXCA, and padron lookups.",
+  "description": "SDK de facturación electrónica con ARCA / AFIP para Node.js: facturas, notas de crédito y débito, y Padrón con una sola API.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "Lapyme",

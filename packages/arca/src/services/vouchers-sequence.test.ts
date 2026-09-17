@@ -90,7 +90,7 @@ function provider() {
         documentNumber: String(data.documentNumber),
         voucherNumber: number,
         result: "A",
-        cae: `cae-${number}`,
+        cae: `741234567890${String(number).padStart(2, "0")}`,
         caeExpiry: "20260914",
         raw: {},
       },
@@ -114,7 +114,7 @@ function provider() {
         kind: "authorized",
         result: "A",
         resultLevel: "detail",
-        cae: `cae-${voucherNumber}`,
+        cae: `741234567890${String(voucherNumber).padStart(2, "0")}`,
         caeExpiry: "20260914",
         voucherNumber,
       };
@@ -303,7 +303,7 @@ describe("superseded claims", () => {
     // fiscal data: two consumidor final sales for the same amount.
     expect(await arca.issue(input, { idempotencyKey: "key2" })).toMatchObject({
       kind: "authorized",
-      voucher: { number: 77, cae: "cae-77" },
+      voucher: { number: 77, cae: "74123456789077" },
     });
     expect(
       JSON.parse(
@@ -590,7 +590,7 @@ describe("deadline", () => {
     expect(await arca.recover("sale")).toMatchObject({
       kind: "authorized",
       recoveredByMatch: true,
-      voucher: { number: 77, cae: "cae-77" },
+      voucher: { number: 77, cae: "74123456789077" },
     });
   });
   it("rejects an options.abortSignal that is not an AbortSignal", async () => {

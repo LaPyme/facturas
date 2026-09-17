@@ -1,3 +1,4 @@
+import type { ReceiverCondition } from "../constants";
 import { ArcaSoapFaultError } from "../errors";
 import type {
   ArcaClientConfig,
@@ -6,11 +7,29 @@ import type {
 import type { SoapTransport } from "../soap";
 import type { WsaaAuthModule } from "../wsaa";
 
+/** One tax registration reported by the constancia de inscripción. */
+export type PadronTax = {
+  id: number;
+  description?: string;
+  /** ARCA's state code; `AC` is active. Absent when ARCA omits it. */
+  state?: string;
+  regime: "general" | "monotributo";
+};
+
 /** Result of a taxpayer lookup via Padron A5. */
 export type PadronTaxpayerResult = {
   taxId: string;
   personType?: string;
   name?: string;
+  /**
+   * The receiver condition to invoice this taxpayer under, derived from its
+   * active IVA registrations: 30 is responsable inscripto, 20 monotributo, 32
+   * exento and 34 no alcanzado. A taxpayer with none of them is a consumidor
+   * final. Absent when the registrations contradict each other or when the
+   * constancia reports an error, because then they may be missing.
+   */
+  condition?: ReceiverCondition;
+  taxes: PadronTax[];
   raw: Record<string, unknown>;
 };
 
@@ -56,15 +75,28 @@ export function createPadronService(
         return null;
       }
       const record = raw as Record<string, unknown>;
+      if (isPadronNotFound(record)) {
+        return null;
+      }
       const datosGenerales = record.datosGenerales as
         | Record<string, unknown>
         | undefined;
+      const idPersona = record.idPersona ?? datosGenerales?.idPersona;
+      const tipoPersona = record.tipoPersona ?? datosGenerales?.tipoPersona;
+      const taxes = extractPadronTaxes(record);
+      // A constancia with an unresolved error may be missing registrations, so
+      // their absence proves nothing about the receiver's condition.
+      const condition = hasConstanciaError(record)
+        ? undefined
+        : deriveReceiverCondition(taxes);
       return {
-        taxId: String(record.idPersona ?? ""),
-        ...(record.tipoPersona === undefined
+        taxId: String(idPersona ?? taxId),
+        ...(tipoPersona === undefined
           ? {}
-          : { personType: String(record.tipoPersona) }),
+          : { personType: String(tipoPersona) }),
         ...(datosGenerales ? { name: extractPadronName(datosGenerales) } : {}),
+        ...(condition === undefined ? {} : { condition }),
+        taxes,
         raw: record,
       };
     },
@@ -93,6 +125,96 @@ export function createPadronService(
       };
     },
   };
+}
+
+const IVA_TAX_CONDITIONS: Readonly<Record<number, ReceiverCondition>> = {
+  20: "monotributo",
+  30: "responsable_inscripto",
+  32: "exento",
+  34: "no_alcanzado",
+};
+
+// The constancia answers a missing CUIT inside errorConstancia, not as a fault.
+const NOT_FOUND_PHRASES = [
+  "la clave solicitada no existe",
+  "no existe persona con ese id",
+  "no existe persona con esa clave",
+  "persona no encontrada",
+  "no se encontro informacion para la clave",
+];
+
+function constanciaErrors(record: Record<string, unknown>): string[] {
+  const errorConstancia = record.errorConstancia as
+    | { error?: unknown }
+    | undefined;
+  const errors = errorConstancia?.error;
+  return (Array.isArray(errors) ? errors : [errors]).filter(
+    (message): message is string =>
+      typeof message === "string" && message.trim() !== ""
+  );
+}
+
+function hasConstanciaError(record: Record<string, unknown>): boolean {
+  return constanciaErrors(record).length > 0;
+}
+
+function isPadronNotFound(record: Record<string, unknown>): boolean {
+  return constanciaErrors(record).some((message) =>
+    NOT_FOUND_PHRASES.some((phrase) => plainText(message).includes(phrase))
+  );
+}
+
+function plainText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+}
+
+function extractPadronTaxes(record: Record<string, unknown>): PadronTax[] {
+  const taxes: PadronTax[] = [];
+  for (const [regime, field] of [
+    ["general", "datosRegimenGeneral"],
+    ["monotributo", "datosMonotributo"],
+  ] as const) {
+    const bucket = record[field] as { impuesto?: unknown } | undefined;
+    const rows = bucket?.impuesto;
+    for (const row of Array.isArray(rows) ? rows : rows ? [rows] : []) {
+      const tax = row as Record<string, unknown>;
+      const id = Number(tax.idImpuesto);
+      if (!Number.isSafeInteger(id)) {
+        continue;
+      }
+      taxes.push({
+        id,
+        ...(typeof tax.descripcionImpuesto === "string"
+          ? { description: tax.descripcionImpuesto }
+          : {}),
+        ...(typeof tax.estadoImpuesto === "string"
+          ? { state: tax.estadoImpuesto.trim().toUpperCase() }
+          : {}),
+        regime,
+      });
+    }
+  }
+  return taxes;
+}
+
+/** One active IVA registration decides; none is a consumidor final; two is nobody's call. */
+function deriveReceiverCondition(
+  taxes: readonly PadronTax[]
+): ReceiverCondition | undefined {
+  const conditions = new Set<ReceiverCondition>();
+  for (const tax of taxes) {
+    const condition = IVA_TAX_CONDITIONS[tax.id];
+    if (condition && (tax.state === undefined || tax.state === "AC")) {
+      conditions.add(condition);
+    }
+  }
+  if (conditions.size === 0) {
+    return "consumidor_final";
+  }
+  return conditions.size === 1 ? [...conditions][0] : undefined;
 }
 
 function extractPadronName(

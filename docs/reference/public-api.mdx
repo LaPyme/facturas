@@ -67,6 +67,11 @@ resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
 esta clave y hay que emitir bajo una clave nueva. Está documentado en
 [Facturas](/guides/invoices#evitar-duplicados-al-reintentar).
 
+`arcaQrUrl()` y `arcaQrPayload()` arman la URL y el JSON del QR de un
+comprobante impreso desde datos guardados, con `ArcaQrInput` y
+`ArcaQrPayload` como tipos y `ARCA_QR_URL` como base. `IssuedVoucher.qr` trae
+esa misma URL en cada resultado autorizado.
+
 Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
@@ -107,8 +112,8 @@ import { ArcaServiceError } from "facturas/errors";
 
 - Tratá los certificados y las claves privadas como secretos.
 - Por defecto, los tickets WSAA se guardan solo en memoria.
-- El SDK persiste los tickets WSAA cuando le pasás `store` o
-  `wsaaSessionStore`. Mantené privado su almacenamiento. Los adaptadores
-  incluidos nunca guardan la configuración de certificado ni de clave privada.
-- Las implementaciones de `wsaaSessionStore` en producción tendrían que cifrar
-  las credenciales en reposo o usar un almacenamiento que ya las cifre.
+- Con `store`, el SDK guarda los tickets WSAA cifrados con AES-256-GCM y una
+  clave derivada de tu clave privada. Los adaptadores incluidos nunca guardan
+  la configuración de certificado ni de clave privada.
+- Un `wsaaSessionStore` propio recibe las credenciales en claro. En producción
+  tendría que cifrarlas en reposo o usar un almacenamiento que ya las cifre.
