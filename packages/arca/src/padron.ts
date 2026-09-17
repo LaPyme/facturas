@@ -1,6 +1,7 @@
 export type {
   CreatePadronServiceOptions,
   PadronService,
+  PadronTax,
   PadronTaxIdLookupResult,
   PadronTaxpayerResult,
 } from "./services/padron";

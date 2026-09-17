@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   ARCA_CONCEPT_TYPES,
-  ARCA_CURRENCIES,
   ARCA_CURRENCY_IDS,
   ARCA_DOCUMENT_TYPES,
   ARCA_RECEIVER_VAT_CONDITIONS,
@@ -45,10 +44,6 @@ describe("constants", () => {
       IVA_27: 6,
       IVA_5: 8,
       IVA_2_5: 9,
-    });
-    expect(ARCA_CURRENCIES).toEqual({
-      PES: "PES",
-      DOL: "DOL",
     });
     expect(ISO_CURRENCIES).toEqual({ ARS: "ARS", USD: "USD" });
     expect(ARCA_CURRENCY_IDS).toEqual({ ARS: "PES", USD: "DOL" });

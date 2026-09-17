@@ -244,6 +244,20 @@ responder. Una repetición con esa clave, o un `recover()`, devuelve el mismo
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
+`voucher` habla en las unidades del input: `date` y `caeExpiry` vienen como
+`YYYY-MM-DD` y `amounts` en centavos. Trae también `qr`, la URL que tiene que
+codificar el código QR del comprobante impreso según la especificación de ARCA,
+armada con el CUIT emisor, el total, la moneda, el CAE y el documento del
+receptor que se envió de verdad. Falta solo si ARCA devolvió un CAE que la
+especificación no puede codificar: una autorización nunca se pierde por su QR. Para reimprimir un comprobante guardado sin
+volver a emitir, `arcaQrUrl()` arma la misma URL a partir de esos datos. Solo
+`request` conserva la forma de ARCA, con importes en pesos y fechas `YYYYMMDD`.
+
+Si ARCA rechaza el ticket WSAA antes de procesar el pedido, `issue()` pide un
+ticket nuevo y reenvía una sola vez. Es seguro porque ese rechazo se clasifica
+solo cuando la respuesta no trae CAE, resultado ni número. Con
+`forceRefresh: true` no hay segundo intento.
+
 Un `indeterminate` informa en `lookup` por qué quedó abierto: `not_found`,
 `incomplete`, `failed`, `aborted` cuando venció tu `abortSignal`, `blocked` cuando
 otra reserva sin resolver todavía frena la secuencia y `superseded` cuando la

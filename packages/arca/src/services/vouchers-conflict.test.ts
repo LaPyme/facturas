@@ -30,7 +30,7 @@ const authorized: WsfeAuthorizationOutcome = {
   kind: "authorized",
   result: "A",
   resultLevel: "detail",
-  cae: "123",
+  cae: "74123456789012",
   caeExpiry: "20260914",
   voucherNumber: 77,
 };
@@ -78,7 +78,7 @@ function found(): WsfeVoucherLookupResult {
       documentNumber: String(data.documentNumber),
       voucherNumber: 77,
       result: "A",
-      cae: "123",
+      cae: "74123456789012",
       caeExpiry: "20260914",
       raw: {},
     },
@@ -129,7 +129,7 @@ describe("durable conflict", () => {
       (await store.get(settledKey("test", "20123456789", "sale"))) ?? "null"
     );
     expect(record).toMatchObject({
-      v: 1,
+      v: 2,
       kind: "conflict",
       number: 77,
       found: { number: 77 },
@@ -147,6 +147,32 @@ describe("durable conflict", () => {
     expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
     expect(wsfe.issue).not.toHaveBeenCalled();
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+
+    // A record written before 0.15 kept ARCA's units; it reads normalized.
+    await store.set(
+      settledKey("test", "20123456789", "sale"),
+      JSON.stringify({
+        ...record,
+        v: 1,
+        found: {
+          number: 77,
+          date: "20260904",
+          totalAmount: 121.5,
+          caeExpiry: "20260914",
+          vatRates: [{ id: 5, baseAmount: 100, amount: 21 }],
+        },
+      })
+    );
+    expect(await service.recover("sale")).toMatchObject({
+      kind: "conflict",
+      found: {
+        number: 77,
+        date: "2026-09-04",
+        totalAmount: 12_150,
+        caeExpiry: "2026-09-14",
+        vatRates: [{ id: 5, baseAmount: 10_000, amount: 2100 }],
+      },
+    });
   });
   it("rejects a fresh 10016 when the number holds no voucher", async () => {
     const { store, wsfe, service } = fake();

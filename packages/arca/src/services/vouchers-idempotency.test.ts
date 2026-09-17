@@ -36,7 +36,7 @@ const authorized: WsfeAuthorizationOutcome = {
   kind: "authorized",
   result: "A",
   resultLevel: "detail",
-  cae: "123",
+  cae: "74123456789012",
   caeExpiry: "20260914",
   voucherNumber: 77,
 };
@@ -78,7 +78,7 @@ function found(data = deriveWsfeInvoice(input).data): WsfeVoucherLookupResult {
       documentNumber: String(data.documentNumber),
       voucherNumber: 77,
       result: "A",
-      cae: "123",
+      cae: "74123456789012",
       caeExpiry: "20260914",
       raw: {},
     },

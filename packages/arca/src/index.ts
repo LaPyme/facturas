@@ -63,10 +63,13 @@ export type {
 export type {
   CreatePadronServiceOptions,
   PadronService,
+  PadronTax,
   PadronTaxIdLookupResult,
   PadronTaxpayerResult,
 } from "./services/padron";
 export { createPadronService } from "./services/padron";
+export type { ArcaQrInput, ArcaQrPayload } from "./services/qr";
+export { ARCA_QR_URL, arcaQrPayload, arcaQrUrl } from "./services/qr";
 export type {
   DebitNoteInput,
   NotePreview,

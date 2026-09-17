@@ -15,7 +15,9 @@ const client = createArcaClient({
 async function main() {
   const taxpayer = await client.padron.getTaxpayerDetails("30717329654");
 
-  console.log(taxpayer);
+  // `condition` es la condición de receptor lista para `to.condition`.
+  // Viene vacía solo si las inscripciones en IVA se contradicen.
+  console.log(taxpayer?.name, taxpayer?.condition, taxpayer?.taxes);
 }
 
 main().catch((error) => {

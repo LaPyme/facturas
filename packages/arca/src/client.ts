@@ -62,7 +62,8 @@ export function createArcaClient(config: ArcaClientOptions = {}): ArcaClient {
   const normalizedConfig = normalizeArcaClientConfig(discovered);
   if (normalizedConfig.store && !normalizedConfig.wsaaSessionStore) {
     normalizedConfig.wsaaSessionStore = createWsaaStoreAdapter(
-      normalizedConfig.store
+      normalizedConfig.store,
+      normalizedConfig
     );
   }
   const logger = createArcaLogger(normalizedConfig.logger);

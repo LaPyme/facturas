@@ -67,6 +67,7 @@ function found(
     },
   };
 }
+const context = { environment: "test" as const, taxId: "20123456789" };
 function fake(
   outcome: WsfeAuthorizationOutcome = authorized,
   lookup: WsfeVoucherLookupResult = found()
@@ -80,7 +81,7 @@ function fake(
     }),
     lookupVoucher: vi.fn().mockResolvedValue(lookup),
   };
-  return { wsfe, service: createVouchersService(wsfe) };
+  return { wsfe, service: createVouchersService(wsfe, context) };
 }
 function expectNoRaw(value: unknown) {
   if (value && typeof value === "object") {
@@ -117,7 +118,7 @@ describe("vouchers.issue", () => {
       voucher: {
         number: 77,
         voucherClass: "B",
-        date: "20260904",
+        date: "2026-09-04",
         amounts: { computedTotal: 12_100, sentTotal: 12_100, vatAdjustment: 0 },
       },
     });
@@ -238,6 +239,101 @@ describe("vouchers.issue", () => {
     if (result.kind === "conflict") {
       expect(result.reason).toContain("totalAmount");
     }
+  });
+  it("carries the ARCA QR of the printed voucher", async () => {
+    const { service } = fake();
+    const result = await service.issue(input);
+    if (result.kind !== "authorized") {
+      throw new Error(result.kind);
+    }
+    expect(result.voucher.qr).toMatch(
+      /^https:\/\/www\.arca\.gob\.ar\/fe\/qr\/\?p=/
+    );
+    const payload = JSON.parse(
+      Buffer.from(
+        (result.voucher.qr as string).split("?p=")[1] as string,
+        "base64"
+      ).toString("utf8")
+    );
+    expect(payload).toMatchObject({
+      ver: 1,
+      fecha: "2026-09-04",
+      cuit: 20_123_456_789,
+      ptoVta: 1,
+      tipoCmp: 6,
+      nroCmp: 77,
+      importe: 121,
+      moneda: "PES",
+      ctz: 1,
+      tipoCodAut: "E",
+      codAut: 74_123_456_789_012,
+    });
+    expect(result.voucher).toMatchObject({
+      date: "2026-09-04",
+      caeExpiry: "2026-09-14",
+    });
+    const represented = await service.issue(input, {
+      representedTaxId: "30000000007",
+    });
+    expect(
+      represented.kind === "authorized" && represented.voucher.qr
+    ).not.toBe(result.voucher.qr);
+    // A CAE the specification cannot encode never costs the authorization.
+    const odd = fake({ ...authorized, cae: "cae-77" });
+    const kept = await odd.service.issue(input);
+    expect(kept).toMatchObject({
+      kind: "authorized",
+      voucher: { cae: "cae-77" },
+    });
+    expect(kept.kind === "authorized" && kept.voucher).not.toHaveProperty("qr");
+    const noIssuer = await createVouchersService(odd.wsfe).issue(input);
+    expect(noIssuer.kind).toBe("authorized");
+  });
+  it("resubmits once with a fresh ticket after a rejected one, never on a forced refresh", async () => {
+    const rejectedTicket: WsfeAuthorizationOutcome = {
+      ...uncertain,
+      reason: "authentication_rejected",
+      authentication: {
+        code: "ARCA_AUTHENTICATION_ERROR",
+        reason: "invalid_token",
+        providerCode: "600",
+      },
+    };
+    const { wsfe, service } = fake();
+    wsfe.issue.mockResolvedValueOnce(rejectedTicket);
+    const result = await service.issue(input);
+    expect(result.kind).toBe("authorized");
+    expect(wsfe.issue).toHaveBeenCalledTimes(2);
+    expect(wsfe.issue.mock.calls[0]?.[0].forceRefresh).toBeUndefined();
+    expect(wsfe.issue.mock.calls[1]?.[0]).toMatchObject({
+      forceRefresh: true,
+      voucherNumber: 77,
+    });
+    expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+
+    const forced = fake(rejectedTicket);
+    const outcome = await forced.service.issue(input, { forceRefresh: true });
+    expect(forced.wsfe.issue).toHaveBeenCalledOnce();
+    expect(outcome.kind).not.toBe("rejected");
+
+    const twice = fake(rejectedTicket, {
+      kind: "not_found",
+      service: "wsfe",
+      operation: "FECompConsultar",
+      errors: [],
+      observations: [],
+      raw: {},
+    });
+    const stillRejected = await twice.service.issue(input);
+    expect(twice.wsfe.issue).toHaveBeenCalledTimes(2);
+    expect(stillRejected).toMatchObject({
+      kind: "indeterminate",
+      attempt: {
+        reason: "authentication_rejected",
+        authentication: { reason: "invalid_token" },
+      },
+      lookup: { kind: "not_found" },
+    });
   });
   it("keeps lookup failures bounded and does not resubmit", async () => {
     const { wsfe, service } = fake(uncertain);
@@ -500,7 +596,7 @@ describe("high-level API with the real SOAP adapter", () => {
       const wsfe = createAdapter({
         execute: vi.fn().mockImplementation(execute),
       });
-      const result = await createVouchersService(wsfe).issue(input);
+      const result = await createVouchersService(wsfe, context).issue(input);
       expect(result.kind).toBe(kind);
       if (kind === "indeterminate") {
         expect(result).toMatchObject({
@@ -577,7 +673,7 @@ describe("high-level API with the real SOAP adapter", () => {
       const wsfe = createAdapter({
         execute: vi.fn().mockImplementation(execute),
       });
-      const result = await createVouchersService(wsfe).issue(input);
+      const result = await createVouchersService(wsfe, context).issue(input);
       expect(result.kind).toBe(
         mode === "rejection" ? "rejected" : "indeterminate"
       );
