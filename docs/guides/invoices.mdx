@@ -245,7 +245,23 @@ responder. Una repetición con esa clave, o un `recover()`, devuelve el mismo
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
 `voucher` habla en las unidades del input: `date` y `caeExpiry` vienen como
-`YYYY-MM-DD` y `amounts` en centavos. Trae también `qr`, la URL que tiene que
+`YYYY-MM-DD` y `amounts` en centavos. `voucher.header` trae `concept`, la
+identidad y condición del receptor, `currencyId`, `exchangeRate` y, cuando
+corresponden, las fechas de servicio y `paymentDueDate`. Las fechas son
+`YYYY-MM-DD`, el documento del receptor es un string y el tipo, la condición y
+el concepto conservan sus identificadores numéricos de ARCA. `exchangeRate` es
+un string decimal exacto. Puede faltar solo cuando ARCA permite omitir la
+cotización de una cancelación en la misma moneda extranjera. Las fechas de
+servicio faltan para un comprobante de productos y `paymentDueDate` falta
+cuando ese comprobante no tiene vencimiento fiscal.
+
+`preview().header` tiene el mismo contrato antes de emitir. Un resultado
+`authorized` lo conserva en `voucher.header` tanto si
+`recoveredByMatch` es `false` como si es `true`. La consulta y el request siguen
+disponibles como evidencia, pero no hace falta ramificar por el modo de
+recuperación para guardar la cabecera.
+
+`voucher` trae también `qr`, la URL que tiene que
 codificar el código QR del comprobante impreso según la especificación de ARCA,
 armada con el CUIT emisor, el total, la moneda, el CAE y el documento del
 receptor que se envió de verdad. Falta solo si ARCA devolvió un CAE que la

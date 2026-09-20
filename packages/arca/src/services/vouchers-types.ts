@@ -8,6 +8,25 @@ import type { WsfeVoucherInput } from "./wsfe";
 import type { IssueAmounts } from "./wsfe-amounts";
 import type { VoucherCoordinates, VoucherSummary } from "./wsfe-identity";
 
+/**
+ * The normalized fiscal fields shared by previews and authorized vouchers.
+ * Dates are `YYYY-MM-DD`; `exchangeRate` is an exact decimal string. Service
+ * dates are absent for product-only documents. `paymentDueDate` is absent when
+ * the fiscal document has no due date.
+ */
+export type FiscalHeader = {
+  /** ARCA concept: products (1), services (2), or both (3). */
+  concept: 1 | 2 | 3;
+  documentType: number;
+  documentNumber: string;
+  receiverVatConditionId: number;
+  currencyId: string;
+  exchangeRate?: string;
+  serviceStartDate?: string;
+  serviceEndDate?: string;
+  paymentDueDate?: string;
+};
+
 export type IssueOptions = {
   service?: "wsfe" | "wsmtxca";
   /** An externally reserved number. Never reads the next number when supplied. */
@@ -29,6 +48,7 @@ export type IssueOptions = {
 export type IssuedVoucher = VoucherCoordinates & {
   voucherClass: VoucherClass;
   date: string;
+  header: FiscalHeader;
   cae: string;
   caeExpiry: string;
   amounts: IssueAmounts;
@@ -60,6 +80,7 @@ export type IssueRequest<S extends IssuanceService = "wsfe"> =
 export type IssuePreview<S extends IssuanceService = "wsfe"> = {
   voucherClass: VoucherClass;
   voucherType: number;
+  header: FiscalHeader;
   amounts: IssueAmounts;
   request: IssueRequest<S>;
   service?: S;

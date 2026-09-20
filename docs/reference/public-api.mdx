@@ -73,7 +73,7 @@ comprobante impreso desde datos guardados, con `ArcaQrInput` y
 esa misma URL en cada resultado autorizado.
 
 Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
-`IssueOutcome`, `IssuePreview`, `IssuedVoucher` y `VouchersService`:
+`IssueOutcome`, `IssuePreview`, `IssuedVoucher`, `FiscalHeader` y `VouchersService`:
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
 `RecoveryOptions`, `IssueRequest`, `IssuanceService`, `FceOptions`,
 `InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
@@ -84,6 +84,9 @@ la fila que devuelven las consultas de WSMTXCA.
 `include: { rawResponse: true, request: true }` agrega la respuesta cruda de
 ARCA y el request fiscal a cualquiera de los cuatro resultados, y
 `NotePreview.originals` lista los comprobantes que una nota vinculada corrige.
+`IssuePreview.header` y `IssuedVoucher.header` exponen la misma cabecera fiscal
+normalizada sin habilitar `include.request`. El segundo aparece en toda
+autorización, tanto directa como recuperada.
 Los [módulos de transporte](/reference/arca-services) documentan
 `client.wsfe`, `client.wsmtxca` y `client.padron`.
 
