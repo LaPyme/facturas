@@ -1,5 +1,11 @@
 # facturas
 
+## 0.16.0
+
+### Minor Changes
+
+- 09950b9: Expose a normalized fiscal `header` on previews and authorized vouchers, including direct and recovered invoice and note outcomes.
+
 ## 0.15.0
 
 ### Minor Changes
