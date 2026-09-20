@@ -9,6 +9,7 @@ import { toIsoDate } from "../internal/dates";
 import {
   arcaMinorUnitsToNumber,
   normalizeArcaAmountToMinorUnits,
+  serializeArcaExchangeRate,
 } from "../internal/decimal";
 import type { ArcaEnvironment } from "../internal/types";
 import {
@@ -31,12 +32,13 @@ import {
 } from "./issuance-fields";
 import {
   createWsmtxcaIssuanceService,
-  type FiscalHeader,
+  type FiscalHeader as IssuanceHeader,
   matchWsmtxcaDetails,
   wsmtxcaRequest,
 } from "./issuance-wsmtxca";
 import { arcaQrUrl } from "./qr";
 import type {
+  FiscalHeader,
   IssuanceService,
   IssuedVoucher,
   IssueOptions,
@@ -193,7 +195,7 @@ type StoreContext = {
   taxId: string;
 };
 type Prepared = Omit<ReturnType<typeof deriveWsfeInvoice>, "data"> & {
-  data: FiscalHeader;
+  data: IssuanceHeader;
 };
 
 export function createVouchersService(
@@ -358,6 +360,7 @@ function toPreview(
   return {
     voucherClass,
     voucherType: data.voucherType,
+    header: fiscalHeader(data),
     amounts,
     request: options.service === "wsmtxca" ? wsmtxcaRequest(data) : data,
     ...(options.service === "wsmtxca" ? { service: "wsmtxca" as const } : {}),
@@ -886,11 +889,16 @@ async function runAuthorization(
     number,
   };
   const includedRequest = requestEvidence(data, number, options);
-  const voucher = (cae: string, caeExpiry: string): IssuedVoucher =>
+  const voucher = (
+    cae: string,
+    caeExpiry: string,
+    lookup?: VoucherSummary
+  ): IssuedVoucher =>
     issuedVoucher(
       { attempted, voucherClass, data, amounts, taxId },
       cae,
-      caeExpiry
+      caeExpiry,
+      lookup
     );
   const recovery = {
     wsfe,
@@ -1041,7 +1049,7 @@ type RecoveryInput = {
   wsfe: IssueWsfeService;
   lookup?: Awaited<ReturnType<IssueWsfeService["lookupVoucher"]>>;
   auth: Pick<IssueOptions, "representedTaxId" | "forceRefresh" | "abortSignal">;
-  data: FiscalHeader;
+  data: IssuanceHeader;
   service?: "wsfe" | "wsmtxca";
   attempted: VoucherCoordinates;
   attempt: Omit<
@@ -1050,7 +1058,11 @@ type RecoveryInput = {
   > & { rawResponse?: Record<string, unknown> };
   includeRawResponse: boolean;
   includedRequest: { request?: IssueRequest<IssuanceService> };
-  voucher: (cae: string, caeExpiry: string) => IssuedVoucher;
+  voucher: (
+    cae: string,
+    caeExpiry: string,
+    lookup?: VoucherSummary
+  ) => IssuedVoucher;
   /** The reserved number was claimed in this call: any voucher on it is foreign. */
   strangerAtNumber?: boolean;
 };
@@ -1157,15 +1169,17 @@ async function recoverInvoice({
     };
   }
   // The matcher requires both fields before declaring a complete match.
+  const lookupSummary = toVoucherSummary(lookup.voucher);
   return {
     kind: "authorized",
     recoveredByMatch: true,
     voucher: voucher(
       lookup.voucher.cae as string,
-      lookup.voucher.caeExpiry as string
+      lookup.voucher.caeExpiry as string,
+      lookupSummary
     ),
     attempt,
-    lookup: { ...toVoucherSummary(lookup.voucher), ...rawResponse },
+    lookup: { ...lookupSummary, ...rawResponse },
     ...includedRequest,
   };
 }
@@ -1434,7 +1448,8 @@ async function prepareNote(
       : deriveWsfePartialCreditNote(originals, note, new Date(), kind);
   if (note.all === true) {
     // A full note mirrors the original, lines included, as ARCA returned them.
-    const mirrored = (firstOriginal as { lines?: FiscalHeader["lines"] }).lines;
+    const mirrored = (firstOriginal as { lines?: IssuanceHeader["lines"] })
+      .lines;
     if (mirrored !== undefined) {
       prepared.data.authorizedLines = structuredClone(mirrored);
     }
@@ -1570,7 +1585,7 @@ function preparePeriodNote(
 }
 
 function requestEvidence(
-  data: FiscalHeader,
+  data: IssuanceHeader,
   number: number | undefined,
   options: IssueOptions
 ): { request?: IssueRequest<IssuanceService> } {
@@ -1698,7 +1713,7 @@ function consultReservation(
       record.number,
       storedOptions
     ),
-    voucher: (cae, caeExpiry) =>
+    voucher: (cae, caeExpiry, lookup) =>
       issuedVoucher(
         {
           attempted,
@@ -1708,7 +1723,8 @@ function consultReservation(
           taxId: record.representedTaxId ?? taxId,
         },
         cae,
-        caeExpiry
+        caeExpiry,
+        lookup
       ),
   });
 }
@@ -1737,12 +1753,13 @@ function issuedVoucher(
   }: {
     attempted: VoucherCoordinates;
     voucherClass: VoucherClass;
-    data: FiscalHeader;
+    data: IssuanceHeader;
     amounts: IssueAmounts;
     taxId: string | undefined;
   },
   cae: string,
-  caeExpiry: string
+  caeExpiry: string,
+  lookup?: VoucherSummary
 ): IssuedVoucher {
   const date = toIsoDate(data.voucherDate) ?? data.voucherDate;
   const qr = voucherQr({ attempted, data, taxId, date, cae });
@@ -1750,11 +1767,50 @@ function issuedVoucher(
     ...attempted,
     voucherClass,
     date,
+    header: fiscalHeader(data, lookup),
     cae,
     caeExpiry: toIsoDate(caeExpiry) ?? caeExpiry,
     amounts,
     ...(qr === undefined ? {} : { qr }),
   };
+}
+
+/**
+ * Project the already-derived request into the stable public header. On a
+ * matching recovery, valid normalized provider values win; the durable sent
+ * request fills fields ARCA omitted. This performs no I/O and no derivation.
+ */
+function fiscalHeader(
+  data: IssuanceHeader,
+  lookup?: VoucherSummary
+): FiscalHeader {
+  const sent = normalizeWsfeVoucherInput(data);
+  const header: FiscalHeader = {
+    concept: (lookup?.concept ?? sent.concept) as FiscalHeader["concept"],
+    documentType: lookup?.documentType ?? sent.documentType,
+    documentNumber: String(lookup?.documentNumber ?? sent.documentNumber),
+    receiverVatConditionId:
+      lookup?.receiverVatConditionId ?? sent.receiverVatConditionId,
+    currencyId: lookup?.currencyId ?? sent.currencyId,
+  };
+  const exchangeRate = lookup?.exchangeRate ?? sent.exchangeRate;
+  if (exchangeRate !== undefined) {
+    header.exchangeRate = serializeArcaExchangeRate(
+      exchangeRate,
+      "exchangeRate"
+    );
+  }
+  for (const field of [
+    "serviceStartDate",
+    "serviceEndDate",
+    "paymentDueDate",
+  ] as const) {
+    const date = toIsoDate(lookup?.[field]) ?? toIsoDate(sent[field]);
+    if (date !== undefined) {
+      header[field] = date;
+    }
+  }
+  return header;
 }
 
 /**
@@ -1769,7 +1825,7 @@ function voucherQr({
   cae,
 }: {
   attempted: VoucherCoordinates;
-  data: FiscalHeader;
+  data: IssuanceHeader;
   taxId: string | undefined;
   date: string;
   cae: string;

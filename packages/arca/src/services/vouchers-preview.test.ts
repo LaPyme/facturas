@@ -118,9 +118,19 @@ describe("vouchers.preview", () => {
     expect(preview).toMatchObject({
       voucherClass: "B",
       voucherType: 6,
+      header: {
+        concept: 1,
+        documentType: 99,
+        documentNumber: "0",
+        receiverVatConditionId: 5,
+        currencyId: "PES",
+        exchangeRate: "1",
+      },
       amounts: { computedTotal: 12_100, sentTotal: 12_100, vatAdjustment: 0 },
       request: { salesPoint: 1, voucherType: 6, voucherDate: "20260904" },
     });
+    expect(preview.header).not.toHaveProperty("serviceStartDate");
+    expect(preview.header).not.toHaveProperty("paymentDueDate");
     expect(preview.request).not.toHaveProperty("voucherNumber");
     expectNoProviderCalls(fakes);
   });
@@ -154,9 +164,37 @@ describe("vouchers.preview", () => {
         }
         expect(result.voucher.voucherClass).toBe(preview.voucherClass);
         expect(result.voucher.voucherType).toBe(preview.voucherType);
+        expect(result.voucher.header).toEqual(preview.header);
         expect(result.voucher.amounts).toEqual(preview.amounts);
       }
     }
+  });
+  it("normalizes service dates and an exact foreign exchange rate", () => {
+    const fakes = fake();
+    expect(
+      fakes.service.preview({
+        ...input,
+        to: { condition: "monotributo", cuit: "20123456789" },
+        currency: "USD",
+        exchangeRate: "1200.500000",
+        service: {
+          from: "20260901",
+          to: "2026-09-30",
+          dueDate: "20261001",
+        },
+      }).header
+    ).toEqual({
+      concept: 2,
+      documentType: 80,
+      documentNumber: "20123456789",
+      receiverVatConditionId: 6,
+      currencyId: "DOL",
+      exchangeRate: "1200.5",
+      serviceStartDate: "2026-09-01",
+      serviceEndDate: "2026-09-30",
+      paymentDueDate: "2026-10-01",
+    });
+    expectNoProviderCalls(fakes);
   });
   it.each([
     {

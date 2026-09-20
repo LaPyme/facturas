@@ -119,6 +119,14 @@ describe("vouchers.issue", () => {
         number: 77,
         voucherClass: "B",
         date: "2026-09-04",
+        header: {
+          concept: 1,
+          documentType: 99,
+          documentNumber: "0",
+          receiverVatConditionId: 5,
+          currencyId: "PES",
+          exchangeRate: "1",
+        },
         amounts: { computedTotal: 12_100, sentTotal: 12_100, vatAdjustment: 0 },
       },
     });
@@ -193,7 +201,17 @@ describe("vouchers.issue", () => {
     expect(result).toMatchObject({
       kind: "authorized",
       recoveredByMatch: true,
-      voucher: { number: 77 },
+      voucher: {
+        number: 77,
+        header: {
+          concept: 1,
+          documentType: 99,
+          documentNumber: "0",
+          receiverVatConditionId: 5,
+          currencyId: "PES",
+          exchangeRate: "1",
+        },
+      },
       attempt: { kind: "indeterminate" },
       lookup: { number: 77 },
       request: deriveWsfeInvoice(input).data,
