@@ -261,6 +261,11 @@ pasaste. Un `VoucherSummary` habla en las unidades del input: importes en
 centavos y fechas `YYYY-MM-DD`. Una nota por período no tiene originales, así que tampoco necesita esa
 consulta ni devuelve esa propiedad.
 
+`header` describe la nota nueva, no sus originales. Por ejemplo, si la factura
+de servicios vencía el 10 de septiembre y la nota se fecha el 19, el SDK ajusta
+el vencimiento final de la nota al 19. Ese valor aparece en
+`previsualizacion.header.paymentDueDate`.
+
 ```ts
 const previsualizacion = await arca.previewCreditNote({
   for: { salesPoint: 3, voucherType: 11, number: 41 },
@@ -268,10 +273,35 @@ const previsualizacion = await arca.previewCreditNote({
 });
 console.log(
   previsualizacion.voucherType,
+  previsualizacion.header.paymentDueDate,
   previsualizacion.amounts,
   previsualizacion.originals?.[0]?.cae,
   previsualizacion.originals?.[0]?.totalAmount,
 );
+```
+
+Guardá la misma cabecera después de una autorización directa o recuperada. No
+hace falta leer `request`, `lookup` ni `recoveredByMatch`:
+
+```ts
+const resultado = await arca.issueCreditNote(input, {
+  idempotencyKey: `nc:${devolucion.id}`,
+});
+
+if (resultado.kind === "authorized") {
+  await guardarComprobante({
+    cae: resultado.voucher.cae,
+    paymentDueDate: resultado.voucher.header.paymentDueDate,
+  });
+}
+
+const recuperado = await arca.recover(`nc:${devolucion.id}`);
+if (recuperado.kind === "authorized") {
+  await guardarComprobante({
+    cae: recuperado.voucher.cae,
+    paymentDueDate: recuperado.voucher.header.paymentDueDate,
+  });
+}
 ```
 
 ## Evitar duplicados y probar en producción

@@ -184,21 +184,31 @@ describe("complete WSFE issuance", () => {
   );
   it("preserves mixed services and payment in foreign currency", () => {
     const { client } = fixture();
-    expect(
-      client.preview({
-        ...invoice,
-        currency: "USD",
-        exchangeRate: "1200.125",
-        paidInForeignCurrency: true,
-        concept: "products_and_services",
-        service: { from: "20260901", to: "20260906", dueDate: "20260930" },
-      }).request
-    ).toMatchObject({
+    const preview = client.preview({
+      ...invoice,
+      currency: "USD",
+      exchangeRate: "1200.125",
+      paidInForeignCurrency: true,
+      concept: "products_and_services",
+      service: { from: "20260901", to: "20260906", dueDate: "20260930" },
+    });
+    expect(preview.request).toMatchObject({
       concept: 3,
       currencyId: "DOL",
       exchangeRate: "1200.125",
       sameCurrencyForeignCancellation: "S",
       serviceStartDate: "20260901",
+    });
+    expect(preview.header).toEqual({
+      concept: 3,
+      documentType: 80,
+      documentNumber: "20123456789",
+      receiverVatConditionId: 1,
+      currencyId: "DOL",
+      exchangeRate: "1200.125",
+      serviceStartDate: "2026-09-01",
+      serviceEndDate: "2026-09-06",
+      paymentDueDate: "2026-09-30",
     });
   });
   it.each([
@@ -244,6 +254,7 @@ describe("complete WSFE issuance", () => {
       expect(issued).toMatchObject({
         kind: "authorized",
         request: { voucherType: debit, totalAmount: 60.5 },
+        voucher: { header: preview.header },
       });
       const credited = await client.issueCreditNote(
         {
@@ -314,13 +325,24 @@ describe("complete WSFE issuance", () => {
       ...invoice,
       associatedPeriod: { from: "20260801" as const, to: "20260831" as const },
     };
-    expect(await client.previewCreditNote(period)).not.toHaveProperty(
-      "original"
-    );
+    const creditPreview = await client.previewCreditNote(period);
+    const debitPreview = await client.previewDebitNote(period);
+    expect(creditPreview).not.toHaveProperty("originals");
+    expect(debitPreview).not.toHaveProperty("originals");
+    expect(creditPreview.header).toEqual({
+      concept: 1,
+      documentType: 80,
+      documentNumber: "20123456789",
+      receiverVatConditionId: 1,
+      currencyId: "PES",
+      exchangeRate: "1",
+    });
+    expect(debitPreview.header).toEqual(creditPreview.header);
     expect(
       await client.issueCreditNote(period, { include: { request: true } })
     ).toMatchObject({
       kind: "authorized",
+      voucher: { header: creditPreview.header },
       request: {
         voucherType: 3,
         associatedPeriod: { startDate: "20260801", endDate: "20260831" },
@@ -666,6 +688,14 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     const input = { ...detailed, taxes: [tax] };
     const preview = client.preview(input, { service: "wsmtxca" });
     expect(calls).toEqual([]);
+    expect(preview.header).toEqual({
+      concept: 1,
+      documentType: 80,
+      documentNumber: "20123456789",
+      receiverVatConditionId: 1,
+      currencyId: "PES",
+      exchangeRate: "1",
+    });
     expect(preview.request.comprobanteCAERequest).toMatchObject({
       importeTotal: 124,
       arrayItems: {
@@ -676,7 +706,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(await client.issue(input, options)).toMatchObject({
       kind: "authorized",
       authorization: { service: "wsmtxca" },
-      voucher: { number: 9 },
+      voucher: { number: 9, header: preview.header },
     });
     expect(
       soap.execute.mock.calls.find(
@@ -686,6 +716,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(await client.issue(input, options)).toMatchObject({
       kind: "authorized",
       recoveredByMatch: true,
+      voucher: { header: preview.header },
     });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
     const raw = vouchers.get(1) as Record<string, unknown>;
@@ -719,7 +750,17 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     ).toMatchObject({
       kind: "authorized",
       recoveredByMatch: true,
-      voucher: { number: 9 },
+      voucher: {
+        number: 9,
+        header: {
+          concept: 1,
+          documentType: 80,
+          documentNumber: "20123456789",
+          receiverVatConditionId: 1,
+          currencyId: "PES",
+          exchangeRate: "1",
+        },
+      },
       request: {
         comprobanteCAERequest: {
           numeroComprobante: 9,

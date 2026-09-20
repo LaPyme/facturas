@@ -11,7 +11,10 @@ const nota = await arca.issueCreditNote(
 );
 switch (nota.kind) {
   case "authorized":
-    console.log(nota.voucher);
+    console.log({
+      cae: nota.voucher.cae,
+      paymentDueDate: nota.voucher.header.paymentDueDate,
+    });
     break;
   case "rejected":
     console.error(nota.issues);

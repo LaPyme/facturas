@@ -62,7 +62,7 @@ Tratá siempre los cuatro resultados:
 
 | Resultado | Qué significa y qué hacer |
 | --- | --- |
-| `authorized` | Guardá el comprobante, el CAE y el `qr` para imprimir. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada. Esto prueba consistencia, no autoría. |
+| `authorized` | Guardá el comprobante, el CAE, `voucher.header` y el `qr` para imprimir. La cabecera tiene el mismo formato en una autorización directa o recuperada. `recoveredByMatch: true` significa que el input guardado coincidió con la identidad consultada. Esto prueba consistencia, no autoría. |
 | `rejected` | Revisá los `issues` de ARCA. Una clave queda ligada a su input incluso después de un rechazo. |
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |

@@ -187,6 +187,82 @@ describe("credit note orchestration", () => {
     expect(calls).toEqual(["lookup"]);
     expect(debit.originals).toEqual(credit.originals);
   });
+  it("returns the linked note's final clamped header in previews, issuance and recovery", async () => {
+    const original = deriveWsfeInvoice({
+      issuer: "monotributo",
+      salesPoint: 1,
+      date: "20260901",
+      to: { condition: "consumidor_final" },
+      items: [{ amount: 100 }],
+      currency: "USD",
+      exchangeRate: "1200.5",
+      service: {
+        from: "20260901",
+        to: "20260910",
+        dueDate: "20260910",
+      },
+    }).data;
+    const { service, wsfe, calls } = fake();
+    wsfe.lookupVoucher.mockImplementation(({ voucherType, number }) => {
+      if (voucherType === 11) {
+        const lookup = found(original, number);
+        if (lookup.kind === "found") {
+          lookup.voucher.receiverVatConditionId = undefined;
+        }
+        return Promise.resolve(lookup);
+      }
+      const sent = wsfe.issue.mock.calls[0]?.[0].data;
+      return Promise.resolve(sent === undefined ? absent : found(sent, number));
+    });
+    const linked = {
+      for: target,
+      all: true as const,
+      date: "20260919" as const,
+      to: { condition: "consumidor_final" as const },
+    };
+
+    const credit = await service.previewCreditNote(linked);
+    const debit = await service.previewDebitNote({
+      ...linked,
+      all: undefined,
+      items: [{ amount: 100 }],
+    });
+    expect(credit.header).toEqual({
+      concept: 2,
+      documentType: 99,
+      documentNumber: "0",
+      receiverVatConditionId: 5,
+      currencyId: "DOL",
+      exchangeRate: "1200.5",
+      serviceStartDate: "2026-09-01",
+      serviceEndDate: "2026-09-10",
+      paymentDueDate: "2026-09-19",
+    });
+    expect(debit.header).toEqual(credit.header);
+    expect(credit.originals?.[0]).toMatchObject({
+      paymentDueDate: "2026-09-10",
+    });
+    expect(credit.originals?.[0]).not.toHaveProperty("receiverVatConditionId");
+
+    const issued = await service.issueCreditNote(linked, options);
+    expect(issued).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: false,
+      voucher: { header: credit.header },
+    });
+    const writes = wsfe.issue.mock.calls.length;
+    const lookups = wsfe.lookupVoucher.mock.calls.length;
+    expect(await service.recover(options.idempotencyKey)).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { header: credit.header },
+      lookup: { paymentDueDate: "2026-09-19" },
+    });
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
+    expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
+    expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(lookups + 1);
+    expect(calls.filter((call) => call === "authorize")).toHaveLength(1);
+  });
   it.each([
     ["a fractional", 100.5],
     ["a non-finite", Number.NaN],

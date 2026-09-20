@@ -79,6 +79,7 @@ export type {
   VouchersService,
 } from "./services/vouchers";
 export type {
+  FiscalHeader,
   IssuanceService,
   IssuedVoucher,
   IssueOptions,
