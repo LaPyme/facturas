@@ -176,11 +176,11 @@ falla al anotar el conflicto,
 la llamada lanza `ArcaConfigurationError` en vez de devolver un conflicto que
 un reintento podría no volver a ver.
 
-Cada registro lleva su versión. `v: 1` es una reserva de WSFE sin detalle y la
-lee cualquier versión desde la 0.9. `v: 2` es una reserva de WSMTXCA o con
-detalle de ítems. Siempre nombra su servicio, y la 0.10 no puede reproducirla,
-justamente para que volver a la versión anterior no reenvíe por WSFE un comprobante que era de
-WSMTXCA. Preservá las dos versiones.
+Cada registro lleva su versión. `v: 1` es una reserva de WSFE sin detalle.
+`v: 2` es una reserva de WSMTXCA o con detalle de ítems, y siempre nombra su
+servicio. Un SDK que no conoce `v: 2` no la reproduce, así que volver a una
+versión anterior no reenvía por WSFE un comprobante que era de WSMTXCA.
+Preservá las dos versiones.
 
 `arca:v1:sequence:{environment}:{taxId}:{salesPoint}:{voucherType}` guarda la
 última reserva reclamada en esa secuencia y si ARCA ya informó su desenlace. Se

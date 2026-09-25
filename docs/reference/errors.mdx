@@ -9,14 +9,15 @@ keywords: ["errores", "diagnóstico", "SOAP", "WSAA", "ARCA"]
 Todos los errores extienden `ArcaError` y exponen un `code` estable como
 string.
 
-| Clase | Cuándo |
-| --- | --- |
-| `ArcaConfigurationError` | Configuración del cliente inválida |
-| `ArcaInputError` | Input inválido de la aplicación o una clave que `recover()` no puede resolver |
-| `ArcaAuthenticationError` | Rechazo de autenticación explícito del proveedor |
-| `ArcaTransportError` | Falla de HTTP o de transporte |
-| `ArcaSoapFaultError` | SOAP fault devuelto por ARCA |
-| `ArcaServiceError` | Rechazo de servicio a nivel de negocio, sobre todo los errores estilo WSFE |
+| Clase | `code` | Cuándo |
+| --- | --- | --- |
+| `ArcaConfigurationError` | `ARCA_CONFIGURATION_ERROR` | Configuración del cliente inválida |
+| `ArcaInputError` | `ARCA_INPUT_*` | Input inválido de la aplicación o una clave que `recover()` no puede resolver |
+| `ArcaAuthenticationError` | `ARCA_AUTHENTICATION_ERROR` | Rechazo de autenticación explícito del proveedor |
+| `ArcaTransportError` | `ARCA_TRANSPORT_ERROR` | Falla de HTTP o de transporte |
+| `ArcaSoapFaultError` | `ARCA_SOAP_FAULT` | SOAP fault devuelto por ARCA |
+| `ArcaInvalidSoapResponseError` | `ARCA_INVALID_SOAP_RESPONSE` | La respuesta no es un sobre SOAP válido, por ejemplo una página HTML de un proxy o un cuerpo cortado |
+| `ArcaServiceError` | `ARCA_SERVICE_ERROR` | Rechazo de servicio a nivel de negocio, sobre todo los errores estilo WSFE |
 
 ```ts
 import {
@@ -54,17 +55,41 @@ errores de autenticación exponen solamente el código estable
 código de proveedor seguro cuando está disponible. No se adjuntan los cuerpos
 crudos del proveedor ni los valores de las credenciales.
 
-`recover()` usa `ARCA_INPUT_RESERVATION_NOT_FOUND` cuando la clave no tiene una
-reserva guardada. Ese código es distinto de `lookup.kind === "not_found"`, que
-significa que la reserva existe y ARCA confirmó que su número está vacío.
+`ArcaInvalidSoapResponseError` también expone `service`, `operation`,
+`endpointUrl`, `statusCode`, `contentType` y una vista previa redactada del
+cuerpo, para saber qué respondió en lugar de ARCA.
+
+## Códigos de `ArcaInputError`
+
+`ArcaInputError` se lanza antes de llamar a ARCA. Además del `code`, expone
+`field` con el campo que falló y, cuando aplica, `expected` con lo que el SDK
+esperaba.
+
+| `code` | Cuándo |
+| --- | --- |
+| `ARCA_INPUT_IDEMPOTENCY_MISMATCH` | La clave de idempotencia ya se usó con otro input, otra operación u otro contribuyente representado |
+| `ARCA_INPUT_RESERVATION_NOT_FOUND` | `recover()` recibió una clave sin reserva guardada |
+| `ARCA_INPUT_INVALID_DATE` | Una fecha no tiene formato `YYYY-MM-DD` o no existe en el calendario |
+| `ARCA_INPUT_INVALID_AMOUNT` | Un importe no es un entero no negativo en centavos o supera el límite de ARCA |
+| `ARCA_INPUT_AMOUNT_PRECISION` | Un importe tiene más decimales de los que admite su campo en ARCA |
+| `ARCA_INPUT_AMOUNT_MISMATCH` | El total no concilia con los ítems y el IVA dentro de la tolerancia de ARCA |
+| `ARCA_INPUT_INVALID_EXCHANGE_RATE` | La cotización no es un decimal positivo con hasta 4 enteros y 6 decimales |
+| `ARCA_INPUT_INVALID_VALUE` | Un valor no está entre los admitidos, por ejemplo una alícuota de IVA |
+| `ARCA_INPUT_MISSING_FIELD` | Falta un campo obligatorio, por ejemplo `for` en `issueCreditNote()` |
+| `ARCA_INPUT_RESERVED_FIELD` | El input trae un campo que la operación no admite o que maneja el SDK |
+
+`ARCA_INPUT_RESERVATION_NOT_FOUND` es distinto de
+`lookup.kind === "not_found"`, que significa que la reserva existe y ARCA
+confirmó que su número está vacío.
 
 ## Diagnóstico
 
 - `coe.alreadyAuthenticated`: el SDK deduplica los logins WSAA en vuelo y reusa
   los tickets válidos guardados en caché. En funciones serverless, procesos de
-  cola o cualquier despliegue con varios procesos, configurá un
-  `wsaaSessionStore` persistente para que un proceso nuevo reuse el TA que obtuvo
-  otro. El caché en memoria no se comparte entre procesos.
+  cola o cualquier despliegue con varios procesos, configurá un `store`
+  persistente para que un proceso nuevo reuse el TA que obtuvo otro. El `store`
+  guarda los tickets cifrados. El caché en memoria no se comparte entre
+  procesos.
 - `dh key too small`: los pedidos de producción de WSFE ya usan, donde hace
   falta, el nivel de seguridad anterior de OpenSSL. Si igual lo ves, confirmá que
   no estés salteando el transporte del SDK ni terminando TLS en otra capa.
