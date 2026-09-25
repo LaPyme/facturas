@@ -26,9 +26,17 @@ paso a paso completo y las referencias oficiales están en
 
 ## 2. Instalá
 
-```sh
+<CodeGroup>
+
+```bash pnpm
 pnpm add facturas
 ```
+
+```bash npm
+npm install facturas
+```
+
+</CodeGroup>
 
 Requiere Node.js 22 o superior y módulos ESM.
 
@@ -63,7 +71,7 @@ hace falta exportar nada para correrlo: si `arca-test.crt` y `arca-test.key`
 están en el directorio, los usa, y saca de ahí el entorno y el CUIT. No
 escribe nada en ARCA. Guarda el ticket WSAA en el directorio temporal para
 poder repetirse. La tabla completa de diagnósticos está en
-[CLI](/getting-started/cli#diagnósticos).
+[Comandos del CLI](/reference/cli#diagnósticos).
 
 ## 4. Emití la primera factura
 
@@ -85,7 +93,7 @@ Si preferís probar el circuito antes de escribir código,
 `npx facturas issue --sales-point 3 --issuer monotributo` emite una factura de
 ARS 1 en homologación y te imprime la llamada que hizo.
 ARCA valida la habilitación fiscal. El SDK no infiere tu condición. Todos los
-campos del input están en [Facturas](/guides/invoices#datos-de-la-factura).
+campos del input están en [Emitir facturas](/guides/invoices#datos-de-la-factura).
 
 Antes de emitir podés revisar lo que el SDK va a enviar con
 `arca.preview(input)`: es sincrónico, no hace ninguna llamada y devuelve la
@@ -142,6 +150,8 @@ guardan el número fiscal que el reintento debe consultar.
 
 Habilitá el certificado y punto de venta de producción y cambiá
 `ARCA_ENVIRONMENT=production`. Una prueba de ARS 1 usa `items: [{ amount: 100 }]`.
+Antes del primer comprobante real, repasá la lista de
+[Pasar a producción](/guides/production).
 
 <Warning>
   Una factura de prueba en producción es un documento fiscal real y queda registrada en ARCA.

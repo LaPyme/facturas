@@ -65,7 +65,7 @@ con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
 de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
 resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
 esta clave y hay que emitir bajo una clave nueva. Está documentado en
-[Facturas](/guides/invoices#evitar-duplicados-al-reintentar).
+[Emitir facturas](/guides/invoices#evitar-duplicados-al-reintentar).
 
 `arcaQrUrl()` y `arcaQrPayload()` arman la URL y el JSON del QR de un
 comprobante impreso desde datos guardados, con `ArcaQrInput` y

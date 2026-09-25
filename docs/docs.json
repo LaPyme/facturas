@@ -3,6 +3,12 @@
   "theme": "palm",
   "name": "SDK para ARCA",
   "description": "SDK de Node.js para facturación electrónica con ARCA.",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "/"
+  },
+  "favicon": "/favicon.svg",
   "colors": {
     "primary": "#1E40AF",
     "light": "#60A5FA",
@@ -32,21 +38,21 @@
         "pages": [
           "guides/invoices",
           "guides/credit-notes",
-          "guides/avoid-duplicates"
+          "guides/avoid-duplicates",
+          "guides/taxpayers",
+          "guides/production",
+          "guides/wsmtxca"
         ]
-      },
-      {
-        "group": "Casos especiales",
-        "icon": "settings-2",
-        "pages": ["guides/wsmtxca"]
       },
       {
         "group": "Referencia",
         "icon": "braces",
         "pages": [
+          "reference/client",
           "reference/configuration",
-          "reference/arca-services",
           "reference/errors",
+          "reference/cli",
+          "reference/arca-services",
           "reference/public-api",
           "reference/examples"
         ]
@@ -56,7 +62,7 @@
   "navbar": {
     "links": [
       {
-        "type": "github",
+        "label": "GitHub",
         "href": "https://github.com/LaPyme/facturas"
       },
       {
@@ -89,6 +95,10 @@
           {
             "label": "Licencia",
             "href": "https://github.com/LaPyme/facturas/blob/main/LICENSE"
+          },
+          {
+            "label": "La Pyme",
+            "href": "https://lapyme.com.ar"
           }
         ]
       }
@@ -98,7 +108,7 @@
     "prompt": "Buscar en la documentación..."
   },
   "contextual": {
-    "options": ["copy", "chatgpt", "claude"],
+    "options": ["copy", "chatgpt", "claude", "cursor", "mcp"],
     "display": "toc"
   },
   "metadata": {
