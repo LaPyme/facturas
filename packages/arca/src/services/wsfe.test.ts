@@ -384,9 +384,9 @@ describe("createWsfeService", () => {
         })
       );
 
-    await expect(
-      createWsfeService(options).getVoucherTypes({})
-    ).resolves.toEqual([{ id: 6, description: "Factura B" }]);
+    await expect(createWsfeService(options).getVoucherTypes()).resolves.toEqual(
+      [{ id: 6, description: "Factura B" }]
+    );
     expect(options.auth.login).toHaveBeenCalledTimes(2);
     expect(options.auth.login).toHaveBeenNthCalledWith(
       2,
@@ -402,7 +402,7 @@ describe("createWsfeService", () => {
       })
     );
     await expect(
-      createWsfeService(businessOptions).getVoucherTypes({})
+      createWsfeService(businessOptions).getVoucherTypes()
     ).rejects.toMatchObject({
       name: "ArcaServiceError",
       serviceCode: "700",
@@ -1145,7 +1145,7 @@ describe("createWsfeService", () => {
       },
     });
     await expect(
-      createWsfeService(noPointsOptions).getSalesPoints({})
+      createWsfeService(noPointsOptions).getSalesPoints()
     ).resolves.toEqual([]);
 
     const otherErrorOptions = createBaseOptions();
@@ -1164,7 +1164,7 @@ describe("createWsfeService", () => {
       },
     });
     await expect(
-      createWsfeService(otherErrorOptions).getSalesPoints({})
+      createWsfeService(otherErrorOptions).getSalesPoints()
     ).rejects.toMatchObject({ name: "ArcaServiceError", serviceCode: "602" });
     expect(otherErrorOptions.soap.execute).toHaveBeenCalledOnce();
 
@@ -1186,7 +1186,7 @@ describe("createWsfeService", () => {
       },
     });
     await expect(
-      createWsfeService(singlePointOptions).getSalesPoints({})
+      createWsfeService(singlePointOptions).getSalesPoints()
     ).resolves.toEqual([
       {
         number: 1,
@@ -1650,7 +1650,7 @@ describe("createWsfeService", () => {
     });
 
     await expect(
-      createWsfeService(options).getSalesPoints({})
+      createWsfeService(options).getSalesPoints()
     ).rejects.toMatchObject({
       name: "ArcaServiceError",
       serviceCode: "500",

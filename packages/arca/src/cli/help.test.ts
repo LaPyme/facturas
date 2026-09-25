@@ -130,7 +130,7 @@ describe("renderHelp without color", () => {
 
         --cert <archivo>          certificado PEM desde un archivo
         --key <archivo>           clave privada PEM desde un archivo
-        --tax-id <cuit>           CUIT, en lugar de ARCA_TAX_ID
+        --cuit <cuit>             CUIT, en lugar de ARCA_TAX_ID
         --env <test|production>   entorno, en lugar de ARCA_ENVIRONMENT
         --dir <directorio>        dónde buscar los archivos (por defecto: el actual)
         --sales-point <n>         punto de venta a verificar
@@ -171,7 +171,7 @@ describe("renderHelp without color", () => {
         --issuer <condición>      condición del emisor
         --cert <archivo>          certificado PEM desde un archivo
         --key <archivo>           clave privada PEM desde un archivo
-        --tax-id <cuit>           CUIT, en lugar de ARCA_TAX_ID
+        --cuit <cuit>             CUIT, en lugar de ARCA_TAX_ID
         --env <test|production>   entorno, en lugar de ARCA_ENVIRONMENT
         --dir <directorio>        dónde buscar los archivos (por defecto: el actual)
         --no-cache                no reusa ni guarda el ticket WSAA

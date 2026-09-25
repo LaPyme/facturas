@@ -379,7 +379,7 @@ function resolveTaxId(
     }
     return {
       taxId: normalizeTaxId(given),
-      source: flags.taxId?.trim() ? "--tax-id" : "ARCA_TAX_ID",
+      source: flags.taxId?.trim() ? "--cuit" : "ARCA_TAX_ID",
     };
   }
   if (certificatePem === undefined) {
@@ -626,7 +626,7 @@ async function checkWsfe(
       };
     }
 
-    const salesPoints = await client.wsfe.getSalesPoints({});
+    const salesPoints = await client.wsfe.getSalesPoints();
     return {
       layer: { name: "wsfe", ok: true, detail: "servidor ok" },
       salesPoints,

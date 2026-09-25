@@ -40,11 +40,6 @@ const DEFAULT_ARCA_TIMEOUT_MS = 30_000;
 const DEFAULT_ARCA_RETRIES = 0;
 const DEFAULT_ARCA_RETRY_DELAY_MS = 500;
 
-/** Returns `"production"` or `"test"` based on the boolean flag. */
-export function resolveArcaEnvironment(production: boolean): ArcaEnvironment {
-  return production ? "production" : "test";
-}
-
 /**
  * Builds an {@link ArcaClientConfig} from environment variables.
  * Reads `process.env` by default; override with `options.env`.

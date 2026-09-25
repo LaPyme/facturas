@@ -7,7 +7,6 @@ import {
   createArcaClientConfigFromEnv,
   discoverArcaClientConfig,
   getArcaServiceConfig,
-  resolveArcaEnvironment,
 } from "./config";
 import { ArcaConfigurationError } from "./errors";
 
@@ -39,10 +38,8 @@ describe("discoverArcaClientConfig", () => {
 });
 
 describe("config", () => {
-  it("resolves the target environment", () => {
+  it("lists the target environments", () => {
     expect(ARCA_ENVIRONMENTS).toEqual(["production", "test"]);
-    expect(resolveArcaEnvironment(true)).toBe("production");
-    expect(resolveArcaEnvironment(false)).toBe("test");
   });
 
   it("accepts a complete client config", () => {

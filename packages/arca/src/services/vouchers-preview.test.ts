@@ -11,7 +11,7 @@ import { createVouchersService } from "./vouchers";
 import {
   normalizeWsfeVoucherInput,
   type WsfeAuthorizationOutcome,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
 } from "./wsfe";
 import type { IssueInput } from "./wsfe-derive";
 
@@ -38,7 +38,7 @@ const authorized: WsfeAuthorizationOutcome = {
 function fake() {
   const wsfe = {
     getNextVoucherNumber: vi.fn().mockResolvedValue(77),
-    issue: vi.fn(({ data }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(({ data }: WsfeIssueInput) => {
       normalizeWsfeVoucherInput(data);
       return Promise.resolve(authorized);
     }),

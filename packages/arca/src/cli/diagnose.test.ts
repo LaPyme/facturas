@@ -22,7 +22,7 @@ const ROWS: [CliDiagnosisKey, string, string | undefined][] = [
   [
     "config.taxIdUnknown",
     "El certificado no dice de qué CUIT es.",
-    "Pasá --tax-id 20123456786 o definí ARCA_TAX_ID.",
+    "Pasá --cuit 20123456786 o definí ARCA_TAX_ID.",
   ],
   ["config.environment", "Falta el entorno.", "export ARCA_ENVIRONMENT=test"],
   [
@@ -53,7 +53,7 @@ const ROWS: [CliDiagnosisKey, string, string | undefined][] = [
   [
     "cert.taxIdMismatch",
     "El certificado es del CUIT {certificateTaxId} y el configurado es {taxId}.",
-    "Usá el certificado de ese CUIT, o corregí --tax-id o ARCA_TAX_ID.",
+    "Usá el certificado de ese CUIT, o corregí --cuit o ARCA_TAX_ID.",
   ],
   [
     "cert.mismatch",

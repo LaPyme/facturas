@@ -1,7 +1,7 @@
 import type { ArcaAuthenticationReason } from "../errors";
 
-/** ARCA services that authorize fiscal vouchers. */
-export type ArcaFiscalService = "wsfe" | "wsmtxca";
+/** The ARCA service a call targets. It is chosen explicitly, never switched. */
+export type IssuanceService = "wsfe" | "wsmtxca";
 
 /** Location of a structured authorization result in the service response. */
 export type ArcaFiscalResultLevel = "header" | "detail" | "operation";
@@ -15,7 +15,7 @@ export type ArcaFiscalResults = {
 
 /** Source and meaning of one provider issue. */
 export type ArcaFiscalIssue = {
-  service: ArcaFiscalService;
+  service: IssuanceService;
   operation: string;
   source: "error" | "observation";
   category: "business" | "infrastructure" | "observation" | "unknown";
@@ -42,7 +42,7 @@ export type ArcaAuthenticationEvidence = {
 };
 
 type ArcaAuthorizationEvidenceBase<
-  TService extends ArcaFiscalService = ArcaFiscalService,
+  TService extends IssuanceService = IssuanceService,
 > = {
   service: TService;
   operation: string;
@@ -54,7 +54,7 @@ type ArcaAuthorizationEvidenceBase<
 
 /** Structured evidence returned by one exact voucher authorization attempt. */
 export type ArcaAuthorizationOutcome<
-  TService extends ArcaFiscalService = ArcaFiscalService,
+  TService extends IssuanceService = IssuanceService,
 > =
   | (ArcaAuthorizationEvidenceBase<TService> & {
       kind: "authorized";
@@ -83,7 +83,7 @@ export type ArcaAuthorizationOutcome<
 /** Structured result of consulting one exact voucher number. */
 export type ArcaVoucherLookupResult<
   TVoucher,
-  TService extends ArcaFiscalService = ArcaFiscalService,
+  TService extends IssuanceService = IssuanceService,
 > =
   | {
       kind: "found";

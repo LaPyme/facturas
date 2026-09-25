@@ -4,8 +4,8 @@
 // It enforces four things:
 //   1. `packages/arca/README.md` is a byte-identical copy of `README.md`.
 //      `pnpm docs:sync` produces it.
-//   2. Every repository link in README files and every Mintlify route in
-//      `docs/**/*.mdx` resolves, including heading anchors.
+//   2. Every repository or facturas-sdk.dev link in README files and every
+//      Mintlify route in `docs/**/*.mdx` resolves, including heading anchors.
 //   3. Every `examples/*.ts` file is linked from at least one document.
 //   4. Public prose follows the repository punctuation and API-positioning
 //      rules. Fenced code is excluded.
@@ -23,6 +23,7 @@ const ROOT_README = "README.md";
 const PACKAGE_README = "packages/arca/README.md";
 const DOCS_DIR = "docs";
 const EXAMPLES_DIR = "examples";
+const SITE_URL = "https://facturas-sdk.dev";
 const EXAMPLE_BLOB_PREFIX =
   "https://github.com/LaPyme/facturas/blob/main/examples/";
 
@@ -171,17 +172,22 @@ for (const file of files) {
       linkedExamples.add(posix.join(EXAMPLES_DIR, example));
       continue;
     }
-    if (/^[a-z][a-z\d+.-]*:/i.test(link) || link.startsWith("//")) {
+    // Site links in the README resolve like Mintlify routes, so npm readers
+    // land on the published page and the checker still sees the target.
+    const siteLink = link.startsWith(SITE_URL)
+      ? link.slice(SITE_URL.length) || "/"
+      : link;
+    if (/^[a-z][a-z\d+.-]*:/i.test(siteLink) || siteLink.startsWith("//")) {
       continue;
     }
-    const [rawPath, anchor] = link.split("#");
+    const [rawPath, anchor] = siteLink.split("#");
     if (rawPath === "") {
       if (anchor && !anchors.get(file).has(decodeURIComponent(anchor))) {
         fail(file, `link "${link}" points to a missing heading in this file`);
       }
       continue;
     }
-    const target = link.startsWith("/")
+    const target = siteLink.startsWith("/")
       ? resolveMintlifyRoute(rawPath)
       : toPosix(
           relative(ROOT, resolve(ROOT, base === "" ? "." : base, rawPath))

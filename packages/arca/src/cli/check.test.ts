@@ -92,7 +92,7 @@ describe("runCheck env layer", () => {
     `);
   });
 
-  it("rejects a --tax-id that fails its check digit", async () => {
+  it("rejects a --cuit that fails its check digit", async () => {
     const context = createContext({ env: fullEnv() });
 
     expect(await run(context, { taxId: "20123456789" })).toBe(1);
@@ -157,7 +157,7 @@ describe("runCheck env layer", () => {
 
     await run(context, { taxId: "20123456786", env: "test" });
 
-    expect(context.stdout()).toContain("--tax-id, --env=test");
+    expect(context.stdout()).toContain("--cuit, --env=test");
   });
 });
 
@@ -296,7 +296,7 @@ describe("runCheck file discovery", () => {
     expect(context.stdout()).toContain(
       "El certificado no dice de qué CUIT es."
     );
-    expect(context.stdout()).toContain("Pasá --tax-id 20123456786");
+    expect(context.stdout()).toContain("Pasá --cuit 20123456786");
   });
 
   it("takes the CUIT that was given over the one in the certificate", async () => {
@@ -305,7 +305,7 @@ describe("runCheck file discovery", () => {
 
     expect(await run(context, { taxId: TAX_ID })).toBe(0);
     expect(context.stdout()).toContain(
-      "arca-test.crt en este directorio, --tax-id"
+      "arca-test.crt en este directorio, --cuit"
     );
   });
 
@@ -315,10 +315,10 @@ describe("runCheck file discovery", () => {
 
     expect(await run(context, { taxId: TAX_ID })).toBe(1);
     expect(context.stdout()).toMatchInlineSnapshot(`
-      "✓ configuración          arca-test.crt en este directorio, --tax-id
+      "✓ configuración          arca-test.crt en este directorio, --cuit
       ✗ certificado y clave
         El certificado es del CUIT 33693450239 y el configurado es 20123456786.
-        Usá el certificado de ese CUIT, o corregí --tax-id o ARCA_TAX_ID.
+        Usá el certificado de ese CUIT, o corregí --cuit o ARCA_TAX_ID.
       "
     `);
   });

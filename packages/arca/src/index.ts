@@ -7,7 +7,6 @@ export {
   ARCA_ENVIRONMENTS,
   assertArcaClientConfig,
   createArcaClientConfigFromEnv,
-  resolveArcaEnvironment,
 } from "./config";
 export type {
   IssuerCondition,
@@ -46,8 +45,8 @@ export type {
   ArcaFiscalIssue,
   ArcaFiscalResultLevel,
   ArcaFiscalResults,
-  ArcaFiscalService,
   ArcaVoucherLookupResult,
+  IssuanceService,
 } from "./services/fiscal-evidence";
 export type {
   FceOptions,
@@ -80,7 +79,6 @@ export type {
 } from "./services/vouchers";
 export type {
   FiscalHeader,
-  IssuanceService,
   IssuedVoucher,
   IssueOptions,
   IssueOutcome,
@@ -94,11 +92,11 @@ export type {
   WsfeAssociatedPeriod,
   WsfeAssociatedVoucher,
   WsfeAuthorizationOutcome,
-  WsfeAuthorizeVoucherInput,
   WsfeBuyer,
   WsfeCatalogEntry,
   WsfeCurrencyType,
   WsfeDateInput,
+  WsfeIssueInput,
   WsfeOptionalField,
   WsfeQuotation,
   WsfeReceiverVatCondition,
@@ -130,7 +128,7 @@ export { matchWsfeVoucherIdentity } from "./services/wsfe-identity";
 export type {
   CreateWsmtxcaServiceOptions,
   WsmtxcaAuthorizationOutcome,
-  WsmtxcaAuthorizeVoucherInput,
+  WsmtxcaIssueInput,
   WsmtxcaLastAuthorizedVoucherResult,
   WsmtxcaSalesPoint,
   WsmtxcaSalesPointsResult,

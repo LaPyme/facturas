@@ -58,7 +58,7 @@ CUIT inválido: 20123456789 no pasa el dígito verificador.
 
 En una terminal vuelve a preguntar con esa razón, hasta tres veces, y recién
 ahí sale con código 2. Sin terminal sale con código 2 en el primer intento. La
-misma validación corre en `--tax-id` y en `ARCA_TAX_ID` para `check` e
+misma validación corre en `--cuit` y en `ARCA_TAX_ID` para `check` e
 `issue`.
 
 | Flag | Por defecto | Qué hace |
@@ -330,7 +330,7 @@ npx facturas check
 
 | # | Fuente | Qué aporta |
 | --- | --- | --- |
-| 1 | Los flags | `--tax-id`, `--env`, `--cert`, `--key` |
+| 1 | Los flags | `--cuit`, `--env`, `--cert`, `--key` |
 | 2 | Las variables de entorno | `ARCA_TAX_ID`, `ARCA_ENVIRONMENT`, `ARCA_CERTIFICATE_PEM`, `ARCA_PRIVATE_KEY_PEM` |
 | 3 | Los archivos del directorio | `arca-<entorno>.crt` y `arca-<entorno>.key`, y con ellos el entorno y el CUIT |
 
@@ -345,7 +345,7 @@ La búsqueda es en el directorio actual o en `--dir`. Reglas:
   ARCA vas a ver `Está arca-test.key pero falta arca-test.crt.`
 - El **CUIT** sale del `serialNumber` del certificado, donde ARCA lo escribe
   como `CUIT <11 dígitos>`. Si el certificado no lo trae y tampoco lo pasaste,
-  el CLI te pide `--tax-id`. Si pasaste uno y el certificado dice otro, el CLI
+  el CLI te pide `--cuit`. Si pasaste uno y el certificado dice otro, el CLI
   se detiene. Es un certificado de otro contribuyente, y falla la capa
   `certificado y clave` con los dos números a la vista.
 
@@ -357,7 +357,7 @@ disco: sigue leyendo variables de entorno, como explica
 | --- | --- |
 | `--cert <archivo>` | Lee el certificado PEM de un archivo, en vez de `ARCA_CERTIFICATE_PEM` |
 | `--key <archivo>` | Lee la clave PEM de un archivo, en vez de `ARCA_PRIVATE_KEY_PEM` |
-| `--tax-id <cuit>` | CUIT, en vez de `ARCA_TAX_ID` |
+| `--cuit <cuit>` | CUIT, en vez de `ARCA_TAX_ID` |
 | `--env <test\|production>` | Entorno, en vez de `ARCA_ENVIRONMENT` |
 | `--dir <directorio>` | Dónde buscar `arca-<entorno>.crt` y `.key` (por defecto, el actual) |
 | `--sales-point <n>` | Punto de venta que querés verificar. Es un entero de 1 a 99999, como el `PtoVta` de WSFE. Cualquier otra cosa sale con código 2 |
@@ -391,14 +391,14 @@ completa:
 | Capa | Caso | Diagnóstico | Solución |
 | --- | --- | --- | --- |
 | configuración | no hay CUIT en ningún lado | Falta el CUIT. | `export ARCA_TAX_ID=20123456786` |
-| configuración | `ARCA_TAX_ID` o `--tax-id` inválido | CUIT inválido: `<cuit>` tiene `<n>` dígitos y necesita 11. / CUIT inválido: `<cuit>` no pasa el dígito verificador. | Son 11 dígitos y el último es el verificador. Podés escribirlo con guiones. |
-| configuración | el certificado no dice el CUIT | El certificado no dice de qué CUIT es. | Pasá `--tax-id 20123456786` o definí `ARCA_TAX_ID`. |
+| configuración | `ARCA_TAX_ID` o `--cuit` inválido | CUIT inválido: `<cuit>` tiene `<n>` dígitos y necesita 11. / CUIT inválido: `<cuit>` no pasa el dígito verificador. | Son 11 dígitos y el último es el verificador. Podés escribirlo con guiones. |
+| configuración | el certificado no dice el CUIT | El certificado no dice de qué CUIT es. | Pasá `--cuit 20123456786` o definí `ARCA_TAX_ID`. |
 | configuración | falta `ARCA_ENVIRONMENT` | Falta el entorno. | `export ARCA_ENVIRONMENT=test` |
 | configuración | falta un PEM | Falta el certificado o la clave. | Guardá `arca-<entorno>.crt` y `arca-<entorno>.key` acá, o pasá `--cert` y `--key`, o definí las variables `ARCA_*_PEM`. |
 | configuración | están los dos entornos en el directorio | Están `arca-test.crt` y `arca-production.crt` en este directorio y no sé cuál querés. | Elegí con `--env test` o `--env production`. |
 | configuración | está la clave y falta el certificado | Está `arca-test.key` pero falta `arca-test.crt`. | Descargá el certificado de ARCA y guardalo acá como `arca-test.crt`. |
 | configuración | está el certificado y falta la clave | Está `arca-test.crt` pero falta `arca-test.key`. | Poné acá la clave con la que generaste el CSR, o pasá `--key`. |
-| certificado y clave | el certificado es de otro CUIT | El certificado es del CUIT `<a>` y el configurado es `<b>`. | Usá el certificado de ese CUIT, o corregí `--tax-id` o `ARCA_TAX_ID`. |
+| certificado y clave | el certificado es de otro CUIT | El certificado es del CUIT `<a>` y el configurado es `<b>`. | Usá el certificado de ese CUIT, o corregí `--cuit` o `ARCA_TAX_ID`. |
 | certificado y clave | el PEM no parsea | El archivo no es un PEM válido. | Revisá que copiaste el bloque completo, con BEGIN y END. |
 | certificado y clave | la clave no es la del certificado | La clave privada no corresponde a este certificado. | Usá la clave con la que generaste el CSR (`arca-<entorno>.key`). |
 | certificado y clave | vencido | El certificado venció el `<fecha>`. | Generá un CSR nuevo con `npx facturas init` y renovalo en ARCA. |
