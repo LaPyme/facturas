@@ -1,5 +1,11 @@
 # facturas
 
+## 0.16.1
+
+### Patch Changes
+
+- 0c18e1a: Use the canonical sample CUIT in the CLI's source comments.
+
 ## 0.16.0
 
 ### Minor Changes
