@@ -217,8 +217,8 @@ WSMTXCA, esos campos forman las filas que requiere ese servicio. Revisá el
 ## Qué hace `issue()` al emitir
 
 Sin clave, una llamada lee un próximo número y autoriza una vez, con a lo sumo
-una consulta de identidad después de una respuesta indeterminada. Es el
-comportamiento de la v0.8. Una primera llamada con clave reserva ese número
+una consulta de identidad después de una respuesta indeterminada. Una primera
+llamada con clave reserva ese número
 antes de escribir. Una repetición con clave consulta la reserva: solo
 `not_found` habilita una autorización del número guardado. Un comprobante
 encontrado nunca se reenvía. Las escrituras indeterminadas y los rechazos 10016

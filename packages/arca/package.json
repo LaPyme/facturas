@@ -4,8 +4,8 @@
   "description": "SDK de facturación electrónica con ARCA / AFIP para Node.js: facturas, notas de crédito y débito, y Padrón con una sola API.",
   "type": "module",
   "license": "Apache-2.0",
-  "author": "Lapyme",
-  "homepage": "https://github.com/LaPyme/facturas#readme",
+  "author": "LaPyme",
+  "homepage": "https://facturas-sdk.dev",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/LaPyme/facturas.git"
@@ -21,7 +21,12 @@
     "wsfe",
     "wsmtxca",
     "padron",
-    "facturacion-electronica"
+    "facturacion-electronica",
+    "factura",
+    "facturacion",
+    "cae",
+    "typescript",
+    "sdk"
   ],
   "engines": {
     "node": ">=22"

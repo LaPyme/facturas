@@ -41,7 +41,7 @@ npm install facturas
 
 ## Emití tu primera factura
 
-Definí las [variables de entorno](./docs/reference/configuration.mdx#variables-de-entorno)
+Definí las [variables de entorno](https://facturas-sdk.dev/reference/configuration#variables-de-entorno)
 con tu CUIT, certificado y clave. No hace falta nada más: ni base de datos, ni
 tabla, ni servicio externo.
 
@@ -67,8 +67,8 @@ Tratá siempre los cuatro resultados:
 | `indeterminate` | Conservá el número y la evidencia. Conciliá o repetí el input idéntico con su clave existente. |
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
-El paso a paso está en [Inicio rápido](./docs/getting-started/quickstart.mdx).
-El detalle está en [Facturas](./docs/guides/invoices.mdx).
+El paso a paso está en [Inicio rápido](https://facturas-sdk.dev/getting-started/quickstart).
+El detalle está en [Facturas](https://facturas-sdk.dev/guides/invoices).
 
 ## Reintentos seguros
 
@@ -93,7 +93,7 @@ const factura = await arca.issue(input, { idempotencyKey: venta.id });
 Hay adaptadores para Postgres, Redis, archivos y memoria, y podés escribir el
 tuyo. Con ellos, dos emisiones simultáneas sobre el mismo punto de venta se
 serializan y cada una escribe su número. Ver
-[Evitar comprobantes duplicados](./docs/guides/avoid-duplicates.mdx).
+[Evitar comprobantes duplicados](https://facturas-sdk.dev/guides/avoid-duplicates).
 
 ## Nota de crédito
 
@@ -113,33 +113,33 @@ const nota = await arca.issueCreditNote(
 
 Con `all: true` acreditás el original completo. El modo es explícito y
 obligatorio. También podés emitir [notas de débito y por
-período](./docs/guides/credit-notes.mdx), tributos y FCE. `recover()` concilia
+período](https://facturas-sdk.dev/guides/credit-notes), tributos y FCE. `recover()` concilia
 una reserva sin emitir.
 
 ## Documentación
 
-- [Inicio rápido](./docs/getting-started/quickstart.mdx): de cero a la primera factura y su
+- [Inicio rápido](https://facturas-sdk.dev/getting-started/quickstart): de cero a la primera factura y su
   nota de crédito.
-- [Habilitación en ARCA](./docs/getting-started/arca-setup.mdx): CUIT, certificado, punto
+- [Habilitación en ARCA](https://facturas-sdk.dev/getting-started/arca-setup): CUIT, certificado, punto
   de venta y referencias oficiales.
-- [CLI](./docs/getting-started/cli.mdx): `init`, `check` e `issue`, con la tabla de diagnósticos.
-- [Facturas](./docs/guides/invoices.mdx): `issue()`, `preview()`, datos de la factura y
+- [CLI](https://facturas-sdk.dev/getting-started/cli): `init`, `check` e `issue`, con la tabla de diagnósticos.
+- [Facturas](https://facturas-sdk.dev/guides/invoices): `issue()`, `preview()`, datos de la factura y
   contrato fiscal de emisión.
-- [Notas de crédito](./docs/guides/credit-notes.mdx): `issueCreditNote()`, modo
+- [Notas de crédito](https://facturas-sdk.dev/guides/credit-notes): `issueCreditNote()`, modo
   parcial y modo total.
-- [Evitar comprobantes duplicados](./docs/guides/avoid-duplicates.mdx): claves para
+- [Evitar comprobantes duplicados](https://facturas-sdk.dev/guides/avoid-duplicates): claves para
   reintentos, Postgres, Redis, archivos y memoria.
-- [WSMTXCA para casos requeridos](./docs/guides/wsmtxca.mdx): configuración
+- [WSMTXCA para casos requeridos](https://facturas-sdk.dev/guides/wsmtxca): configuración
   avanzada para contribuyentes o puntos de venta que operan con ese servicio.
-- [Configuración](./docs/reference/configuration.mdx): variables de entorno, opciones del
+- [Configuración](https://facturas-sdk.dev/reference/configuration): variables de entorno, opciones del
   cliente, sesiones WSAA, logs, reintentos y límites de tiempo.
-- [Módulos de transporte](./docs/reference/arca-services.mdx): `client.wsfe`,
+- [Módulos de transporte](https://facturas-sdk.dev/reference/arca-services): `client.wsfe`,
   `client.wsmtxca` y `client.padron` para lecturas, catálogos, estado del
   servicio y Padrón.
-- [Errores](./docs/reference/errors.mdx): clases de error y diagnóstico.
-- [Referencia](./docs/reference/public-api.mdx): constantes, API pública con semver y
+- [Errores](https://facturas-sdk.dev/reference/errors): clases de error y diagnóstico.
+- [Referencia](https://facturas-sdk.dev/reference/public-api): constantes, API pública con semver y
   seguridad.
-- [Ejemplos](./docs/reference/examples.mdx): índice de [examples/](./examples).
+- [Ejemplos](https://facturas-sdk.dev/reference/examples): índice de [examples/](./examples).
 
 ## Contribuir
 
