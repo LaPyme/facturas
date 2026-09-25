@@ -179,7 +179,7 @@ const HELP_PAGES: Record<CliHelpTopic, HelpPage> = {
             description: "clave privada PEM desde un archivo",
           },
           {
-            name: "--tax-id <cuit>",
+            name: "--cuit <cuit>",
             description: "CUIT, en lugar de ARCA_TAX_ID",
           },
           {
@@ -236,7 +236,7 @@ const HELP_PAGES: Record<CliHelpTopic, HelpPage> = {
             description: "clave privada PEM desde un archivo",
           },
           {
-            name: "--tax-id <cuit>",
+            name: "--cuit <cuit>",
             description: "CUIT, en lugar de ARCA_TAX_ID",
           },
           {

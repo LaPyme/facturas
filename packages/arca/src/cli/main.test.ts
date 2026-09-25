@@ -119,7 +119,7 @@ describe("run dispatch", () => {
   it("exits 2 when a flag is missing its value", async () => {
     const context = createContext();
 
-    expect(await run(["check", "--tax-id"], context.io)).toBe(2);
+    expect(await run(["check", "--cuit"], context.io)).toBe(2);
     expect(context.stderr()).toContain("Falta el valor de");
   });
 

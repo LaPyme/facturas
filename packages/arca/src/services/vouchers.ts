@@ -24,7 +24,10 @@ import {
   settledKey,
   storeCall,
 } from "../store/types";
-import type { ArcaAuthorizationOutcome } from "./fiscal-evidence";
+import type {
+  ArcaAuthorizationOutcome,
+  IssuanceService,
+} from "./fiscal-evidence";
 import {
   normalizedFceAnnulment,
   validateFiscalHeader,
@@ -39,7 +42,6 @@ import {
 import { arcaQrUrl } from "./qr";
 import type {
   FiscalHeader,
-  IssuanceService,
   IssuedVoucher,
   IssueOptions,
   IssueOutcome,

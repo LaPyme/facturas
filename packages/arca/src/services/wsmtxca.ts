@@ -21,8 +21,8 @@ import type {
   ArcaVoucherLookupResult,
 } from "./fiscal-evidence";
 
-/** Input data for one WSMTXCA voucher authorization. */
-export type WsmtxcaAuthorizeVoucherInput = {
+/** Input for {@link WsmtxcaService.issue}: one WSMTXCA voucher request. */
+export type WsmtxcaIssueInput = {
   representedTaxId?: ArcaRepresentedTaxId;
   data: Record<string, unknown>;
   forceRefresh?: boolean;
@@ -96,9 +96,7 @@ export type WsmtxcaService = {
    * Issues one exact voucher: a single autorizarComprobante without transport
    * retries, returning structured evidence instead of throwing.
    */
-  issue(
-    input: WsmtxcaAuthorizeVoucherInput
-  ): Promise<WsmtxcaAuthorizationOutcome>;
+  issue(input: WsmtxcaIssueInput): Promise<WsmtxcaAuthorizationOutcome>;
   /** Returns the last authorized voucher number for the given sales point and type. */
   getLastAuthorizedVoucher(input: {
     representedTaxId?: ArcaRepresentedTaxId;
@@ -108,7 +106,7 @@ export type WsmtxcaService = {
     abortSignal?: AbortSignal;
   }): Promise<WsmtxcaLastAuthorizedVoucherResult>;
   /** Returns the points of sale enabled for WSMTXCA. */
-  getSalesPoints(input: {
+  getSalesPoints(input?: {
     representedTaxId?: ArcaRepresentedTaxId;
     forceRefresh?: boolean;
   }): Promise<WsmtxcaSalesPointsResult>;
@@ -185,7 +183,7 @@ export function createWsmtxcaService(
     data,
     forceRefresh,
     abortSignal,
-  }: WsmtxcaAuthorizeVoucherInput): Promise<{
+  }: WsmtxcaIssueInput): Promise<{
     outcome: WsmtxcaAuthorizationOutcome;
     error?: unknown;
   }> {
@@ -217,7 +215,7 @@ export function createWsmtxcaService(
   }
 
   async function issue(
-    input: WsmtxcaAuthorizeVoucherInput
+    input: WsmtxcaIssueInput
   ): Promise<WsmtxcaAuthorizationOutcome> {
     return (await executeWsmtxcaAuthorization(input)).outcome;
   }
@@ -299,7 +297,7 @@ export function createWsmtxcaService(
   }: {
     representedTaxId?: ArcaRepresentedTaxId;
     forceRefresh?: boolean;
-  }): Promise<WsmtxcaSalesPointsResult> {
+  } = {}): Promise<WsmtxcaSalesPointsResult> {
     return executeWithAuthenticationRecovery({
       service: "wsmtxca",
       operation: "consultarPuntosVenta",

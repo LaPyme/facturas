@@ -9,7 +9,7 @@ import {
   createWsfeService,
   normalizeWsfeVoucherInput,
   type WsfeAuthorizationOutcome,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
   type WsfeVoucherInfo,
   type WsfeVoucherLookupResult,
 } from "./wsfe";
@@ -74,7 +74,7 @@ function fake(
 ) {
   const wsfe = {
     getNextVoucherNumber: vi.fn().mockResolvedValue(77),
-    issue: vi.fn(({ data }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(({ data }: WsfeIssueInput) => {
       // Exercise the real provider reconciliation on every attempted write.
       normalizeWsfeVoucherInput(data);
       return Promise.resolve(outcome);

@@ -5,7 +5,7 @@ import { wsmtxcaRequest } from "./issuance-wsmtxca";
 import { createVouchersService } from "./vouchers";
 import {
   createWsfeService,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
   type WsfeVoucherInfo,
   type WsfeVoucherInput,
   type WsfeVoucherLookupResult,
@@ -76,7 +76,7 @@ function fixture() {
           : absent;
       }
     ),
-    issue: vi.fn(async ({ data, voucherNumber }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(async ({ data, voucherNumber }: WsfeIssueInput) => {
       await Promise.resolve();
       records.set(
         `${data.voucherType}:${voucherNumber}`,

@@ -8,7 +8,7 @@ import {
   type NotePreview,
   type VouchersService,
   type WsfeAuthorizationOutcome,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
   type WsfeVoucherInput,
 } from "facturas";
 import { ARCA_CURRENCY_IDS, ISO_CURRENCIES } from "facturas/constants";
@@ -17,7 +17,7 @@ import {
   ArcaInputError as SubpathInputError,
 } from "facturas/errors";
 import type {
-  WsfeAuthorizeVoucherInput as SubpathAuthorizeVoucherInput,
+  WsfeIssueInput as SubpathIssueInput,
   WsfeVoucherInput as SubpathVoucherInput,
 } from "facturas/wsfe";
 
@@ -41,11 +41,11 @@ const transportInput: WsfeVoucherInput = {
   vatRates: [{ id: 5, baseAmount: 100, amount: 21 }],
 };
 const subpathTransportInput: SubpathVoucherInput = transportInput;
-const authorizationInput: WsfeAuthorizeVoucherInput = {
+const authorizationInput: WsfeIssueInput = {
   data: transportInput,
   voucherNumber: 1,
 };
-const subpathAuthorizationInput: SubpathAuthorizeVoucherInput = {
+const subpathAuthorizationInput: SubpathIssueInput = {
   data: subpathTransportInput,
   voucherNumber: 2,
 };

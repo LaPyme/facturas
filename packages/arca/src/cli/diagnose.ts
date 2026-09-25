@@ -65,7 +65,7 @@ export const CLI_DIAGNOSES: Record<CliDiagnosisKey, CliDiagnosis> = {
   },
   "config.taxIdUnknown": {
     diagnosis: "El certificado no dice de qué CUIT es.",
-    fix: "Pasá --tax-id 20123456786 o definí ARCA_TAX_ID.",
+    fix: "Pasá --cuit 20123456786 o definí ARCA_TAX_ID.",
   },
   "config.environment": {
     diagnosis: "Falta el entorno.",
@@ -94,7 +94,7 @@ export const CLI_DIAGNOSES: Record<CliDiagnosisKey, CliDiagnosis> = {
   "cert.taxIdMismatch": {
     diagnosis:
       "El certificado es del CUIT {certificateTaxId} y el configurado es {taxId}.",
-    fix: "Usá el certificado de ese CUIT, o corregí --tax-id o ARCA_TAX_ID.",
+    fix: "Usá el certificado de ese CUIT, o corregí --cuit o ARCA_TAX_ID.",
   },
   "cert.mismatch": {
     diagnosis: "La clave privada no corresponde a este certificado.",

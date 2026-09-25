@@ -113,8 +113,8 @@ export type WsfeVoucherInput = {
   activities?: WsfeActivity[];
 };
 
-/** Input for authorizing a WSFE voucher with an explicit voucher number. */
-export type WsfeAuthorizeVoucherInput = {
+/** Input for {@link WsfeService.issue}: one voucher with an explicit number. */
+export type WsfeIssueInput = {
   representedTaxId?: number | string;
   data: WsfeVoucherInput;
   voucherNumber: number;
@@ -214,7 +214,7 @@ export type WsfeService = {
    * `voucherNumber`, without transport retries, returning structured evidence
    * (`authorized`, `rejected` or `indeterminate`) instead of throwing.
    */
-  issue(input: WsfeAuthorizeVoucherInput): Promise<WsfeAuthorizationOutcome>;
+  issue(input: WsfeIssueInput): Promise<WsfeAuthorizationOutcome>;
   /** Returns the next available voucher number for the given sales point and type. */
   getNextVoucherNumber(input: {
     representedTaxId?: number | string;
@@ -224,52 +224,52 @@ export type WsfeService = {
     abortSignal?: AbortSignal;
   }): Promise<number>;
   /** Lists all configured points of sale for the taxpayer. */
-  getSalesPoints(input: {
+  getSalesPoints(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeSalesPoint[]>;
   /** Lists voucher types accepted by WSFE. */
-  getVoucherTypes(input: {
+  getVoucherTypes(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCatalogEntry[]>;
   /** Lists document types accepted by WSFE. */
-  getDocumentTypes(input: {
+  getDocumentTypes(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCatalogEntry[]>;
   /** Lists concept types accepted by WSFE. */
-  getConceptTypes(input: {
+  getConceptTypes(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCatalogEntry[]>;
   /** Lists live ARCA currency identifiers such as PES and DOL, not ISO codes. */
-  getCurrencyTypes(input: {
+  getCurrencyTypes(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCurrencyType[]>;
   /** Lists VAT rates accepted by WSFE. */
-  getVatRates(input: {
+  getVatRates(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCatalogEntry[]>;
   /** Lists tax types accepted by WSFE. */
-  getTaxTypes(input: {
+  getTaxTypes(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCatalogEntry[]>;
   /** Lists optional field types accepted by WSFE. */
-  getOptionalTypes(input: {
+  getOptionalTypes(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeCatalogEntry[]>;
   /** Lists activities enabled for the taxpayer. */
-  getActivities(input: {
+  getActivities(input?: {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeActivityType[]>;
   /** Lists receiver VAT condition values accepted by WSFE. */
-  getReceiverVatConditions(input: {
+  getReceiverVatConditions(input?: {
     representedTaxId?: number | string;
     voucherClass?: string;
     forceRefresh?: boolean;
@@ -501,7 +501,7 @@ export function createWsfeService(
     voucherNumber,
     forceRefresh,
     abortSignal,
-  }: WsfeAuthorizeVoucherInput): Promise<WsfeAuthorizationOutcome> {
+  }: WsfeIssueInput): Promise<WsfeAuthorizationOutcome> {
     const normalizedInput = normalizeWsfeVoucherInput(data);
     return executeWsfeAuthorization({
       representedTaxId,
@@ -656,7 +656,7 @@ export function createWsfeService(
   return {
     issue,
     getNextVoucherNumber,
-    async getSalesPoints({ representedTaxId, forceRefresh }) {
+    async getSalesPoints({ representedTaxId, forceRefresh } = {}) {
       const operation = "FEParamGetPtosVenta";
       const result = await executeWithAuthenticationRecovery({
         service: "wsfe",
@@ -691,16 +691,16 @@ export function createWsfeService(
       const entries = Array.isArray(rawPoints) ? rawPoints : [rawPoints];
       return entries.map(mapWsfeSalesPoint);
     },
-    getVoucherTypes(input) {
+    getVoucherTypes(input = {}) {
       return getWsfeCatalog("FEParamGetTiposCbte", "CbteTipo", input);
     },
-    getDocumentTypes(input) {
+    getDocumentTypes(input = {}) {
       return getWsfeCatalog("FEParamGetTiposDoc", "DocTipo", input);
     },
-    getConceptTypes(input) {
+    getConceptTypes(input = {}) {
       return getWsfeCatalog("FEParamGetTiposConcepto", "ConceptoTipo", input);
     },
-    async getCurrencyTypes({ representedTaxId, forceRefresh }) {
+    async getCurrencyTypes({ representedTaxId, forceRefresh } = {}) {
       const result = await executeWsfeAuthenticatedOperation(
         "FEParamGetTiposMonedas",
         {
@@ -710,16 +710,16 @@ export function createWsfeService(
       );
       return getWsfeResultEntries(result, "Moneda").map(mapWsfeCurrencyType);
     },
-    getVatRates(input) {
+    getVatRates(input = {}) {
       return getWsfeCatalog("FEParamGetTiposIva", "IvaTipo", input);
     },
-    getTaxTypes(input) {
+    getTaxTypes(input = {}) {
       return getWsfeCatalog("FEParamGetTiposTributos", "TributoTipo", input);
     },
-    getOptionalTypes(input) {
+    getOptionalTypes(input = {}) {
       return getWsfeCatalog("FEParamGetTiposOpcional", "OpcionalTipo", input);
     },
-    async getActivities({ representedTaxId, forceRefresh }) {
+    async getActivities({ representedTaxId, forceRefresh } = {}) {
       const result = await executeWsfeAuthenticatedOperation(
         "FEParamGetActividades",
         {
@@ -735,7 +735,7 @@ export function createWsfeService(
       representedTaxId,
       voucherClass,
       forceRefresh,
-    }) {
+    } = {}) {
       const result = await executeWsfeAuthenticatedOperation(
         "FEParamGetCondicionIvaReceptor",
         {

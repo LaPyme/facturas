@@ -1,7 +1,7 @@
 export type {
   CreateWsmtxcaServiceOptions,
   WsmtxcaAuthorizationOutcome,
-  WsmtxcaAuthorizeVoucherInput,
+  WsmtxcaIssueInput,
   WsmtxcaLastAuthorizedVoucherResult,
   WsmtxcaSalesPoint,
   WsmtxcaSalesPointsResult,

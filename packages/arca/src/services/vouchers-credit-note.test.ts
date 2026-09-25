@@ -10,7 +10,7 @@ import type { IssueOptions } from "./vouchers-types";
 import {
   normalizeWsfeVoucherInput,
   type WsfeAuthorizationOutcome,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
   type WsfeVoucherInput,
   type WsfeVoucherLookupResult,
 } from "./wsfe";
@@ -95,7 +95,7 @@ function fake({ coordinated = true } = {}) {
       calls.push("next");
       return Promise.resolve(9);
     }),
-    issue: vi.fn(({ data: sent }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(({ data: sent }: WsfeIssueInput) => {
       normalizeWsfeVoucherInput(sent);
       written = sent;
       calls.push("authorize");
