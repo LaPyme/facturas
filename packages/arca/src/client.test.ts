@@ -236,7 +236,7 @@ describe("createArcaClient", () => {
 
     const client = createArcaClient(config);
 
-    await expect(client.wsfe.getSalesPoints({})).resolves.toEqual([
+    await expect(client.wsfe.getSalesPoints()).resolves.toEqual([
       { number: 3 },
     ]);
 

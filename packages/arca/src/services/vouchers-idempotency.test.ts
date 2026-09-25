@@ -11,7 +11,7 @@ import type { IssueOptions } from "./vouchers-types";
 import {
   normalizeWsfeVoucherInput,
   type WsfeAuthorizationOutcome,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
   type WsfeVoucherLookupResult,
 } from "./wsfe";
 import { deriveWsfeInvoice, type IssueInput } from "./wsfe-derive";
@@ -97,7 +97,7 @@ function fake({ coordinated = true } = {}) {
   const store = createMemoryStore();
   const wsfe = {
     getNextVoucherNumber: vi.fn().mockResolvedValue(77),
-    issue: vi.fn(async ({ data }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(async ({ data }: WsfeIssueInput) => {
       normalizeWsfeVoucherInput(data);
       expect(await store.get(key)).not.toBeNull();
       return authorized;

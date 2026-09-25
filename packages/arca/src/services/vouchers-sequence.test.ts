@@ -17,7 +17,7 @@ import { createVouchersService } from "./vouchers";
 import {
   normalizeWsfeVoucherInput,
   type WsfeAuthorizationOutcome,
-  type WsfeAuthorizeVoucherInput,
+  type WsfeIssueInput,
   type WsfeVoucherInput,
   type WsfeVoucherLookupResult,
 } from "./wsfe";
@@ -98,7 +98,7 @@ function provider() {
   };
   const wsfe = {
     getNextVoucherNumber: vi.fn(() => Promise.resolve(last + 1)),
-    issue: vi.fn(async ({ data, voucherNumber }: WsfeAuthorizeVoucherInput) => {
+    issue: vi.fn(async ({ data, voucherNumber }: WsfeIssueInput) => {
       normalizeWsfeVoucherInput(data);
       running += 1;
       writes.concurrent = Math.max(writes.concurrent, running);

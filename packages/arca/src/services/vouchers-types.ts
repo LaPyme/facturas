@@ -3,6 +3,7 @@ import type { ArcaSafeErrorMetadata } from "../errors";
 import type {
   ArcaAuthorizationOutcome,
   ArcaFiscalIssue,
+  IssuanceService,
 } from "./fiscal-evidence";
 import type { WsfeVoucherInput } from "./wsfe";
 import type { IssueAmounts } from "./wsfe-amounts";
@@ -60,8 +61,6 @@ export type IssuedVoucher = VoucherCoordinates & {
   qr?: string;
 };
 
-/** The provider a call targets. It is chosen explicitly, never switched. */
-export type IssuanceService = "wsfe" | "wsmtxca";
 export type ServiceFor<O extends IssueOptions> = "service" extends keyof O
   ? "wsmtxca" extends O["service"]
     ? O extends { service: "wsmtxca" }

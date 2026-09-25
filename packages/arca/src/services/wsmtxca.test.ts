@@ -319,7 +319,7 @@ describe("createWsmtxcaService", () => {
       });
 
     await expect(
-      createWsmtxcaService(options).getSalesPoints({})
+      createWsmtxcaService(options).getSalesPoints()
     ).resolves.toMatchObject({ salesPoints: [{ number: 1, blocked: false }] });
     expect(options.auth.login).toHaveBeenCalledTimes(2);
     expect(options.auth.login).toHaveBeenLastCalledWith(
