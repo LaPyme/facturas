@@ -8,7 +8,7 @@ mode: "custom"
 
 <div className="px-4 sm:px-6 pb-24">
 
-<div className="max-w-3xl mx-auto pt-16 sm:pt-28 text-center">
+<div className="max-w-3xl mx-auto pt-40 lg:pt-28 text-center">
   <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-gray-900 dark:text-white">
     Facturación electrónica para TypeScript
   </h1>
@@ -40,11 +40,11 @@ npx skills add LaPyme/facturas
   </a>
 </div>
 
-<div className="max-w-5xl mx-auto mt-20 grid lg:grid-cols-2 gap-6 items-center">
+<div className="max-w-5xl mx-auto mt-12 lg:mt-20 grid lg:grid-cols-2 gap-6 items-center">
 
-<div className="min-w-0">
+<div className="min-w-0" id="emitir">
 
-```typescript emitir.ts
+```typescript emitir.ts wrap
 import { createArcaClient } from "facturas";
 
 const arca = createArcaClient();
@@ -54,13 +54,14 @@ const resultado = await arca.issue({
   salesPoint: 3,
   to: { condition: "consumidor_final" },
   items: [
-    { amount: 1_800_000 }, // 2 × Yerba mate 1 kg
-    { amount: 3_450_000 }, // Termo de acero 1 L
+    { amount: 1_800_000 }, // 2 × Yerba
+    { amount: 3_450_000 }, // 1 × Termo
   ],
 });
 
 if (resultado.kind === "authorized") {
-  const { number, cae, qr } = resultado.voucher;
+  const { number, cae, caeExpiry, qr } =
+    resultado.voucher;
 }
 ```
 
@@ -86,8 +87,8 @@ if (resultado.kind === "authorized") {
       </div>
       <div className="col-span-3 sm:col-span-1 sm:col-start-3 text-right text-gray-600">
         <div><span className="font-semibold text-gray-900">Fecha de Emisión:</span> 26/09/2026</div>
-        <div><span className="font-semibold text-gray-900">CUIT:</span> 20-12345678-6</div>
-        <div><span className="font-semibold text-gray-900">Ingresos Brutos:</span> 20-12345678-6</div>
+        <div><span className="font-semibold text-gray-900">CUIT:</span> <span className="whitespace-nowrap">20-12345678-6</span></div>
+        <div><span className="font-semibold text-gray-900">Ingresos Brutos:</span> <span className="whitespace-nowrap">20-12345678-6</span></div>
         <div><span className="font-semibold text-gray-900">Inicio de Actividades:</span> 01/03/2024</div>
       </div>
     </div>

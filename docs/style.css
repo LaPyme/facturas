@@ -1,0 +1,14 @@
+/* Landing page: fit the emitir.ts example on a phone without clipping. */
+@media (max-width: 639px) {
+  #emitir pre {
+    font-size: 12px;
+    line-height: 20px;
+  }
+}
+
+@media (max-width: 399px) {
+  #emitir pre {
+    font-size: 11px;
+    line-height: 18px;
+  }
+}
