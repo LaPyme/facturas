@@ -12,6 +12,7 @@ repositorio y proponer un cambio.
   [SECURITY.md](./SECURITY.md).
 - No pegues certificados, claves privadas, tickets WSAA ni datos fiscales reales
   en issues, pull requests, tests o ejemplos.
+- Al participar aceptás el [código de conducta](./CODE_OF_CONDUCT.md).
 
 ## Entorno
 
