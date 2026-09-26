@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 // Documentation checker. Dependency-free Node, run by `pnpm check:docs`.
 //
-// It enforces four things:
-//   1. `packages/arca/README.md` is a byte-identical copy of `README.md`.
-//      `pnpm docs:sync` produces it.
-//   2. Every repository or facturas-sdk.dev link in README files and every
-//      Mintlify route in `docs/**/*.mdx` resolves, including heading anchors.
+// It enforces five things:
+//   1. `packages/arca/README.md` is a byte-identical copy of `README.md`, and
+//      `docs/skill.md` of `skills/facturas/SKILL.md`. `pnpm docs:sync`
+//      produces both.
+//   2. Every repository or facturas-sdk.dev link in README files, the agent
+//      skill, `docs/llms.txt` and every Mintlify route in `docs/**/*.mdx`
+//      resolves, including heading anchors.
 //   3. Every `examples/*.ts` file is linked from at least one document.
-//   4. Public prose follows the repository punctuation and API-positioning
+//   4. Every page in the `docs.json` navigation is listed in `docs/llms.txt`,
+//      which is written by hand and overrides the one Mintlify generates.
+//   5. Public prose follows the repository punctuation and API-positioning
 //      rules. Fenced code is excluded.
 //
 // `packages/arca/README.md` is a copy of the root README, so its relative
@@ -22,6 +26,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ROOT_README = "README.md";
 const PACKAGE_README = "packages/arca/README.md";
 const DOCS_DIR = "docs";
+const SKILL = "skills/facturas/SKILL.md";
+const SKILL_MIRROR = "docs/skill.md";
+const LLMS = "docs/llms.txt";
+// Mintlify generates these at build time, so there is no file to resolve.
+const GENERATED_SITE_PATHS = new Set(["/llms-full.txt"]);
 const EXAMPLES_DIR = "examples";
 const SITE_URL = "https://facturas-sdk.dev";
 const EXAMPLE_BLOB_PREFIX =
@@ -130,7 +139,13 @@ function linksOf(text) {
   return found;
 }
 
-const files = [ROOT_README, PACKAGE_README, ...listDocumentation(DOCS_DIR)];
+const files = [
+  ROOT_README,
+  PACKAGE_README,
+  SKILL,
+  LLMS,
+  ...listDocumentation(DOCS_DIR),
+];
 const contents = new Map(
   files.map((file) => [file, readFileSync(join(ROOT, file), "utf8")])
 );
@@ -139,7 +154,11 @@ const anchors = new Map(
 );
 
 for (const file of files.filter(
-  (candidate) => candidate.endsWith(".mdx") || candidate.endsWith("README.md")
+  (candidate) =>
+    candidate.endsWith(".mdx") ||
+    candidate.endsWith("README.md") ||
+    candidate === SKILL ||
+    candidate === LLMS
 )) {
   const prose = stripCodeFences(contents.get(file));
   if (prose.includes(";")) {
@@ -160,6 +179,38 @@ if (contents.get(ROOT_README) !== contents.get(PACKAGE_README)) {
   );
 }
 
+if (contents.get(SKILL) !== contents.get(SKILL_MIRROR)) {
+  fail(
+    SKILL_MIRROR,
+    `differs from ${SKILL}. Run \`pnpm docs:sync\` to copy it.`
+  );
+}
+
+const docsConfig = JSON.parse(
+  readFileSync(join(ROOT, DOCS_DIR, "docs.json"), "utf8")
+);
+const listedInLlms = new Set(linksOf(contents.get(LLMS)));
+for (const page of navigationPages(docsConfig.navigation)) {
+  if (page !== "index" && !listedInLlms.has(`${SITE_URL}/${page}.md`)) {
+    fail(LLMS, `does not list the page "${page}" as ${SITE_URL}/${page}.md`);
+  }
+}
+
+function navigationPages(node) {
+  if (typeof node === "string") {
+    return [node];
+  }
+  if (Array.isArray(node)) {
+    return node.flatMap(navigationPages);
+  }
+  if (node && typeof node === "object") {
+    return Object.values(node).flatMap((value) =>
+      typeof value === "object" ? navigationPages(value) : []
+    );
+  }
+  return [];
+}
+
 const linkedExamples = new Set();
 
 for (const file of files) {
@@ -177,6 +228,9 @@ for (const file of files) {
     const siteLink = link.startsWith(SITE_URL)
       ? link.slice(SITE_URL.length) || "/"
       : link;
+    if (GENERATED_SITE_PATHS.has(siteLink)) {
+      continue;
+    }
     if (/^[a-z][a-z\d+.-]*:/i.test(siteLink) || siteLink.startsWith("//")) {
       continue;
     }
@@ -220,7 +274,10 @@ for (const file of files) {
 }
 
 function resolveMintlifyRoute(rawPath) {
-  const route = decodeURIComponent(rawPath).replace(/^\/+|\/+$/g, "");
+  // Mintlify serves every page as Markdown at the same route plus `.md`.
+  const route = decodeURIComponent(rawPath)
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/\.md$/, "");
   const candidates =
     route === ""
       ? [posix.join(DOCS_DIR, "index.mdx")]

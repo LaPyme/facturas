@@ -115,7 +115,7 @@ Cuando una llamada falla, mirá [Errores](/reference/errors).
 
 ## 6. Evitá duplicados al reintentar
 
-ARCA no acepta una clave de idempotencia como Stripe. Si se corta la respuesta,
+ARCA no acepta una clave de idempotencia. Si se corta la respuesta,
 tu aplicación no sabe si ARCA emitió el comprobante. `facturas` facilita un
 mecanismo de deduplicación: guardá el intento en un `store` y pasá el ID estable
 de la venta como `idempotencyKey`. Al reintentar, el SDK consulta el número

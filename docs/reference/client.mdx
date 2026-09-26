@@ -162,7 +162,7 @@ resultados fiscales se devuelven, no se lanzan, y `kind` los distingue:
 | `lookup.kind` | Qué significa |
 | --- | --- |
 | `not_found` | ARCA confirmó que el número está vacío |
-| `incomplete` | La consulta no alcanzó para decidir. `reason` dice por qué |
+| `incomplete` | ARCA tiene un comprobante en el número reservado, pero la consulta no trae los datos para probar que es este. `reason` dice por qué |
 | `failed` | La consulta falló. `error` trae el mensaje seguro y el código |
 | `aborted` | Venció tu `abortSignal`. La reserva queda para `recover()` |
 | `blocked` | Otra reserva sin resolver frena la secuencia. Conciliá la clave `by` y repetí |

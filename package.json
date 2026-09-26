@@ -6,7 +6,7 @@
     "build": "pnpm exec turbo build",
     "changeset": "changeset",
     "check:docs": "node scripts/check-docs.mjs",
-    "docs:sync": "cp README.md packages/arca/README.md",
+    "docs:sync": "cp README.md packages/arca/README.md && cp skills/facturas/SKILL.md docs/skill.md",
     "typecheck": "pnpm exec turbo typecheck && pnpm typecheck:examples",
     "typecheck:examples": "pnpm exec tsc --project tsconfig.examples.json --noEmit",
     "test": "pnpm exec turbo test",
