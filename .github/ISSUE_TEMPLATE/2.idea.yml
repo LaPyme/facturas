@@ -1,0 +1,37 @@
+name: Proponer una mejora o hacer una pregunta
+description: Un caso que el SDK no cubre, una duda de uso o una parte de la documentación que no se entiende.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Antes de abrir, buscá en la [documentación](https://facturas-sdk.dev) y en los [issues](https://github.com/LaPyme/facturas/issues?q=is%3Aissue). No pegues credenciales ni datos fiscales reales.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Tipo
+      options:
+        - Mejora o caso nuevo
+        - Pregunta de uso
+        - Documentación
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: Qué necesitás
+      description: El caso fiscal o de negocio, no solo la API que imaginás. Por ejemplo, qué comprobante querés emitir y para quién.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Qué probaste
+      description: El código, la guía o la referencia de ARCA que miraste, y dónde te trabaste.
+      render: ts
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: Acepto el [código de conducta](https://github.com/LaPyme/facturas/blob/main/CODE_OF_CONDUCT.md).
+          required: true

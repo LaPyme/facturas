@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentación
+    url: https://facturas-sdk.dev
+    about: Guías de emisión, referencia de la API, errores y diagnóstico del CLI.
+  - name: Reportar una vulnerabilidad
+    url: https://github.com/LaPyme/facturas/blob/main/SECURITY.md
+    about: No abras un issue. Seguí la política de seguridad y escribinos en privado.

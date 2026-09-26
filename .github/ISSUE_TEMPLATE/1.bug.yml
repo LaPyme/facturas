@@ -1,0 +1,84 @@
+name: Reportar un error
+description: El SDK o el CLI hace algo distinto de lo que dice la documentación.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **No pegues certificados, claves privadas, tickets WSAA ni CUITs o comprobantes reales.** Este issue es público. Usá `20123456786` y montos de ejemplo.
+
+        Si el problema puede exponer credenciales o emitir un comprobante que no corresponde, no abras un issue: seguí [SECURITY.md](https://github.com/LaPyme/facturas/blob/main/SECURITY.md).
+  - type: textarea
+    id: description
+    attributes:
+      label: Qué pasó
+      description: Qué esperabas y qué pasó en cambio.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Cómo reproducirlo
+      description: El código mínimo o el comando del CLI que lo muestra. Si pasa en homologación, mejor.
+      render: ts
+      placeholder: |
+        const result = await arca.issue({
+          issuer: "responsable_inscripto",
+          salesPoint: 1,
+          to: { condition: "responsable_inscripto", cuit: "20123456786" },
+          items: [{ net: 10_000, vat: 21 }],
+        });
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Error o resultado
+      description: |
+        El `code` y el mensaje del error, y `serviceCode` si es un `ArcaServiceError`. Si no hubo error, el `status` del resultado y, si aplica, `lookup`. Borrá cualquier dato real.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Versión de facturas
+      placeholder: "0.17.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Entorno
+      options:
+        - test (homologación)
+        - production
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Dónde
+      options:
+        - Emisión con WSFE
+        - Emisión con WSMTXCA
+        - Notas de crédito o débito
+        - Padrón
+        - Autenticación WSAA o tickets
+        - Store y reintentos
+        - CLI
+        - Otro
+    validations:
+      required: true
+  - type: input
+    id: runtime
+    attributes:
+      label: Node.js y plataforma
+      placeholder: "Node.js 22.12, Vercel Functions"
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Antes de enviar
+      options:
+        - label: Saqué certificados, claves, tickets, CUITs y comprobantes reales.
+          required: true
+        - label: Acepto el [código de conducta](https://github.com/LaPyme/facturas/blob/main/CODE_OF_CONDUCT.md).
+          required: true
