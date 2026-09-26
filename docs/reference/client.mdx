@@ -1,0 +1,242 @@
+---
+title: "Cliente"
+description: "Cada método de createArcaClient(), con su firma, sus opciones y lo que devuelve."
+keywords: ["createArcaClient", "issue", "preview", "recover", "issueCreditNote", "issueDebitNote", "IssueOutcome", "IssuedVoucher"]
+---
+
+`createArcaClient()` devuelve el cliente. Sus métodos son la API para emitir:
+reciben datos de tu negocio y devuelven el resultado fiscal ya normalizado.
+
+| Método | Qué hace | Guía |
+| --- | --- | --- |
+| `issue()` | Emite una factura | [Emitir facturas](/guides/invoices) |
+| `preview()` | Muestra lo que enviaría `issue()`, sin I/O | [Emitir facturas](/guides/invoices#revisá-antes-de-emitir) |
+| `issueCreditNote()` | Emite una nota de crédito | [Notas de crédito](/guides/credit-notes) |
+| `issueDebitNote()` | Emite una nota de débito | [Notas de crédito](/guides/credit-notes#notas-de-débito) |
+| `previewCreditNote()` | Muestra la nota de crédito, leyendo el original | [Notas de crédito](/guides/credit-notes#vista-previa-de-notas) |
+| `previewDebitNote()` | Muestra la nota de débito, leyendo el original | [Notas de crédito](/guides/credit-notes#vista-previa-de-notas) |
+| `recover()` | Concilia una reserva sin emitir | [Evitar comprobantes duplicados](/guides/avoid-duplicates) |
+
+`client.wsfe`, `client.wsmtxca` y `client.padron` son los módulos técnicos que
+el cliente usa por debajo. Están en
+[Módulos de transporte](/reference/arca-services), y el Padrón en
+[Consultar contribuyentes](/guides/taxpayers).
+
+## `createArcaClient()`
+
+```ts
+function createArcaClient(config?: ArcaClientOptions): ArcaClient;
+```
+
+Completa los campos que faltan con las variables `ARCA_*` y valida la
+configuración al crear el cliente. Si falta el CUIT, un PEM o el entorno, lanza
+`ArcaConfigurationError` antes de cualquier llamada. `client.config` expone
+`taxId` y `environment`, de solo lectura. Las opciones están en
+[Configuración](/reference/configuration).
+
+## `issue()`
+
+```ts
+issue(input: IssueInput, options?: IssueOptions): Promise<IssueOutcome>;
+```
+
+Deriva la clase, el tipo de comprobante, el IVA y el pedido para ARCA a partir
+de `input`, y autoriza el comprobante. Sin `idempotencyKey`, lee el próximo
+número, autoriza una vez y hace a lo sumo una consulta si la respuesta queda
+incierta. Con clave y `store`, reserva el número antes de escribir, y una
+repetición consulta la reserva en vez de emitir otra vez.
+
+Los errores de input y la falla al leer el próximo número se lanzan antes de
+autorizar. Todo lo que pasa después vuelve como uno de los cuatro
+[resultados](#resultados). Los campos de `input` están en
+[Emitir facturas](/guides/invoices#datos-de-la-factura).
+
+## `preview()`
+
+```ts
+preview(
+  input: IssueInput,
+  options?: { representedTaxId?: number | string; service?: "wsfe" | "wsmtxca" },
+): IssuePreview;
+```
+
+Sincrónico y sin I/O: no usa el store, WSAA ni SOAP, y no lee el próximo
+número. Lanza los mismos errores de input que `issue()` antes de su primera
+llamada. Devuelve:
+
+| Campo | Qué trae |
+| --- | --- |
+| `voucherClass` | `"A"`, `"B"` o `"C"` |
+| `voucherType` | El código de ARCA, por ejemplo `6` para Factura B |
+| `header` | La [cabecera fiscal](#fiscalheader), la misma que trae un resultado autorizado |
+| `amounts` | Los [importes](#importes) que se enviarían |
+| `request` | El pedido para ARCA, sin el número de comprobante |
+
+## `issueCreditNote()`
+
+```ts
+issueCreditNote(
+  input: CreditNoteInput | PeriodNoteInput,
+  options?: IssueOptions,
+): Promise<IssueOutcome>;
+```
+
+`for` nombra el comprobante autorizado que corregís, o una lista de ellos. La
+nota acredita las líneas de `items`, un desglose `amounts` ya revisado, o el
+original entero con `all: true`. Uno de los tres es obligatorio. La clase, el
+receptor, la moneda, el concepto y las fechas de servicio salen del original.
+Con `associatedPeriod: { from, to }` en lugar de `for`, la nota ajusta un
+período y lleva su propio input de negocio. Devuelve los mismos
+[resultados](#resultados) que `issue()`.
+
+## `issueDebitNote()`
+
+```ts
+issueDebitNote(input: DebitNoteInput, options?: IssueOptions): Promise<IssueOutcome>;
+```
+
+El mismo contrato que `issueCreditNote()`, sin `all: true`: una nota de débito
+suma a la cuenta, así que sus líneas siempre son explícitas.
+
+## `previewCreditNote()` y `previewDebitNote()`
+
+```ts
+previewCreditNote(
+  input: CreditNoteInput | PeriodNoteInput,
+  options?: PreviewOptions,
+): Promise<NotePreview>;
+
+previewDebitNote(input: DebitNoteInput, options?: PreviewOptions): Promise<NotePreview>;
+```
+
+A diferencia de `preview()`, son asincrónicas: consultan cada original una vez,
+sin escribir y sin reservar número. Devuelven lo mismo que `preview()` más
+`originals`, los comprobantes consultados en el orden del input. Una nota por
+período no consulta nada y no trae `originals`. `PreviewOptions` acepta
+`representedTaxId`, `service`, `forceRefresh` y `abortSignal`.
+
+## `recover()`
+
+```ts
+recover(idempotencyKey: string, options?: RecoveryOptions): Promise<IssueOutcome>;
+```
+
+Consulta la reserva guardada para esa clave, con el servicio y el número que
+quedaron registrados. Nunca autoriza ni reserva un número nuevo. Si ARCA
+confirma que el número está vacío, devuelve `indeterminate` con
+`lookup.kind === "not_found"`: para emitir, llamá otra vez al método original
+con la misma clave. Si no hay reserva para esa clave, lanza `ArcaInputError`
+con `code === "ARCA_INPUT_RESERVATION_NOT_FOUND"`. `RecoveryOptions` acepta
+`representedTaxId`, `forceRefresh`, `include` y `abortSignal`.
+
+## Opciones de emisión
+
+`issue()`, `issueCreditNote()` e `issueDebitNote()` aceptan `IssueOptions` como
+segundo argumento. Todas son opcionales.
+
+| Opción | Tipo | Qué hace |
+| --- | --- | --- |
+| `idempotencyKey` | `string` | Liga la llamada a una reserva en el `store`. De 1 a 255 caracteres, estable por operación de negocio. Sin `store`, lanza antes de cualquier I/O |
+| `abortSignal` | `AbortSignal` | Límite de tiempo para el login WSAA, la escritura y las consultas de la llamada. Un corte después del envío devuelve `indeterminate` con `lookup.kind === "aborted"` |
+| `include` | `{ request?: boolean, rawResponse?: boolean }` | Agrega el request fiscal y la respuesta cruda de ARCA a cualquiera de los cuatro resultados |
+| `service` | `"wsfe" \| "wsmtxca"` | El servicio de ARCA. Por defecto, WSFE. Pasá `"wsmtxca"` solo cuando el contribuyente o el punto de venta lo requiere |
+| `number` | `number` | Un número reservado por fuera. La llamada no lee el próximo número |
+| `representedTaxId` | `number \| string` | El CUIT por el que emitís cuando operás para un tercero. Sin la opción, es el `taxId` del cliente. Forma parte de la identidad de la clave |
+| `forceRefresh` | `boolean` | Descarta el ticket WSAA guardado y pide uno nuevo. Con esta opción no hay segundo intento después de un rechazo del ticket |
+
+## Resultados
+
+Los cuatro métodos que emiten, y `recover()`, devuelven un `IssueOutcome`. Los
+resultados fiscales se devuelven, no se lanzan, y `kind` los distingue:
+
+| `kind` | Campos |
+| --- | --- |
+| `authorized` | `voucher`, `recoveredByMatch`, y `authorization` o, cuando `recoveredByMatch` es `true`, `attempt` y `lookup` |
+| `rejected` | `attempted`, `issues` con los errores de ARCA, `authorization` |
+| `indeterminate` | `attempted`, `attempt`, `lookup` |
+| `conflict` | `attempted`, `attempt`, `found`, `reason` |
+
+`attempted` son las coordenadas del intento: `salesPoint`, `voucherType` y
+`number`. En `indeterminate`, `lookup.kind` dice por qué quedó abierto:
+
+| `lookup.kind` | Qué significa |
+| --- | --- |
+| `not_found` | ARCA confirmó que el número está vacío |
+| `incomplete` | La consulta no alcanzó para decidir. `reason` dice por qué |
+| `failed` | La consulta falló. `error` trae el mensaje seguro y el código |
+| `aborted` | Venció tu `abortSignal`. La reserva queda para `recover()` |
+| `blocked` | Otra reserva sin resolver frena la secuencia. Conciliá la clave `by` y repetí |
+| `superseded` | La secuencia siguió sin esta clave, que ya no va a escribir. Emití con una clave nueva |
+
+Qué hacer con cada uno está en
+[Emitir facturas](/guides/invoices#qué-hace-issue-al-emitir).
+
+## `IssuedVoucher`
+
+`voucher`, en un resultado autorizado, habla en las unidades del input: fechas
+`YYYY-MM-DD` e importes en centavos.
+
+| Campo | Qué trae |
+| --- | --- |
+| `salesPoint`, `voucherType`, `number` | Las coordenadas del comprobante |
+| `voucherClass` | `"A"`, `"B"` o `"C"` |
+| `date` | La fecha del comprobante |
+| `header` | La [cabecera fiscal](#fiscalheader) |
+| `cae` | El CAE |
+| `caeExpiry` | El vencimiento del CAE |
+| `amounts` | Los [importes](#importes) emitidos |
+| `qr` | La URL que codifica el QR del comprobante impreso. Falta solo si ARCA devolvió un CAE que la especificación no puede codificar |
+
+### `FiscalHeader`
+
+`header` es la misma en `preview()` y en `voucher`, tanto en una autorización
+directa como en una recuperada.
+
+| Campo | Qué trae |
+| --- | --- |
+| `concept` | `1` productos, `2` servicios, `3` productos y servicios |
+| `documentType` | El tipo de documento del receptor, por ejemplo `80` para CUIT |
+| `documentNumber` | El número de documento del receptor, como string |
+| `receiverVatConditionId` | La condición de IVA del receptor, con el código de ARCA |
+| `currencyId` | El código de moneda de ARCA, por ejemplo `PES` |
+| `exchangeRate` | El tipo de cambio, como string decimal exacto |
+| `serviceStartDate`, `serviceEndDate` | Las fechas de servicio. Faltan en un comprobante de productos |
+| `paymentDueDate` | El vencimiento de pago. Falta cuando el comprobante no tiene vencimiento fiscal |
+
+### Importes
+
+`amounts` trae tres enteros en centavos:
+
+| Campo | Qué trae |
+| --- | --- |
+| `computedTotal` | El total que calculó el SDK a partir de los ítems |
+| `sentTotal` | El total enviado a ARCA. Es el `total` que pasaste, o `computedTotal` si no pasaste ninguno |
+| `vatAdjustment` | La diferencia entre los dos, absorbida en el IVA de cabecera. A lo sumo un centavo por alícuota |
+
+## QR de un comprobante guardado
+
+`voucher.qr` ya trae la URL. Para reimprimir un comprobante guardado sin volver
+a emitir, `arcaQrUrl()` la arma con los mismos datos, sin I/O:
+
+```ts
+import { arcaQrUrl } from "facturas";
+
+const url = arcaQrUrl({
+  taxId: "20123456786",
+  salesPoint: guardado.salesPoint,
+  voucherType: guardado.voucherType,
+  number: guardado.number,
+  date: guardado.date,
+  total: guardado.amounts.sentTotal,
+  currency: guardado.header.currencyId,
+  exchangeRate: guardado.header.exchangeRate,
+  cae: guardado.cae,
+  document: {
+    type: guardado.header.documentType,
+    number: guardado.header.documentNumber,
+  },
+});
+```
+
+`arcaQrPayload()` devuelve el JSON que va codificado en esa URL, y
+`ARCA_QR_URL` es la base.

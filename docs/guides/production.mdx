@@ -1,0 +1,108 @@
+---
+title: "Pasar a producción"
+description: "La lista de lo que tiene que estar listo antes de emitir el primer comprobante real en ARCA."
+keywords: ["producción", "checklist", "certificado", "store", "idempotencia", "prueba de humo"]
+---
+
+En homologación nada de lo que emitís tiene valor fiscal. En producción, cada
+comprobante autorizado es un documento real, y ARCA no anula: una factura mal
+emitida se corrige con una nota de crédito, que también es real. Repasá esta
+lista antes de cambiar `ARCA_ENVIRONMENT`.
+
+## 1. Credenciales de producción
+
+Homologación y producción tienen certificados y puntos de venta propios. Nada
+de lo que habilitaste en el WSASS sirve en producción.
+
+- Generá la clave y el CSR de producción con
+  `npx facturas init --cuit 20123456786 --env production`, y seguí los pasos
+  que imprime: `Administración de Certificados Digitales` para el certificado y
+  `Administrador de Relaciones` para autorizarlo en Facturación Electrónica.
+  Están en [Habilitación en ARCA](/getting-started/arca-setup#producción-paso-a-paso).
+- Habilitá un punto de venta de producción con el sistema de web services de
+  tu condición. `Comprobantes en línea` no sirve.
+- Corré `npx facturas check` con el par de producción. En producción, si ARCA
+  no informa ningún punto de venta, la capa falla: no hay excepción como en
+  homologación.
+- Guardá los PEM en el gestor de secretos de tu plataforma, nunca en el
+  repositorio.
+
+## 2. Configuración
+
+- `ARCA_ENVIRONMENT=production`. No hay valor por defecto, así que un entorno
+  olvidado lanza `ArcaConfigurationError` en vez de emitir en el lugar
+  equivocado.
+- Dejá los logs en `warn`, que es el nivel por defecto, o en `info`. En `debug`
+  el SDK loguea los requests SOAP, con los datos de cada comprobante. Está en
+  [Configuración](/reference/configuration#logs).
+- `retries` reintenta solo fallas de transporte, nunca la autorización. Un
+  valor distinto de cero no puede duplicar un comprobante.
+
+## 3. Un store persistente y una clave por venta
+
+Sin `store`, un corte de conexión después del envío deja a tu aplicación sin
+saber si ARCA emitió, y el reintento puede duplicar la factura.
+
+- Configurá un `store` persistente y compartido por todos los procesos que
+  emiten: Postgres, Redis, o archivos en un único servidor.
+  `createMemoryStore()` no sobrevive a un reinicio y no sirve en producción.
+- Pasá `idempotencyKey` en cada `issue()`, `issueCreditNote()` e
+  `issueDebitNote()`. Usá el ID estable de la venta, nunca un UUID nuevo por
+  intento, y sin CUIT, DNI ni otros datos personales.
+- No borres, no hagas vencer y no reescribas los registros de reserva. Guardan
+  el número fiscal que un reintento tiene que consultar. Contienen datos
+  fiscales y de clientes: restringí el acceso y protegé los backups.
+- Con `withLock`, el store coordina la numeración entre los procesos que lo
+  comparten. No alcanza a otros sistemas que emitan en el mismo punto de venta.
+  Un punto de venta propio para la aplicación evita ese caso.
+
+La comparación de adaptadores está en
+[Evitar comprobantes duplicados](/guides/avoid-duplicates#qué-guarda-cada-opción).
+
+## 4. Los cuatro resultados
+
+`issue()` devuelve el resultado fiscal en vez de lanzarlo. Tu código tiene que
+tratar los cuatro, y cada uno pide algo distinto:
+
+| Resultado | Qué hace tu aplicación |
+| --- | --- |
+| `authorized` | Guarda el número, el CAE, `caeExpiry`, `header` y `qr`. |
+| `rejected` | Muestra los `issues` de ARCA. El input corregido va con una clave nueva, porque la clave queda ligada al input rechazado. |
+| `indeterminate` | Conserva el número y la evidencia. Concilia con `recover()` o repite el mismo input con la misma clave. |
+| `conflict` | Detiene el flujo y avisa a una persona. Hay otro comprobante en el número reservado. |
+
+Dentro de `indeterminate`, `lookup.kind` dice por qué quedó abierto. Con
+`blocked`, conciliá primero la clave que nombra `by`. Con `superseded`, emití
+bajo una clave nueva. El resto de los casos está en
+[Emitir facturas](/guides/invoices#qué-hace-issue-al-emitir).
+
+Pasá un `abortSignal`, por ejemplo `AbortSignal.timeout(20_000)`, para que una
+llamada no quede colgada si ARCA no responde. Si corta después del envío, el
+resultado es `indeterminate` y la reserva queda para `recover()`.
+
+Los errores de input y de configuración sí se lanzan, antes de escribir en
+ARCA. Están en [Errores](/reference/errors).
+
+## 5. Una prueba de humo
+
+Antes de la primera venta real, emití una factura de ARS 1 con
+`items: [{ amount: 100 }]` seguida de una nota de crédito total, con
+`all: true`. Usá tu condición fiscal real en `issuer`.
+
+<Warning>
+  La factura y la nota son documentos reales y quedan en los registros de ARCA. La nota es una operación aparte: si falla, la factura queda pendiente.
+</Warning>
+
+En cada venta, `preview(input)` te muestra los importes sin hacer ninguna
+llamada. Compará `amounts.sentTotal` con el total de tu venta antes de emitir.
+
+## 6. Mantenimiento
+
+- Vigilá el vencimiento del certificado. `npx facturas check` avisa cuando
+  faltan menos de 30 días. Para renovarlo, generá un CSR nuevo con
+  `npx facturas init` y repetí el alta en ARCA.
+- Fijá la versión exacta de `facturas` y leé el
+  [changelog](https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md)
+  antes de actualizar. El paquete está antes de la versión 1.0.
+- Conservá los registros del store al actualizar. Cada uno lleva su versión, y
+  el SDK los sigue leyendo.

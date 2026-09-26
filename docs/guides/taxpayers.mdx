@@ -1,0 +1,112 @@
+---
+title: "Consultar contribuyentes"
+sidebarTitle: "Padrón"
+description: "Consultá el Padrón de ARCA para saber a quién facturás y con qué condición de IVA."
+keywords: ["Padrón", "constancia de inscripción", "condición de IVA", "CUIT", "DNI", "A5", "A13"]
+---
+
+Antes de emitir una factura a una empresa necesitás su condición frente al
+IVA: define la clase del comprobante y el receptor que informás. El Padrón de
+ARCA la tiene, y `client.padron` te la devuelve en el mismo formato que acepta
+`to.condition`.
+
+```ts
+import { createArcaClient } from "facturas";
+
+const arca = createArcaClient();
+
+const contribuyente = await arca.padron.getTaxpayerDetails("20123456786");
+
+if (contribuyente?.condition) {
+  const resultado = await arca.issue({
+    issuer: "responsable_inscripto",
+    salesPoint: 3,
+    to: { condition: contribuyente.condition, cuit: contribuyente.taxId },
+    items: [{ net: 100_000, vat: 21 }],
+  });
+}
+```
+
+El ejemplo completo está en
+[examples/consultar-contribuyente.ts](https://github.com/LaPyme/facturas/blob/main/examples/consultar-contribuyente.ts).
+
+## Habilitar los servicios
+
+El Padrón son dos servicios de ARCA distintos de Facturación Electrónica, y el
+certificado tiene que estar autorizado para cada uno que uses:
+
+| Método | Servicio de ARCA |
+| --- | --- |
+| `getTaxpayerDetails(cuit)` | `ws_sr_constancia_inscripcion` |
+| `getTaxIdByDocument(documento)` | `ws_sr_padron_a13` |
+
+Es el mismo certificado y el mismo trámite que hiciste para `wsfe`, repetido
+por servicio. En homologación, otra autorización a servicio en el WSASS. En
+producción, otra relación en el Administrador de Relaciones para el mismo
+computador fiscal. Los pasos de cada entorno están en
+[Habilitación en ARCA](/getting-started/arca-setup#homologación-paso-a-paso).
+
+`npx facturas check` prueba solo `wsfe`. Si el certificado no está autorizado
+para un servicio del Padrón, la llamada lanza `ArcaAuthenticationError`, como
+explica [Errores](/reference/errors).
+
+## Datos del contribuyente
+
+`getTaxpayerDetails()` consulta la constancia de inscripción y devuelve:
+
+| Campo | Qué trae |
+| --- | --- |
+| `taxId` | El CUIT, como string de 11 dígitos |
+| `personType` | `FISICA` o `JURIDICA`, cuando ARCA lo informa |
+| `name` | La razón social, o el apellido y nombre de una persona física |
+| `condition` | La condición de receptor para `to.condition`, cuando se puede decidir |
+| `taxes` | Cada impuesto informado, con `id`, `description`, `state` y `regime` |
+| `raw` | La respuesta completa de ARCA, para lo que el SDK no normaliza |
+
+Devuelve `null` cuando ARCA dice que el CUIT no existe. Cualquier otro error
+del servicio se lanza.
+
+### Cómo se decide `condition`
+
+`condition` sale de las inscripciones activas en IVA:
+
+| Impuesto | `condition` |
+| --- | --- |
+| 30 | `responsable_inscripto` |
+| 20 | `monotributo` |
+| 32 | `exento` |
+| 34 | `no_alcanzado` |
+| ninguno de los cuatro | `consumidor_final` |
+
+`condition` no viene en dos casos: cuando las inscripciones se contradicen, por
+ejemplo dos de la tabla activas a la vez, y cuando la constancia trae un error
+distinto de "no existe". En ese último caso a la respuesta le pueden faltar
+inscripciones, así que su ausencia no prueba nada. Las dos veces el SDK no
+adivina, y la decisión queda en tu aplicación: pedísela al cliente o revisá
+`taxes` y `raw`.
+
+## Buscar el CUIT por documento
+
+Si tenés el DNI y no el CUIT, `getTaxIdByDocument()` devuelve los CUIT
+asociados a ese número:
+
+```ts
+const encontrado = await arca.padron.getTaxIdByDocument("12345678");
+
+if (encontrado?.taxIds.length === 1) {
+  const contribuyente = await arca.padron.getTaxpayerDetails(encontrado.taxIds[0]);
+}
+```
+
+`taxIds` puede traer más de uno, porque un mismo número de documento puede
+estar asociado a más de una persona, o venir vacío. Elegí con tu cliente
+antes de facturar. Devuelve `null` cuando ARCA no encuentra el documento.
+
+## Cada consulta va a ARCA
+
+El SDK no guarda las respuestas del Padrón. Si consultás al mismo contribuyente
+en cada venta, cacheá el resultado en tu aplicación con el vencimiento que te
+parezca razonable. Lo que sí reutiliza es el ticket WSAA de cada servicio,
+igual que en la emisión, como explica [Configuración](/reference/configuration).
+Las firmas completas están en
+[Módulos de transporte](/reference/arca-services#clientpadron).
