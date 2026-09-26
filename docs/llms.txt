@@ -38,7 +38,7 @@ La skill también se puede leer en https://facturas-sdk.dev/skill.md.
 - [Emitir facturas](https://facturas-sdk.dev/guides/invoices.md): el input de `issue()`, la vista previa y qué hacer con cada resultado.
 - [Notas de crédito y débito](https://facturas-sdk.dev/guides/credit-notes.md): notas parciales, totales, por período y FCE.
 - [Evitar comprobantes duplicados](https://facturas-sdk.dev/guides/avoid-duplicates.md): stores de Postgres, Redis, archivos y memoria, y `recover()`.
-- [Consultar contribuyentes](https://facturas-sdk.dev/guides/taxpayers.md): datos de un CUIT en el Padrón de ARCA.
+- [Consultar contribuyentes](https://facturas-sdk.dev/guides/taxpayers.md): condición de IVA, domicilio fiscal y actividades de un CUIT en el Padrón de ARCA.
 - [Pasar a producción](https://facturas-sdk.dev/guides/production.md): la lista de lo que tiene que estar listo antes del primer comprobante real.
 - [WSMTXCA para casos requeridos](https://facturas-sdk.dev/guides/wsmtxca.md): emisión cuando el contribuyente o el punto de venta opera con WSMTXCA.
 

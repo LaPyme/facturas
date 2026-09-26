@@ -170,6 +170,7 @@ describe("credit note orchestration", () => {
     const { service, calls } = fake();
     const credit = await service.previewCreditNote(partial);
     expect(calls).toEqual(["lookup"]);
+    expect(credit.date).toBe("2026-09-05");
     expect(credit.originals).toHaveLength(1);
     expect(credit.originals?.[0]).toMatchObject({
       number: 1,
@@ -185,6 +186,7 @@ describe("credit note orchestration", () => {
     calls.length = 0;
     const debit = await service.previewDebitNote(partial);
     expect(calls).toEqual(["lookup"]);
+    expect(debit.date).toBe("2026-09-05");
     expect(debit.originals).toEqual(credit.originals);
   });
   it("returns the linked note's final clamped header in previews, issuance and recovery", async () => {

@@ -11,6 +11,7 @@ import {
   createArcaAuthenticationEvidence,
   executeWithAuthenticationRecovery,
 } from "../internal/authentication";
+import { toIsoDate } from "../internal/dates";
 import {
   isWithinArcaTolerance,
   normalizeArcaAmountToMinorUnits,
@@ -126,15 +127,19 @@ export type WsfeIssueInput = {
 /** Structured evidence from one exact WSFE authorization attempt. */
 export type WsfeAuthorizationOutcome = ArcaAuthorizationOutcome<"wsfe">;
 
-/** A point-of-sale entry returned by {@link WsfeService.getSalesPoints}. */
+/**
+ * A point-of-sale entry returned by {@link WsfeService.getSalesPoints}, in the
+ * same shape as a WSMTXCA one. `deletedAt` is `YYYY-MM-DD` and absent while the
+ * point is active.
+ */
 export type WsfeSalesPoint = {
   number: number;
   emissionType?: string;
-  blocked?: string;
-  deletedSince?: string;
+  blocked: boolean;
+  deletedAt?: string;
 };
 
-/** Voucher details returned by {@link WsfeService.getVoucherInfo}. */
+/** Voucher details returned by {@link WsfeService.lookupVoucher}. */
 export type WsfeVoucherInfo = {
   voucherNumber: number;
   voucherDate?: string;
@@ -282,14 +287,6 @@ export type WsfeService = {
     representedTaxId?: number | string;
     forceRefresh?: boolean;
   }): Promise<WsfeQuotation>;
-  /** Retrieves details for a specific voucher. Returns `null` if not found. */
-  getVoucherInfo(input: {
-    representedTaxId?: number | string;
-    number: number;
-    salesPoint: number;
-    voucherType: number;
-    forceRefresh?: boolean;
-  }): Promise<WsfeVoucherInfo | null>;
   /** Consults one exact voucher and normalizes WSFE error 602 to `not_found`. */
   lookupVoucher(input: {
     representedTaxId?: number | string;
@@ -768,10 +765,6 @@ export function createWsfeService(
       const raw =
         (result.ResultGet as Record<string, unknown> | undefined) ?? {};
       return mapWsfeQuotation(raw);
-    },
-    async getVoucherInfo(input) {
-      const lookup = await lookupVoucher(input);
-      return lookup.kind === "found" ? lookup.voucher : null;
     },
     lookupVoucher,
   };
@@ -1294,19 +1287,20 @@ function assertValidCalendarDate(
   }
 }
 
+/** ARCA answers `Bloqueado` as `S`/`N` and an active point's `FchBaja` as `NULL`. */
 function mapWsfeSalesPoint(raw: unknown): WsfeSalesPoint {
   const record = raw as Record<string, unknown>;
+  const deletedAt = toIsoDate(record.FchBaja);
   return {
     number: Number(record.Nro ?? 0),
     ...(record.EmisionTipo === undefined
       ? {}
       : { emissionType: String(record.EmisionTipo) }),
-    ...(record.Bloqueado === undefined
-      ? {}
-      : { blocked: String(record.Bloqueado) }),
-    ...(record.FchBaja === undefined
-      ? {}
-      : { deletedSince: String(record.FchBaja) }),
+    blocked:
+      String(record.Bloqueado ?? "N")
+        .trim()
+        .toUpperCase() === "S",
+    ...(deletedAt === undefined ? {} : { deletedAt }),
   };
 }
 

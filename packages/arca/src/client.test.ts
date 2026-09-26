@@ -126,6 +126,7 @@ describe("createArcaClient", () => {
       issueDebitNote: expect.any(Function),
       previewCreditNote: expect.any(Function),
       previewDebitNote: expect.any(Function),
+      lookup: expect.any(Function),
       wsfe,
       wsmtxca,
       padron,
@@ -237,7 +238,7 @@ describe("createArcaClient", () => {
     const client = createArcaClient(config);
 
     await expect(client.wsfe.getSalesPoints()).resolves.toEqual([
-      { number: 3 },
+      { number: 3, blocked: false },
     ]);
 
     expect(log).toHaveBeenCalledWith(

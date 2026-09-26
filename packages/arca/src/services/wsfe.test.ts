@@ -1127,7 +1127,10 @@ describe("createWsfeService", () => {
         representedTaxId: "20304050607",
         forceRefresh: true,
       })
-    ).resolves.toEqual([{ number: 1 }, { number: 2 }]);
+    ).resolves.toEqual([
+      { number: 1, blocked: false },
+      { number: 2, blocked: false },
+    ]);
 
     const noPointsOptions = createBaseOptions();
     noPointsOptions.soap.execute.mockResolvedValueOnce({
@@ -1188,23 +1191,45 @@ describe("createWsfeService", () => {
     await expect(
       createWsfeService(singlePointOptions).getSalesPoints()
     ).resolves.toEqual([
+      { number: 1, emissionType: "CAE - Monotributo", blocked: false },
+    ]);
+
+    const deletedPointOptions = createBaseOptions();
+    deletedPointOptions.soap.execute.mockResolvedValueOnce({
+      result: {
+        FEParamGetPtosVentaResponse: {
+          FEParamGetPtosVentaResult: {
+            ResultGet: {
+              PtoVenta: {
+                Nro: 2,
+                EmisionTipo: "CAE",
+                Bloqueado: "S",
+                FchBaja: "20260301",
+              },
+            },
+          },
+        },
+      },
+    });
+    await expect(
+      createWsfeService(deletedPointOptions).getSalesPoints()
+    ).resolves.toEqual([
       {
-        number: 1,
-        emissionType: "CAE - Monotributo",
-        blocked: "N",
-        deletedSince: "NULL",
+        number: 2,
+        emissionType: "CAE",
+        blocked: true,
+        deletedAt: "2026-03-01",
       },
     ]);
 
-    await expect(
-      service.getVoucherInfo({
-        representedTaxId: "20304050607",
-        number: 77,
-        salesPoint: 1,
-        voucherType: 6,
-        forceRefresh: true,
-      })
-    ).resolves.toEqual({
+    const lookup = await service.lookupVoucher({
+      representedTaxId: "20304050607",
+      number: 77,
+      salesPoint: 1,
+      voucherType: 6,
+      forceRefresh: true,
+    });
+    expect(lookup.kind === "found" && lookup.voucher).toEqual({
       voucherNumber: 77,
       voucherDate: "20260501",
       salesPoint: 1,

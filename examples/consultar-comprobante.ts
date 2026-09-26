@@ -14,13 +14,13 @@ const client = createArcaClient({
 });
 
 async function main() {
-  const voucher = await client.wsfe.getVoucherInfo({
-    number: 245,
+  const voucher = await client.lookup({
     salesPoint: 1,
     voucherType: ARCA_VOUCHER_TYPES.FACTURA_B,
+    number: 245,
   });
 
-  console.log(voucher);
+  console.log(voucher ?? "ARCA no tiene ese comprobante");
 }
 
 main().catch((error) => {

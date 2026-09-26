@@ -82,14 +82,6 @@ export type WsmtxcaVoucherLookupOutcome = ArcaVoucherLookupResult<
   "wsmtxca"
 >;
 
-/** Result of looking up a specific WSMTXCA voucher. */
-export type WsmtxcaVoucherLookupResult = {
-  invoiceDate: string;
-  voucher: Record<string, unknown>;
-  messages: string[];
-  raw: Record<string, unknown>;
-};
-
 /** WSMTXCA electronic invoicing service (Factura de Crédito Electrónica). */
 export type WsmtxcaService = {
   /**
@@ -119,14 +111,6 @@ export type WsmtxcaService = {
     forceRefresh?: boolean;
     abortSignal?: AbortSignal;
   }): Promise<WsmtxcaVoucherLookupOutcome>;
-  /** Retrieves details for a specific voucher. */
-  getVoucher(input: {
-    representedTaxId?: ArcaRepresentedTaxId;
-    voucherType: number;
-    salesPoint: number;
-    voucherNumber: number;
-    forceRefresh?: boolean;
-  }): Promise<WsmtxcaVoucherLookupResult>;
 };
 
 export type CreateWsmtxcaServiceOptions = {
@@ -445,45 +429,11 @@ export function createWsmtxcaService(
     };
   }
 
-  async function getVoucher(input: {
-    representedTaxId?: ArcaRepresentedTaxId;
-    voucherType: number;
-    salesPoint: number;
-    voucherNumber: number;
-    forceRefresh?: boolean;
-  }): Promise<WsmtxcaVoucherLookupResult> {
-    const lookup = await lookupVoucher(input);
-    if (lookup.kind === "not_found") {
-      throw createWsmtxcaServiceError(lookup.operation, lookup.errors);
-    }
-
-    const invoiceDate = lookup.voucher.invoiceDate;
-    if (!invoiceDate) {
-      throw new ArcaServiceError(
-        formatWsmtxcaIssues(lookup.observations)[0] ??
-          "WSMTXCA did not return the voucher issue date",
-        {
-          service: "wsmtxca",
-          operation: lookup.operation,
-          issues: lookup.observations,
-        }
-      );
-    }
-
-    return {
-      invoiceDate,
-      voucher: lookup.voucher.raw,
-      messages: formatWsmtxcaIssues(lookup.observations),
-      raw: lookup.raw,
-    };
-  }
-
   return {
     issue,
     getLastAuthorizedVoucher,
     getSalesPoints,
     lookupVoucher,
-    getVoucher,
   };
 }
 

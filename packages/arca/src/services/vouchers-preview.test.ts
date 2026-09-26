@@ -118,6 +118,7 @@ describe("vouchers.preview", () => {
     expect(preview).toMatchObject({
       voucherClass: "B",
       voucherType: 6,
+      date: "2026-09-04",
       header: {
         concept: 1,
         documentType: 99,
@@ -164,6 +165,7 @@ describe("vouchers.preview", () => {
         }
         expect(result.voucher.voucherClass).toBe(preview.voucherClass);
         expect(result.voucher.voucherType).toBe(preview.voucherType);
+        expect(result.voucher.date).toBe(preview.date);
         expect(result.voucher.header).toEqual(preview.header);
         expect(result.voucher.amounts).toEqual(preview.amounts);
       }
@@ -220,6 +222,7 @@ describe("vouchers.preview", () => {
       const preview = service.preview(undated);
       await service.issue(undated);
       expect(preview.request.voucherDate).toBe("20260904");
+      expect(preview.date).toBe("2026-09-04");
       expect(wsfe.issue.mock.calls[0][0].data).toEqual(preview.request);
     } finally {
       vi.useRealTimers();

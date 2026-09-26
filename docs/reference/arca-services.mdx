@@ -29,13 +29,16 @@ cacheado y pedir un Token Authorization nuevo para ese servicio.
 - `issue({ voucherNumber, data })` manda una autorización y devuelve evidencia
   `authorized`, `rejected` o `indeterminate`.
 - `getNextVoucherNumber({ salesPoint, voucherType })` lee el próximo número.
-- `getVoucherInfo({ number, salesPoint, voucherType })` devuelve el detalle del
-  comprobante o `null`.
 - `lookupVoucher({ number, salesPoint, voucherType })` devuelve la consulta
-  normalizada, con `not_found` para el código 602 de `FECompConsultar`.
-- `getSalesPoints()` devuelve los puntos de venta. El código 602 de
-  `FEParamGetPtosVenta` es una lista vacía, que es como ARCA informa un
-  contribuyente sin puntos de venta para web services.
+  con la respuesta cruda, con `not_found` para el código 602 de
+  `FECompConsultar`. Para el comprobante normalizado, usá
+  [`lookup()`](/reference/client#lookup).
+- `getSalesPoints()` devuelve los puntos de venta como
+  `{ number, emissionType?, blocked, deletedAt? }`, la misma forma que en
+  WSMTXCA: `blocked` es booleano y `deletedAt` es `YYYY-MM-DD`, ausente mientras
+  el punto está activo. El código 602 de `FEParamGetPtosVenta` es una lista
+  vacía, que es como ARCA informa un contribuyente sin puntos de venta para web
+  services.
 - Los catálogos en vivo, como `getVoucherTypes()`, `getDocumentTypes()`,
   `getCurrencyTypes()` y `getVatRates()`, para datos de referencia sin valores
   fijos en el código.
@@ -46,8 +49,8 @@ cacheado y pedir un Token Authorization nuevo para ese servicio.
 - `issue({ data })`
 - `getLastAuthorizedVoucher({ voucherType, salesPoint })`, donde el código 1502
   devuelve el número de comprobante `0`.
-- `getVoucher({ voucherType, salesPoint, voucherNumber })` y `lookupVoucher()`,
-  donde el código 1503 de `consultarComprobante` es `not_found`. El código 602
+- `lookupVoucher({ voucherType, salesPoint, voucherNumber })`, donde el código
+  1503 de `consultarComprobante` es `not_found`. El código 602
   de WSMTXCA no es ausencia de comprobante y sigue siendo un error.
 - `getSalesPoints()` para los puntos de venta habilitados en WSMTXCA.
 
@@ -69,7 +72,10 @@ Sale de las inscripciones activas en IVA: 30 es `responsable_inscripto`, 20
 `consumidor_final`. Si las inscripciones se contradicen, o la constancia trae
 un error distinto de "no existe", `condition` no viene y la decisión queda en
 tus manos. `taxes` lista cada impuesto informado con su
-id, descripción, estado y régimen, y `raw` conserva la respuesta completa.
+id, descripción, estado y régimen. `address` trae el domicilio fiscal,
+`activities` las actividades económicas con su código NAES, `errors` los
+errores de la constancia, y `raw` conserva la respuesta completa. El detalle
+está en [Consultar contribuyentes](/guides/taxpayers#datos-del-contribuyente).
 
 ```ts
 const contribuyente = await arca.padron.getTaxpayerDetails(cuit);

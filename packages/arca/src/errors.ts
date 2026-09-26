@@ -235,24 +235,80 @@ function normalizeProviderCode(
   return undefined;
 }
 
-/** Narrow error evidence: never includes a cause, raw response or stack. */
+/**
+ * Narrow error evidence, safe to log or store: the typed fields the error
+ * classes declare, never a cause, stack, raw response, response body preview,
+ * endpoint URL, fiscal issues or CAE.
+ */
 export type ArcaSafeErrorMetadata = {
   name: string;
   message: string;
   code?: string;
   statusCode?: number;
+  contentType?: string;
+  service?: ArcaServiceName;
+  operation?: string;
+  /** ArcaAuthenticationError's stable reason. */
+  reason?: ArcaAuthenticationReason;
+  providerCode?: string | number;
+  faultCode?: string;
+  field?: string;
+  expected?: string;
+  /** ArcaServiceError's provider code, always as a string. */
+  serviceCode?: string;
+  result?: string;
+  resultLevel?: ArcaFiscalResultLevel;
 };
 
 export function toArcaSafeErrorMetadata(error: unknown): ArcaSafeErrorMetadata {
   if (!(error instanceof Error)) {
     return { name: "UnknownError", message: String(error) };
   }
-  return {
+  const metadata: ArcaSafeErrorMetadata = {
     name: error.name,
     message: error.message,
-    ...(error instanceof ArcaError ? { code: error.code } : {}),
-    ...(error instanceof ArcaTransportError && error.statusCode !== undefined
-      ? { statusCode: error.statusCode }
-      : {}),
   };
+  if (!(error instanceof ArcaError)) {
+    return metadata;
+  }
+  const fields: Partial<ArcaSafeErrorMetadata> = { code: error.code };
+  if (error instanceof ArcaInputError) {
+    Object.assign(fields, { field: error.field, expected: error.expected });
+  } else if (error instanceof ArcaAuthenticationError) {
+    Object.assign(fields, {
+      service: error.service,
+      operation: error.operation,
+      reason: error.reason,
+      providerCode: error.providerCode,
+    });
+  } else if (error instanceof ArcaTransportError) {
+    Object.assign(fields, {
+      statusCode: error.statusCode,
+      contentType: error.contentType,
+    });
+  } else if (error instanceof ArcaSoapFaultError) {
+    Object.assign(fields, { faultCode: error.faultCode });
+  } else if (error instanceof ArcaInvalidSoapResponseError) {
+    Object.assign(fields, {
+      service: error.service,
+      operation: error.operation,
+      statusCode: error.statusCode,
+      contentType: error.contentType,
+    });
+  } else if (error instanceof ArcaServiceError) {
+    Object.assign(fields, {
+      service: error.service,
+      operation: error.operation,
+      serviceCode:
+        error.serviceCode === undefined ? undefined : String(error.serviceCode),
+      result: error.result,
+      resultLevel: error.resultLevel,
+    });
+  }
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) {
+      (metadata as Record<string, unknown>)[key] = value;
+    }
+  }
+  return metadata;
 }

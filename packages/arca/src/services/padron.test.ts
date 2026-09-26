@@ -45,6 +45,8 @@ describe("createPadronService", () => {
       name: "Mi Empresa SRL",
       condition: "consumidor_final",
       taxes: [],
+      activities: [],
+      errors: [],
       raw: {
         idPersona: "20123456789",
         tipoPersona: "JURIDICA",
@@ -201,8 +203,88 @@ describe("createPadronService", () => {
     // Any other constancia error leaves the condition undecided: the
     // registrations may simply be missing from the answer.
     const blocked = await service.getTaxpayerDetails("20999999995");
-    expect(blocked).toMatchObject({ taxId: "20999999995", taxes: [] });
+    expect(blocked).toMatchObject({
+      taxId: "20999999995",
+      taxes: [],
+      errors: ["La constancia está bloqueada"],
+    });
     expect(blocked).not.toHaveProperty("condition");
+  });
+
+  it("returns the domicilio fiscal and the activities of every regime", async () => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        personaReturn: {
+          datosGenerales: {
+            idPersona: 20_123_456_786,
+            tipoPersona: "FISICA",
+            apellido: "Perez",
+            domicilioFiscal: {
+              direccion: " AV CORRIENTES 1234 ",
+              localidad: "CAPITAL FEDERAL",
+              codPostal: "1043",
+              idProvincia: 0,
+              descripcionProvincia: "CIUDAD AUTONOMA BUENOS AIRES",
+            },
+          },
+          datosRegimenGeneral: {
+            actividad: [
+              {
+                idActividad: 620_100,
+                descripcionActividad: "SERVICIOS DE CONSULTORES EN INFORMÁTICA",
+                orden: 1,
+                periodo: 201_907,
+              },
+              { idActividad: "11211", orden: "2", periodo: "bad" },
+            ],
+          },
+          datosMonotributo: {
+            actividad: { idActividad: "960990", periodo: "202001" },
+            actividadMonotributista: { idActividad: "960990" },
+          },
+        },
+      },
+    });
+    const result =
+      await createPadronService(options).getTaxpayerDetails("20123456786");
+    expect(result?.address).toEqual({
+      street: "AV CORRIENTES 1234",
+      city: "CAPITAL FEDERAL",
+      postalCode: "1043",
+      provinceId: 0,
+      province: "CIUDAD AUTONOMA BUENOS AIRES",
+    });
+    expect(result?.activities).toEqual([
+      {
+        id: "620100",
+        description: "SERVICIOS DE CONSULTORES EN INFORMÁTICA",
+        order: 1,
+        since: "2019-07",
+        regime: "general",
+      },
+      { id: "011211", order: 2, regime: "general" },
+      { id: "960990", since: "2020-01", regime: "monotributo" },
+    ]);
+    expect(result?.errors).toEqual([]);
+  });
+
+  it("omits an address ARCA leaves empty", async () => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        personaReturn: {
+          datosGenerales: {
+            idPersona: 20_123_456_786,
+            domicilioFiscal: { direccion: "", idProvincia: null },
+          },
+        },
+      },
+    });
+    const result =
+      await createPadronService(options).getTaxpayerDetails("20123456786");
+    expect(result).not.toHaveProperty("address");
+    expect(result?.activities).toEqual([]);
   });
 
   it("returns null on not-found SOAP faults and rethrows other SOAP faults", async () => {

@@ -133,8 +133,9 @@ if (factura.kind === "authorized") {
 ```
 
 `preview()` es sincrónico y devuelve la `voucherClass` derivada, el
-`voucherType`, los mismos `amounts` que informa un resultado autorizado, y
-`request`, el pedido que enviaría `issue()`. El número de comprobante no aparece
+`voucherType`, la `date` del comprobante en `YYYY-MM-DD`, los mismos `amounts`
+que informa un resultado autorizado, y `request`, el pedido que enviaría
+`issue()`. El número de comprobante no aparece
 porque recién se conoce cuando se reserva al emitir.
 Previsualizar una nota sí necesita el original, así que `previewCreditNote()` y
 `previewDebitNote()` son asincrónicas y hacen esa consulta. Están en

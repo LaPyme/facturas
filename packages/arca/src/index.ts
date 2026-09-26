@@ -61,6 +61,8 @@ export type {
 } from "./services/issuance-wsmtxca";
 export type {
   CreatePadronServiceOptions,
+  PadronActivity,
+  PadronAddress,
   PadronService,
   PadronTax,
   PadronTaxIdLookupResult,
@@ -135,7 +137,6 @@ export type {
   WsmtxcaService,
   WsmtxcaVoucherInfo,
   WsmtxcaVoucherLookupOutcome,
-  WsmtxcaVoucherLookupResult,
 } from "./services/wsmtxca";
 export { createWsmtxcaService } from "./services/wsmtxca";
 export { createFileStore } from "./store/file";

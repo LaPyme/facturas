@@ -74,11 +74,13 @@ export type IssueRequest<S extends IssuanceService = "wsfe"> =
     : WsfeVoucherInput;
 /**
  * What issue() would send, derived with zero I/O. The voucher number is absent
- * because it is only known when the number is reserved at issuance.
+ * because it is only known when the number is reserved at issuance. `date` is
+ * the voucher date as `YYYY-MM-DD`, the same value issue() returns.
  */
 export type IssuePreview<S extends IssuanceService = "wsfe"> = {
   voucherClass: VoucherClass;
   voucherType: number;
+  date: string;
   header: FiscalHeader;
   amounts: IssueAmounts;
   request: IssueRequest<S>;
