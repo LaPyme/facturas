@@ -133,7 +133,10 @@ confirmó que su número está vacío.
   inconsistente para ese tipo de comprobante y ese importe. Por ejemplo, la
   Factura B tiene reglas especiales de documento del receptor según el total.
 - WSFE `10016`: el número de comprobante enviado en `CbteDesde` no es el
-  siguiente válido para ese punto de venta y ese tipo de comprobante. Llamá a
+  siguiente válido para ese punto de venta y ese tipo de comprobante, o la
+  fecha no es válida. `preview()` e `issue()` rechazan antes, con
+  `ArcaInputError`, una fecha fuera de la
+  [ventana que acepta ARCA](/guides/invoices#datos-de-la-factura). Llamá a
   `getNextVoucherNumber()` inmediatamente antes de autorizar cuando tu
   numeración se pueda haber movido. Con clave de idempotencia, `issue()`
   consulta el número reservado: si ya lo ocupa otro comprobante el resultado es

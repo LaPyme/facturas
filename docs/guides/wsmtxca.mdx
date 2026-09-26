@@ -121,7 +121,8 @@ ese formato no la reproduce, así que nunca reenvía por WSFE un comprobante que
 era de WSMTXCA. La vida de estos registros está en
 [Evitar comprobantes duplicados](/guides/avoid-duplicates#implementar-otro-store).
 
-Para consultar un comprobante, usá `lookup()` con `{ service: "wsmtxca" }`.
+Para consultar un comprobante, usá `lookup()` con `{ service: "wsmtxca" }`, y
+para el último número autorizado, `lastAuthorized()` con la misma opción.
 Para las lecturas de `client.wsmtxca`, como `getLastAuthorizedVoucher()` y
 `getSalesPoints()`, mirá
 [Módulos de transporte](/reference/arca-services#clientwsmtxca).

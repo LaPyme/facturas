@@ -106,3 +106,18 @@ Both use 22 for explicit annulment and 27 for transfer. See WSFE rules
 schemas include associated periods, buyers, activities and foreign-currency
 payment (physical pages 22-25 and 257-260). Its detailed item consultation is
 used to check the reserved request, not just its header total.
+
+## Voucher date window (2026-09-26)
+
+Re-downloaded the WSFE manual; the v4.7 checksum above is unchanged. WSMTXCA
+is the v0.25.8 manual linked above. `preview()` and `issue()` check the
+voucher date against the day of submission in Argentina before any I/O.
+
+| Rule | Physical PDF pages | Contract |
+| --- | --- | --- |
+| WSFE 10016 | 42-43 (field on 28-29) | `CbteFch` within N-5..N+5 for concept 1, not past the month of submission; N-10..N+10 for concepts 2 and 3. FCE (MiPyMEs) invoices N-5..N+1; FCE notes no earlier than N-5. The bullets are cumulative, so an FCE voucher also keeps its concept's bounds. |
+| WSMTXCA 103 | 39 | `fechaEmision` within 5 days either side for concept 1, "sin extenderse al mes siguiente", which reads the WSFE month clause as an upper bound only; 10 days either side for concepts 2 and 3. WSMTXCA states no FCE-specific window, so none is applied there. |
+
+Not checked locally: the date must be on or after the last voucher of the same
+type and sales point (WSFE 10016, WSMTXCA 104), and an FCE note on or after its
+associated invoice. Both need a provider read, and ARCA stays authoritative.

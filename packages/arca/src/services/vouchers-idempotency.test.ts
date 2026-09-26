@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ArcaConfigurationError } from "../errors";
 import { createMemoryStore } from "../store/memory";
 import {
@@ -15,6 +15,16 @@ import {
   type WsfeVoucherLookupResult,
 } from "./wsfe";
 import { deriveWsfeInvoice, type IssueInput } from "./wsfe-derive";
+
+// The fixtures are dated around 2026-09-04, and ARCA only accepts a voucher
+// dated near the day it is sent.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-05T15:00:00Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const input: IssueInput = {
   issuer: "monotributo",
@@ -200,6 +210,19 @@ describe("keyed issue", () => {
       "authorized"
     );
     expect(wsfe.issue.mock.calls[1][0]).toEqual(first);
+    expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
+  });
+  it("replays a key after its date left ARCA's window, but refuses a new one", async () => {
+    const { wsfe, service } = fake();
+    await service.issue(input, { idempotencyKey: "sale" });
+    vi.setSystemTime(new Date("2026-09-20T15:00:00Z"));
+    expect((await service.issue(input, { idempotencyKey: "sale" })).kind).toBe(
+      "authorized"
+    );
+    await expect(
+      service.issue(input, { idempotencyKey: "other" })
+    ).rejects.toMatchObject({ name: "ArcaInputError", field: "date" });
+    expect(wsfe.issue).toHaveBeenCalledTimes(1);
     expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
   });
   it("mismatched input or represented taxpayer causes zero provider calls", async () => {

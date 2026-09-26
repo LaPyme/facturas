@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
 import {
   type ArcaAttemptRecord,
@@ -17,6 +17,16 @@ import {
 import type { CreditNoteInput } from "./wsfe-credit-note";
 import { deriveWsfeInvoice } from "./wsfe-derive";
 import type { WsmtxcaService } from "./wsmtxca";
+
+// The fixtures are dated around 2026-09-04, and ARCA only accepts a voucher
+// dated near the day it is sent.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-05T15:00:00Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const data = deriveWsfeInvoice({
   issuer: "monotributo",
@@ -219,7 +229,7 @@ describe("credit note orchestration", () => {
     const linked = {
       for: target,
       all: true as const,
-      date: "20260919" as const,
+      date: "20260914" as const,
       to: { condition: "consumidor_final" as const },
     };
 
@@ -238,7 +248,7 @@ describe("credit note orchestration", () => {
       exchangeRate: "1200.5",
       serviceStartDate: "2026-09-01",
       serviceEndDate: "2026-09-10",
-      paymentDueDate: "2026-09-19",
+      paymentDueDate: "2026-09-14",
     });
     expect(debit.header).toEqual(credit.header);
     expect(credit.originals?.[0]).toMatchObject({
@@ -258,7 +268,7 @@ describe("credit note orchestration", () => {
       kind: "authorized",
       recoveredByMatch: true,
       voucher: { header: credit.header },
-      lookup: { paymentDueDate: "2026-09-19" },
+      lookup: { paymentDueDate: "2026-09-14" },
     });
     expect(wsfe.issue).toHaveBeenCalledTimes(writes);
     expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);

@@ -44,6 +44,8 @@ export type ArcaClient = {
   previewDebitNote: VouchersService["previewDebitNote"];
   /** Consults one authorized voucher; `null` when ARCA has no such voucher. */
   lookup: VouchersService["lookup"];
+  /** The last number ARCA authorized for a sales point and type; `0` when none. */
+  lastAuthorized: VouchersService["lastAuthorized"];
   wsfe: WsfeService;
   wsmtxca: WsmtxcaService;
   padron: PadronService;
@@ -54,7 +56,8 @@ export type ArcaClient = {
  * Validates the config, wires WSAA authentication and SOAP transport,
  * and returns an object with `issue()`, `preview()`, `issueCreditNote()`,
  * `issueDebitNote()`, `previewCreditNote()`, `previewDebitNote()`, `recover()`,
- * `lookup()` and the `.wsfe`, `.wsmtxca`, and `.padron` service modules.
+ * `lookup()`, `lastAuthorized()` and the `.wsfe`, `.wsmtxca`, and `.padron`
+ * service modules.
  *
  * @throws {ArcaConfigurationError} When the config is missing or invalid.
  */
@@ -97,6 +100,7 @@ export function createArcaClient(config: ArcaClientOptions = {}): ArcaClient {
     previewCreditNote: vouchers.previewCreditNote,
     previewDebitNote: vouchers.previewDebitNote,
     lookup: vouchers.lookup,
+    lastAuthorized: vouchers.lastAuthorized,
     wsfe,
     wsmtxca,
     padron: createPadronService({ config: normalizedConfig, auth, soap }),

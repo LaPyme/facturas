@@ -127,6 +127,7 @@ describe("createArcaClient", () => {
       previewCreditNote: expect.any(Function),
       previewDebitNote: expect.any(Function),
       lookup: expect.any(Function),
+      lastAuthorized: expect.any(Function),
       wsfe,
       wsmtxca,
       padron,

@@ -10,12 +10,14 @@ import {
   type VoucherClass,
 } from "../constants";
 import { ArcaError, ArcaInputError } from "../errors";
+import { toIsoDate } from "../internal/dates";
 import {
   normalizeArcaAmountToMinorUnits,
   serializeArcaExchangeRate,
 } from "../internal/decimal";
 import {
   applyIssuanceFields,
+  FAMILIES,
   type InvoiceFamily,
   ISSUANCE_KEYS,
   type IssuanceFields,
@@ -459,6 +461,72 @@ export function buenosAiresDate(now: Date): WsfeDateInput {
   return ["year", "month", "day"]
     .map((part) => parts.find((entry) => entry.type === part)?.value)
     .join("") as WsfeDateInput;
+}
+
+const FCE_TYPES: readonly (readonly number[])[] = Object.values(FAMILIES.fce);
+const FCE_INVOICE_TYPES = FCE_TYPES.map(([invoice]) => invoice);
+const FCE_NOTE_TYPES = FCE_TYPES.flatMap(([, ...notes]) => notes);
+
+/**
+ * ARCA only accepts a voucher dated near the day it is sent (WSFE 10016,
+ * WSMTXCA 103): products 5 days either side without leaving the month,
+ * services 10. On WSFE an FCE invoice also stays within 5 days before and 1
+ * after, and an FCE note within 5 days before. `today` is Argentina's date.
+ */
+export function assertVoucherDateWindow(
+  data: Pick<WsfeVoucherInput, "concept" | "voucherDate" | "voucherType">,
+  service: "wsfe" | "wsmtxca",
+  today: WsfeDateInput
+): void {
+  const products = data.concept === 1;
+  let from = addDays(today, products ? -5 : -10);
+  let to = addDays(today, products ? 5 : 10);
+  if (products) {
+    to = minDate(to, endOfMonth(today));
+  }
+  if (service === "wsfe" && FCE_INVOICE_TYPES.includes(data.voucherType)) {
+    from = maxDate(from, addDays(today, -5));
+    to = minDate(to, addDays(today, 1));
+  }
+  if (service === "wsfe" && FCE_NOTE_TYPES.includes(data.voucherType)) {
+    from = maxDate(from, addDays(today, -5));
+  }
+  if (data.voucherDate < from || data.voucherDate > to) {
+    invalid(
+      "date",
+      `from ${toIsoDate(from)} through ${toIsoDate(to)}, the window ARCA accepts on ${toIsoDate(today)}`
+    );
+  }
+}
+
+/** Day arithmetic on `YYYYMMDD`; `Date.UTC` rolls overflowing days and months. */
+function shiftDate(
+  date: WsfeDateInput,
+  days: number,
+  months = 0
+): WsfeDateInput {
+  const utc = Date.UTC(
+    Number(date.slice(0, 4)),
+    Number(date.slice(4, 6)) - 1 + months,
+    Number(date.slice(6, 8)) + days
+  );
+  return new Date(utc)
+    .toISOString()
+    .slice(0, 10)
+    .replaceAll("-", "") as WsfeDateInput;
+}
+function addDays(date: WsfeDateInput, days: number): WsfeDateInput {
+  return shiftDate(date, days);
+}
+/** Day 0 of the next month is the last day of this one. */
+function endOfMonth(date: WsfeDateInput): WsfeDateInput {
+  return shiftDate(date, -Number(date.slice(6, 8)), 1);
+}
+function minDate(a: WsfeDateInput, b: WsfeDateInput): WsfeDateInput {
+  return a < b ? a : b;
+}
+function maxDate(a: WsfeDateInput, b: WsfeDateInput): WsfeDateInput {
+  return a > b ? a : b;
 }
 
 export function assertIssueObject(

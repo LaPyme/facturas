@@ -5,7 +5,11 @@ import {
   type IssuerCondition,
   type ReceiverCondition,
 } from "../constants";
-import { deriveWsfeInvoice, type IssueInput } from "./wsfe-derive";
+import {
+  assertVoucherDateWindow,
+  deriveWsfeInvoice,
+  type IssueInput,
+} from "./wsfe-derive";
 
 const base: IssueInput = {
   issuer: "responsable_inscripto",
@@ -231,4 +235,78 @@ describe("WSFE invoice derivation", () => {
       );
     }
   );
+});
+
+describe("ARCA's voucher date window", () => {
+  const today = "20260926";
+  const check =
+    (
+      voucherDate: string,
+      concept: number,
+      voucherType = 11,
+      service: "wsfe" | "wsmtxca" = "wsfe"
+    ) =>
+    () =>
+      assertVoucherDateWindow(
+        { voucherDate: voucherDate as "20260926", concept, voucherType },
+        service,
+        today
+      );
+
+  it.each([
+    ["products", 1, "20260921", "20260930", "20260920", "20261001"],
+    ["services", 2, "20260916", "20261006", "20260915", "20261007"],
+    [
+      "products and services",
+      3,
+      "20260916",
+      "20261006",
+      "20260915",
+      "20261007",
+    ],
+  ])(
+    "accepts %s from its first through its last day",
+    (_, concept, first, last, before, after) => {
+      expect(check(first, concept)).not.toThrow();
+      expect(check(last, concept)).not.toThrow();
+      expect(check(before, concept)).toThrow(
+        expect.objectContaining({ name: "ArcaInputError", field: "date" })
+      );
+      expect(check(after, concept)).toThrow(
+        expect.objectContaining({ name: "ArcaInputError", field: "date" })
+      );
+    }
+  );
+
+  it("keeps products from running into the next month, not the previous", () => {
+    expect(check("20261001", 1)).toThrow(
+      "date must be from 2026-09-21 through 2026-09-30, the window ARCA accepts on 2026-09-26."
+    );
+    expect(() =>
+      assertVoucherDateWindow(
+        { voucherDate: "20260827", concept: 1, voucherType: 11 },
+        "wsfe",
+        "20260901"
+      )
+    ).not.toThrow();
+  });
+
+  it("narrows FCE invoices to 5 days before and 1 after on WSFE", () => {
+    for (const type of [201, 206, 211]) {
+      expect(check("20260921", 2, type)).not.toThrow();
+      expect(check("20260927", 2, type)).not.toThrow();
+      expect(check("20260920", 2, type)).toThrow();
+      expect(check("20260928", 2, type)).toThrow();
+      expect(check("20260928", 2, type, "wsmtxca")).not.toThrow();
+    }
+  });
+
+  it("keeps FCE notes within 5 days before on WSFE", () => {
+    for (const type of [202, 203, 207, 208, 212, 213]) {
+      expect(check("20260921", 2, type)).not.toThrow();
+      expect(check("20261006", 2, type)).not.toThrow();
+      expect(check("20260920", 2, type)).toThrow();
+      expect(check("20260916", 2, type, "wsmtxca")).not.toThrow();
+    }
+  });
 });

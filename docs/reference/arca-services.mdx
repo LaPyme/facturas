@@ -29,6 +29,8 @@ cacheado y pedir un Token Authorization nuevo para ese servicio.
 - `issue({ voucherNumber, data })` manda una autorización y devuelve evidencia
   `authorized`, `rejected` o `indeterminate`.
 - `getNextVoucherNumber({ salesPoint, voucherType })` lee el próximo número.
+  Para el último número autorizado en WSFE o WSMTXCA, usá
+  [`lastAuthorized()`](/reference/client#lastauthorized).
 - `lookupVoucher({ number, salesPoint, voucherType })` devuelve la consulta
   con la respuesta cruda, con `not_found` para el código 602 de
   `FECompConsultar`. Para el comprobante normalizado, usá
