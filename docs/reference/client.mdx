@@ -1,7 +1,7 @@
 ---
 title: "Cliente"
 description: "Cada método de createArcaClient(), con su firma, sus opciones y lo que devuelve."
-keywords: ["createArcaClient", "issue", "preview", "lookup", "recover", "issueCreditNote", "issueDebitNote", "IssueOutcome", "IssuedVoucher"]
+keywords: ["createArcaClient", "issue", "preview", "lookup", "lastAuthorized", "recover", "issueCreditNote", "issueDebitNote", "IssueOutcome", "IssuedVoucher"]
 ---
 
 `createArcaClient()` devuelve el cliente. Sus métodos son la API para emitir:
@@ -17,6 +17,7 @@ reciben datos de tu negocio y devuelven el resultado fiscal ya normalizado.
 | `previewDebitNote()` | Muestra la nota de débito, leyendo el original | [Notas de crédito](/guides/credit-notes#vista-previa-de-notas) |
 | `recover()` | Concilia una reserva sin emitir | [Evitar comprobantes duplicados](/guides/avoid-duplicates) |
 | `lookup()` | Consulta un comprobante autorizado | [Consultar un comprobante](#lookup) |
+| `lastAuthorized()` | Lee el último número autorizado | [Último número autorizado](#lastauthorized) |
 
 `client.wsfe`, `client.wsmtxca` y `client.padron` son los módulos técnicos que
 el cliente usa por debajo. Están en
@@ -158,6 +159,24 @@ const comprobante = await arca.lookup({
 if (comprobante) {
   console.log(comprobante.date, comprobante.totalAmount, comprobante.cae);
 }
+```
+
+## `lastAuthorized()`
+
+```ts
+lastAuthorized(
+  sequence: { salesPoint: number; voucherType: number },
+  options?: PreviewOptions,
+): Promise<number>;
+```
+
+Devuelve el número del último comprobante que ARCA autorizó para ese punto de
+venta y tipo, o `0` si nunca autorizó ninguno. Solo lee: no usa el store ni
+reserva número. Con `service: "wsmtxca"` consulta WSMTXCA, y la respuesta es
+la misma en los dos servicios.
+
+```ts
+const ultimo = await arca.lastAuthorized({ salesPoint: 3, voucherType: 6 });
 ```
 
 ## Opciones de emisión

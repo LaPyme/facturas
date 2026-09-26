@@ -170,6 +170,22 @@ para el concepto 2. Las fechas aceptan `YYYY-MM-DD` o `YYYYMMDD`. El fin del
 servicio tiene que ser igual o posterior a su inicio y el vencimiento de pago
 igual o posterior a la fecha de la factura.
 
+ARCA solo acepta una fecha cercana al día en que recibe el comprobante, y
+`preview()` e `issue()` la controlan antes de enviar nada, contando desde hoy
+en Buenos Aires:
+
+| Comprobante | Desde | Hasta |
+| --- | --- | --- |
+| Productos (concepto 1) | 5 días antes | 5 días después, sin pasar al mes siguiente |
+| Servicios (conceptos 2 y 3) | 10 días antes | 10 días después |
+| Factura FCE por WSFE | 5 días antes | 1 día después |
+| Nota FCE por WSFE | 5 días antes | El límite de su concepto |
+
+Una fecha fuera de esa ventana lanza `ArcaInputError` con `field: "date"`, y el
+mensaje dice qué fechas acepta ARCA ese día. Un reintento con la misma
+`idempotencyKey` devuelve lo que ARCA ya autorizó aunque la ventana se haya
+movido.
+
 Los receptores que no son consumidor final requieren un `cuit` de 11 dígitos.
 Un consumidor final acepta un `cuit` o un `dni`, o ninguno por debajo del
 umbral de identificación. Desde ARS 10.000.000 (incluidos los USD convertidos

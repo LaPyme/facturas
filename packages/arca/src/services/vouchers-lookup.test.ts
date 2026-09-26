@@ -152,3 +152,54 @@ describe("vouchers.lookup", () => {
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
   });
 });
+
+describe("vouchers.lastAuthorized", () => {
+  const sequence = { salesPoint: 1, voucherType: 11 };
+
+  it("answers WSFE's last number, 0 on an empty sequence", async () => {
+    const { wsfe, service } = fake(found());
+    wsfe.getNextVoucherNumber.mockResolvedValueOnce(8).mockResolvedValueOnce(1);
+    await expect(
+      service.lastAuthorized(sequence, { representedTaxId: "20123456786" })
+    ).resolves.toBe(7);
+    await expect(service.lastAuthorized(sequence)).resolves.toBe(0);
+    expect(wsfe.getNextVoucherNumber).toHaveBeenNthCalledWith(1, {
+      representedTaxId: "20123456786",
+      forceRefresh: undefined,
+      salesPoint: 1,
+      voucherType: 11,
+    });
+  });
+
+  it("answers WSMTXCA's last number with service: wsmtxca", async () => {
+    const wsmtxca = {
+      getLastAuthorizedVoucher: vi
+        .fn()
+        .mockResolvedValue({ voucherNumber: 7, raw: {} }),
+    } as unknown as WsmtxcaService;
+    const { wsfe, service } = fake(found(), wsmtxca);
+    await expect(
+      service.lastAuthorized(
+        { salesPoint: 1, voucherType: 1 },
+        { service: "wsmtxca" }
+      )
+    ).resolves.toBe(7);
+    expect(wsmtxca.getLastAuthorizedVoucher).toHaveBeenCalledWith(
+      expect.objectContaining({ salesPoint: 1, voucherType: 1 })
+    );
+    expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [null, "sequence"],
+    [{ ...sequence, salesPoint: 0 }, "sequence.salesPoint"],
+    [{ ...sequence, voucherType: 1000 }, "sequence.voucherType"],
+    [{ ...sequence, number: 7 }, "sequence.number"],
+  ])("rejects %j before any call", async (value, field) => {
+    const { wsfe, service } = fake(found());
+    await expect(
+      service.lastAuthorized(value as typeof sequence)
+    ).rejects.toMatchObject({ name: "ArcaInputError", field });
+    expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+  });
+});

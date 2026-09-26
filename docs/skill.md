@@ -94,6 +94,9 @@ mano.
   o `dni`.
 - Por defecto la fecha es hoy en Buenos Aires, el concepto es productos y la
   moneda es `ARS`. Para servicios pasá `service: { from, to, dueDate }`.
+- ARCA acepta una fecha de hasta 5 días antes o después de hoy para productos,
+  sin pasar al mes siguiente, y 10 para servicios. `preview()` e `issue()`
+  lanzan `ArcaInputError` con `field: "date"` fuera de esa ventana.
 
 `arca.preview(input)` es sincrónico y no hace I/O. Devuelve la clase, el tipo,
 los importes y el pedido exacto. Compará `preview(input).amounts.sentTotal`
@@ -219,6 +222,8 @@ const nota = await arca.issueCreditNote(
 - `arca.lookup({ salesPoint, voucherType, number })` consulta un comprobante
   autorizado, en centavos y fechas `YYYY-MM-DD`. Devuelve `null` si ARCA no lo
   tiene.
+- `arca.lastAuthorized({ salesPoint, voucherType })` devuelve el último número
+  autorizado, o `0`, en WSFE o WSMTXCA.
 - `associatedPeriod: { from, to }` en lugar de `for` ajusta un período. Es la
   alternativa cuando no hay un comprobante puntual.
 

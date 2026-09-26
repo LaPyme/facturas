@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey, settledKey } from "../store/types";
 import { createVouchersService } from "./vouchers";
@@ -9,6 +9,16 @@ import {
   type WsfeVoucherLookupResult,
 } from "./wsfe";
 import { deriveWsfeInvoice, type IssueInput } from "./wsfe-derive";
+
+// The fixtures are dated around 2026-09-04, and ARCA only accepts a voucher
+// dated near the day it is sent.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-05T15:00:00Z"));
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const input: IssueInput = {
   issuer: "monotributo",

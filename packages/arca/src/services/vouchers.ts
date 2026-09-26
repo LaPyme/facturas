@@ -67,6 +67,8 @@ import {
 import {
   assertIssueKeys,
   assertIssueObject,
+  assertVoucherDateWindow,
+  buenosAiresDate,
   deriveWsfeInvoice,
   type IssueInput,
   issueDocumentNumber,
@@ -109,6 +111,14 @@ export type VouchersService = {
     voucher: VoucherCoordinates,
     options?: PreviewOptions
   ): Promise<VoucherSummary | null>;
+  /**
+   * The number of the last voucher ARCA authorized for a sales point and
+   * voucher type, on WSFE or WSMTXCA; `0` when none was ever authorized.
+   */
+  lastAuthorized(
+    sequence: Omit<VoucherCoordinates, "number">,
+    options?: PreviewOptions
+  ): Promise<number>;
   /** Consults a durable reservation. Never allocates or authorizes a voucher. */
   recover<O extends RecoveryOptions = { include?: never }>(
     idempotencyKey: string,
@@ -227,6 +237,8 @@ export function createVouchersService(
   return {
     lookup: async (voucher, options) =>
       lookupVoucher(select(options), voucher, options ?? {}),
+    lastAuthorized: async (sequence, options) =>
+      lastAuthorizedNumber(select(options), sequence, options ?? {}),
     recover: async (key, options) =>
       recoverOperation(
         select,
@@ -324,7 +336,25 @@ function previewInvoice(
       11
     );
   }
-  return toPreview(prepareInvoice(input, options), options);
+  return toPreview(
+    withinDateWindow(prepareInvoice(input, options), options),
+    options
+  );
+}
+/**
+ * Checked where a new voucher would be sent, never on replay: a keyed retry
+ * returns what ARCA authorized even after the window has moved on.
+ */
+function withinDateWindow<P extends Prepared>(
+  prepared: P,
+  options: IssueOptions
+): P {
+  assertVoucherDateWindow(
+    prepared.data,
+    options.service ?? "wsfe",
+    buenosAiresDate(new Date())
+  );
+  return prepared;
 }
 function prepareInvoice(input: IssueInput, options: IssueOptions): Prepared {
   const prepared: Prepared = deriveWsfeInvoice(input);
@@ -416,7 +446,12 @@ async function runOperation(
 ): Promise<IssueOutcome<IssueOptions>> {
   const issuer = issuerTaxId(options, context);
   if (options.idempotencyKey === undefined || !context?.store) {
-    return runAuthorization(wsfe, await prepare(), options, issuer);
+    return runAuthorization(
+      wsfe,
+      withinDateWindow(await prepare(), options),
+      options,
+      issuer
+    );
   }
   const store: ArcaStore = context.store;
   const { environment, taxId } = context;
@@ -437,7 +472,7 @@ async function runOperation(
   if (existing !== null) {
     return await replay(existing);
   }
-  const prepared = await prepare();
+  const prepared = withinDateWindow(await prepare(), options);
   const sequence = {
     coordinates: {
       salesPoint: prepared.data.salesPoint,
@@ -1422,7 +1457,10 @@ async function previewNote(
     ["representedTaxId", "service", "forceRefresh", "abortSignal"],
     "options"
   );
-  const prepared = await prepareNote(wsfe, input, options, context, kind);
+  const prepared = withinDateWindow(
+    await prepareNote(wsfe, input, options, context, kind),
+    options
+  );
   return {
     ...toPreview(prepared, options),
     ...(prepared.originals === undefined
@@ -1528,12 +1566,31 @@ function validateFceAssociations(
   }
 }
 
-/** One read of one original, checked against the coordinates that asked for it. */
-const LOOKUP_BOUNDS = [
+const SEQUENCE_BOUNDS = [
   ["salesPoint", 99_999],
   ["voucherType", 999],
-  ["number", 99_999_999],
 ] as const;
+const LOOKUP_BOUNDS = [...SEQUENCE_BOUNDS, ["number", 99_999_999]] as const;
+
+function assertBounds<K extends string>(
+  value: Record<K, number>,
+  bounds: readonly (readonly [K, number])[],
+  field: string,
+  method: string
+): void {
+  for (const [key, max] of bounds) {
+    if (
+      !Number.isSafeInteger(value[key]) ||
+      value[key] < 1 ||
+      value[key] > max
+    ) {
+      throw new ArcaInputError(
+        `${method} requires ${field}.${key} to be an integer from 1 through ${max}.`,
+        { code: "ARCA_INPUT_INVALID_VALUE", field: `${field}.${key}` }
+      );
+    }
+  }
+}
 
 async function lookupVoucher(
   wsfe: IssueWsfeService,
@@ -1554,15 +1611,7 @@ async function lookupVoucher(
     "voucher",
     "lookup()"
   );
-  for (const [field, max] of LOOKUP_BOUNDS) {
-    const value = voucher[field];
-    if (!Number.isSafeInteger(value) || value < 1 || value > max) {
-      throw new ArcaInputError(
-        `lookup() requires voucher.${field} to be an integer from 1 through ${max}.`,
-        { code: "ARCA_INPUT_INVALID_VALUE", field: `voucher.${field}` }
-      );
-    }
-  }
+  assertBounds(voucher, LOOKUP_BOUNDS, "voucher", "lookup()");
   const found = await wsfe.lookupVoucher({
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
@@ -1589,6 +1638,40 @@ async function lookupVoucher(
   return toVoucherSummary(found.voucher);
 }
 
+async function lastAuthorizedNumber(
+  wsfe: IssueWsfeService,
+  sequence: Omit<VoucherCoordinates, "number">,
+  inputOptions: PreviewOptions
+): Promise<number> {
+  const options = cloneOptions(inputOptions);
+  assertIssueKeys(
+    options,
+    ["representedTaxId", "service", "forceRefresh", "abortSignal"],
+    "options",
+    "lastAuthorized()"
+  );
+  assertIssueObject(sequence, "sequence");
+  assertIssueKeys(
+    sequence,
+    ["salesPoint", "voucherType"],
+    "sequence",
+    "lastAuthorized()"
+  );
+  assertBounds(sequence, SEQUENCE_BOUNDS, "sequence", "lastAuthorized()");
+  // WSMTXCA's adapter answers "next" from its "last", so one subtraction serves both.
+  const next = await wsfe.getNextVoucherNumber({
+    representedTaxId: options.representedTaxId,
+    forceRefresh: options.forceRefresh,
+    ...(options.abortSignal === undefined
+      ? {}
+      : { abortSignal: options.abortSignal }),
+    salesPoint: sequence.salesPoint,
+    voucherType: sequence.voucherType,
+  });
+  return next - 1;
+}
+
+/** One read of one original, checked against the coordinates that asked for it. */
 async function lookupOriginal(
   wsfe: IssueWsfeService,
   target: VoucherCoordinates,
