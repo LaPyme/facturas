@@ -8,7 +8,7 @@
 
 </div>
 
-SDK de Node.js para facturación electrónica con ARCA / AFIP. Emití facturas,
+SDK de TypeScript para facturación electrónica con ARCA / AFIP. Emití facturas,
 notas de crédito y notas de débito, y consultá el Padrón con una sola API.
 
 - **Solo ESM**, Node.js **>= 22**
@@ -72,7 +72,7 @@ El detalle está en [Facturas](https://facturas-sdk.dev/guides/invoices).
 
 ## Reintentos seguros
 
-ARCA no recibe una clave de idempotencia como Stripe. Si una respuesta se
+ARCA no recibe una clave de idempotencia. Si una respuesta se
 pierde, no puede distinguir un reintento de una emisión nueva. `facturas` te
 permite guardar cada intento en un `store` con el ID estable de tu venta. Al
 repetir esa clave, consulta el número reservado en vez de empezar otra emisión.

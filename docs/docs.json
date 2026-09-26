@@ -2,7 +2,7 @@
   "$schema": "https://mintlify.com/docs.json",
   "theme": "palm",
   "name": "SDK para ARCA",
-  "description": "SDK de Node.js para facturación electrónica con ARCA.",
+  "description": "SDK de TypeScript para facturación electrónica con ARCA.",
   "logo": {
     "light": "/logo/light.svg",
     "dark": "/logo/dark.svg",
@@ -62,12 +62,9 @@
   "navbar": {
     "links": [
       {
-        "label": "GitHub",
+        "label": "",
+        "icon": "github",
         "href": "https://github.com/LaPyme/facturas"
-      },
-      {
-        "label": "npm",
-        "href": "https://www.npmjs.com/package/facturas"
       }
     ],
     "primary": {

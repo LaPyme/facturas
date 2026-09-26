@@ -4,9 +4,8 @@ description: "Guardá cada intento para que un reintento no emita otro comproban
 keywords: ["duplicados", "idempotencia", "Postgres", "Redis", "store", "reintentos"]
 ---
 
-A diferencia de Stripe, ARCA no recibe una clave de idempotencia. Si una
-respuesta se pierde, ARCA no puede distinguir un reintento de una emisión
-nueva.
+ARCA no recibe una clave de idempotencia. Si una respuesta se pierde, no puede
+distinguir un reintento de una emisión nueva.
 
 `facturas` resuelve ese problema con una clave estable de tu aplicación y un
 almacenamiento compartido, llamado `store` en la API. El SDK guarda ahí el

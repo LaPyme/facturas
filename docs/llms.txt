@@ -1,0 +1,59 @@
+# facturas
+
+> SDK de TypeScript para emitir facturas, notas de crédito y notas de débito electrónicas con ARCA (ex AFIP). Se conecta directo desde tu servidor, sin SOAP ni XML a la vista y sin intermediarios.
+
+El paquete de npm es `facturas`. Requiere Node.js 22 o posterior y es solo ESM. Está antes de la versión 1.0, así que su API cambia entre versiones menores: verificá cada método contra los tipos de la versión instalada, en `node_modules/facturas/dist/`, antes de usar lo que recuerdes.
+
+## Cómo leer esta documentación
+
+Cada página se puede leer en Markdown agregando `.md` a la URL, por ejemplo https://facturas-sdk.dev/guides/invoices.md. El texto completo de todas las páginas está en [llms-full.txt](https://facturas-sdk.dev/llms-full.txt).
+
+## Agentes de código
+
+Instalá la skill de facturas para que tu agente emita con la API actual, trate los cuatro resultados y evite comprobantes duplicados:
+
+```sh
+npx skills add LaPyme/facturas
+```
+
+La skill también se puede leer en https://facturas-sdk.dev/skill.md.
+
+## Datos que conviene saber antes de escribir código
+
+- La primera factura no necesita base de datos ni servicio externo. Alcanza con `ARCA_TAX_ID`, `ARCA_CERTIFICATE_PEM`, `ARCA_PRIVATE_KEY_PEM` y `ARCA_ENVIRONMENT`.
+- Los importes son enteros en centavos. El SDK deriva la clase, el tipo de comprobante y el IVA desde datos de negocio.
+- `issue()` devuelve uno de cuatro resultados: `authorized`, `rejected`, `indeterminate` o `conflict`. Los resultados fiscales no se lanzan.
+- Para reintentar sin duplicar, pasá un `store` persistente y el ID estable de la venta como `idempotencyKey`.
+- ARCA no anula comprobantes. Una corrección es una nota de crédito con `for` apuntando al original.
+- El CLI habilita y diagnostica: `npx facturas init`, `cert`, `check` e `issue`.
+
+## Empezar
+
+- [Inicio rápido](https://facturas-sdk.dev/getting-started/quickstart.md): configurá el cliente, validá el acceso a ARCA y emití el primer comprobante.
+- [Habilitación en ARCA](https://facturas-sdk.dev/getting-started/arca-setup.md): CUIT, certificado, servicio y punto de venta para homologación o producción.
+- [CLI](https://facturas-sdk.dev/getting-started/cli.md): prepará credenciales, diagnosticá ARCA y emití una prueba controlada.
+
+## Guías
+
+- [Emitir facturas](https://facturas-sdk.dev/guides/invoices.md): el input de `issue()`, la vista previa y qué hacer con cada resultado.
+- [Notas de crédito y débito](https://facturas-sdk.dev/guides/credit-notes.md): notas parciales, totales, por período y FCE.
+- [Evitar comprobantes duplicados](https://facturas-sdk.dev/guides/avoid-duplicates.md): stores de Postgres, Redis, archivos y memoria, y `recover()`.
+- [Consultar contribuyentes](https://facturas-sdk.dev/guides/taxpayers.md): datos de un CUIT en el Padrón de ARCA.
+- [Pasar a producción](https://facturas-sdk.dev/guides/production.md): la lista de lo que tiene que estar listo antes del primer comprobante real.
+- [WSMTXCA para casos requeridos](https://facturas-sdk.dev/guides/wsmtxca.md): emisión cuando el contribuyente o el punto de venta opera con WSMTXCA.
+
+## Referencia
+
+- [Cliente](https://facturas-sdk.dev/reference/client.md): cada método de `createArcaClient()`, con su firma, sus opciones y sus resultados.
+- [Configuración](https://facturas-sdk.dev/reference/configuration.md): variables de entorno, sesiones WSAA, logs, reintentos y límites de tiempo.
+- [Errores y diagnóstico](https://facturas-sdk.dev/reference/errors.md): clases de error, códigos de `ArcaInputError` y errores frecuentes de ARCA.
+- [Comandos del CLI](https://facturas-sdk.dev/reference/cli.md): flags, archivos y diagnósticos de cada comando.
+- [Módulos de transporte](https://facturas-sdk.dev/reference/arca-services.md): los clientes técnicos de WSFE, WSMTXCA y Padrón.
+- [API pública y constantes](https://facturas-sdk.dev/reference/public-api.md): constantes exportadas, política de semver y prácticas de seguridad.
+- [Ejemplos](https://facturas-sdk.dev/reference/examples.md): programas completos para facturas, notas, consultas y vistas previas.
+
+## Opcional
+
+- [Repositorio](https://github.com/LaPyme/facturas): código fuente, ejemplos e issues.
+- [Changelog](https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md): cambios de cada versión.
+- [npm](https://www.npmjs.com/package/facturas): el paquete publicado.

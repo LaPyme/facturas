@@ -1,29 +1,50 @@
 ---
-title: "Facturación electrónica para Node.js"
+title: "Facturación electrónica para TypeScript"
 sidebarTitle: "Inicio"
 description: "Emití facturas, notas de crédito y notas de débito en ARCA (ex AFIP) desde TypeScript."
-keywords: ["ARCA", "AFIP", "facturación electrónica", "factura electrónica", "CAE", "Node.js", "TypeScript"]
-mode: "wide"
+keywords: ["ARCA", "AFIP", "facturación electrónica", "factura electrónica", "CAE", "TypeScript", "Node.js"]
+mode: "custom"
 ---
 
-`facturas` es el SDK de TypeScript para facturar con ARCA, ex AFIP. Emitís
-facturas, notas de crédito y notas de débito con CAE, y consultás el Padrón,
-sin escribir SOAP ni calcular el IVA a mano. Lo usamos en producción en
-[La Pyme](https://lapyme.com.ar).
+<div className="px-4 sm:px-6 pb-24">
+
+<div className="max-w-3xl mx-auto pt-16 sm:pt-28 text-center">
+  <h1 className="text-4xl sm:text-6xl font-semibold tracking-tight text-gray-900 dark:text-white">
+    Facturación electrónica para TypeScript
+  </h1>
+  <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-600 dark:text-gray-400">
+    El SDK para emitir facturas, notas de crédito y notas de débito con CAE. Sin SOAP, sin XML y sin intermediarios entre tu servidor y ARCA.
+  </p>
+</div>
+
+<div className="max-w-sm mx-auto mt-8">
 
 <CodeGroup>
 
-```bash pnpm
-pnpm add facturas
+```bash Para humanos
+npm install facturas
 ```
 
-```bash npm
-npm install facturas
+```bash Para agentes
+npx skills add LaPyme/facturas
 ```
 
 </CodeGroup>
 
-```typescript
+</div>
+
+<div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+  <a href="/getting-started/quickstart" className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-white px-5 py-2.5 text-sm font-medium text-white dark:text-gray-900 hover:opacity-90">
+    Emití tu primera factura
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+  </a>
+</div>
+
+<div className="max-w-5xl mx-auto mt-20 grid lg:grid-cols-2 gap-6 items-center">
+
+<div className="min-w-0">
+
+```typescript emitir.ts
 import { createArcaClient } from "facturas";
 
 const arca = createArcaClient();
@@ -32,82 +53,265 @@ const resultado = await arca.issue({
   issuer: "monotributo",
   salesPoint: 3,
   to: { condition: "consumidor_final" },
-  items: [{ amount: 150_000 }], // ARS 1.500,00 en centavos
+  items: [
+    { amount: 1_800_000 }, // 2 × Yerba mate 1 kg
+    { amount: 3_450_000 }, // Termo de acero 1 L
+  ],
 });
 
 if (resultado.kind === "authorized") {
-  console.log(resultado.voucher.cae, resultado.voucher.number);
+  const { number, cae, qr } = resultado.voucher;
 }
 ```
 
-El cliente lee el CUIT, el certificado, la clave y el entorno de las variables
-`ARCA_*`. No hace falta base de datos ni ningún servicio externo para emitir.
-Requiere Node.js 22 o posterior y es solo ESM. El
-[inicio rápido](/getting-started/quickstart) te lleva de cero a la primera
-factura en homologación.
+</div>
 
-<Columns cols={2}>
-  <Card title="Sin SOAP ni XML" icon="braces" href="/guides/invoices">
-    Pasás los datos de tu venta en centavos. El SDK deriva la clase, el tipo de comprobante, el IVA y el pedido que espera ARCA.
-  </Card>
-  <Card title="Habilitación guiada" icon="terminal" href="/getting-started/cli">
-    `npx facturas init` genera la clave y el CSR y te dice qué página abrir en ARCA. `npx facturas check` nombra la capa que falta.
-  </Card>
-  <Card title="Sin duplicados al reintentar" icon="shield-check" href="/guides/avoid-duplicates">
-    ARCA no recibe claves de idempotencia. Con un store y una clave tuya, un reintento consulta el número reservado en vez de emitir otro.
-  </Card>
-  <Card title="Directo a ARCA" icon="plug" href="/reference/configuration">
-    Sin proxy ni servicio alojado de por medio. La clave privada nunca sale de tu servidor.
-  </Card>
-</Columns>
+<div className="min-w-0">
+  <div className="rounded-lg border border-gray-950/10 dark:border-white/10 bg-white text-gray-900 px-3 py-5 sm:px-7 sm:py-6 text-[10px] sm:text-[11px] leading-normal" style={{ boxShadow: "0 1px 2px rgb(0 0 0 / 0.04), 0 16px 40px -12px rgb(0 0 0 / 0.18)" }}>
+    <div className="grid grid-cols-[1fr_auto_1fr] gap-x-2 gap-y-3 sm:gap-x-4 sm:gap-y-1">
+      <div className="min-w-0 self-end sm:row-span-2">
+        <div className="text-xs sm:text-sm font-medium">Tu Negocio</div>
+        <div className="mt-1 text-gray-600">Av. Corrientes 1234</div>
+        <div className="text-gray-600">CABA - CP: 1043</div>
+        <div className="text-gray-600">Responsable Monotributo</div>
+      </div>
+      <div className="self-start flex flex-col items-center rounded-md border border-gray-400 px-2 pt-1 pb-0.5">
+        <span className="text-xl sm:text-2xl font-bold leading-none">C</span>
+        <span className="mt-0.5 text-[8px] sm:text-[9px] text-gray-500">Cód. 11</span>
+      </div>
+      <div className="min-w-0 text-right">
+        <div className="text-sm sm:text-base font-bold leading-tight">Factura</div>
+        <div className="text-[9px] sm:text-[10px] text-gray-500">Original</div>
+        <div className="mt-1 whitespace-nowrap text-xs sm:text-lg tabular-nums"><span className="rounded-sm bg-emerald-100 px-1">Nº 00003-00000142</span></div>
+      </div>
+      <div className="col-span-3 sm:col-span-1 sm:col-start-3 text-right text-gray-600">
+        <div><span className="font-semibold text-gray-900">Fecha de Emisión:</span> 26/09/2026</div>
+        <div><span className="font-semibold text-gray-900">CUIT:</span> 20-12345678-6</div>
+        <div><span className="font-semibold text-gray-900">Ingresos Brutos:</span> 20-12345678-6</div>
+        <div><span className="font-semibold text-gray-900">Inicio de Actividades:</span> 01/03/2024</div>
+      </div>
+    </div>
+    <div className="mt-4 sm:mt-5 grid sm:grid-cols-2 gap-x-4 border-t border-gray-200 pt-3">
+      <div><span className="font-semibold">Razón social:</span> Consumidor Final</div>
+      <div><span className="font-semibold">Condición de IVA:</span> Consumidor Final</div>
+      <div className="sm:col-start-2"><span className="font-semibold">Condición de venta:</span> Contado</div>
+    </div>
+    <div className="mt-4 sm:mt-5 tabular-nums">
+      <div className="flex gap-2 border-b border-gray-900 pb-1 font-semibold">
+        <div className="hidden sm:block w-12 shrink-0">Código</div>
+        <div className="flex-1 min-w-0">Descripción</div>
+        <div className="w-8 shrink-0 text-right">Cant.</div>
+        <div className="w-16 shrink-0 text-right">Precio Unit.</div>
+        <div className="w-16 shrink-0 text-right">Subtotal</div>
+      </div>
+      <div className="flex gap-2 pt-1.5">
+        <div className="hidden sm:block w-12 shrink-0">0012</div>
+        <div className="flex-1 min-w-0">Yerba mate 1 kg</div>
+        <div className="w-8 shrink-0 text-right">2</div>
+        <div className="w-16 shrink-0 text-right">9.000,00</div>
+        <div className="w-16 shrink-0 text-right">18.000,00</div>
+      </div>
+      <div className="flex gap-2 pt-1">
+        <div className="hidden sm:block w-12 shrink-0">0450</div>
+        <div className="flex-1 min-w-0">Termo de acero 1 L</div>
+        <div className="w-8 shrink-0 text-right">1</div>
+        <div className="w-16 shrink-0 text-right">34.500,00</div>
+        <div className="w-16 shrink-0 text-right">34.500,00</div>
+      </div>
+    </div>
+    <div className="mt-4 sm:ml-auto sm:w-1/2 tabular-nums">
+      <div className="flex justify-between border-t border-gray-200 py-1"><span>Subtotal</span><span>{"$52.500,00"}</span></div>
+      <div className="flex justify-between border-t border-gray-200 py-1 font-bold"><span>Total</span><span>{"$52.500,00"}</span></div>
+      <div className="flex justify-between border-t border-gray-200 py-1"><span>Monto abonado</span><span>{"$52.500,00"}</span></div>
+    </div>
+    <div className="mt-8 grid grid-cols-[auto_1fr] sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
+      <div className="hidden sm:block">
+        <div className="font-semibold">Observaciones:</div>
+        <div className="text-gray-600">Venta en mostrador</div>
+      </div>
+      <img noZoom src="/images/qr-ejemplo.svg" alt="QR del comprobante" className="w-16 h-16 sm:w-20 sm:h-20 rounded border-2 border-emerald-200 p-0.5" />
+      <div className="whitespace-nowrap text-right font-semibold tabular-nums">
+        <div><span className="rounded-sm bg-emerald-100 px-1">CAE Nº: 76391234567890</span></div>
+        <div className="mt-0.5"><span className="rounded-sm bg-emerald-100 px-1">Fecha de Vto. de CAE: 06/10/2026</span></div>
+      </div>
+    </div>
+  </div>
+  <p className="mt-3 flex items-start gap-2 text-xs text-gray-500 dark:text-gray-400">
+    <span className="mt-0.5 inline-block w-2.5 h-2.5 shrink-0 rounded-sm bg-emerald-200 dark:bg-emerald-400/40" />
+    <span>Lo resaltado sale de <code className="font-mono text-[0.9em]">resultado.voucher</code>. El resto del PDF lo arma tu sistema con los datos de la venta.</span>
+  </p>
+</div>
 
-## Qué devuelve `issue()`
+</div>
 
-Los resultados fiscales se devuelven, no se lanzan. `issue()` devuelve uno de
-cuatro, y tu código tiene que tratar los cuatro. Los errores de input y de
-configuración sí se lanzan, antes de escribir en ARCA, y están en
-[Errores](/reference/errors).
+<p className="max-w-2xl mx-auto mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
+  El cliente lee el CUIT, el certificado, la clave y el entorno de las variables <code className="font-mono text-[0.9em]">ARCA_*</code>. Para emitir no hace falta base de datos ni ningún servicio externo.
+</p>
 
-| Resultado | Qué significa | Qué tenés que hacer |
-| --- | --- | --- |
-| `authorized` | ARCA autorizó el comprobante. | Guardá el número, el CAE, su vencimiento y el `qr` para imprimir. |
-| `rejected` | ARCA rechazó el pedido de forma definitiva. | Revisá `issues`. No cambies el input ligado a la clave. |
-| `indeterminate` | No se puede demostrar todavía si ARCA lo autorizó. | Conservá la evidencia y conciliá antes de reintentar. |
-| `conflict` | El número reservado pertenece a otro comprobante. | Detené el flujo e investigá. |
+<div className="max-w-5xl mx-auto mt-24 grid sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-gray-950/10 dark:border-white/10 bg-gray-950/10 dark:bg-white/10">
+  <a href="/guides/invoices" className="group block p-6 bg-background-light dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-white/[0.04]">
+    <Icon icon="braces" size={20} />
+    <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-white">Sin SOAP ni XML</h3>
+    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Pasás los datos de tu venta en centavos. El SDK deriva la clase, el tipo de comprobante, el IVA y el pedido para ARCA.</p>
+  </a>
+  <a href="/getting-started/cli" className="group block p-6 bg-background-light dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-white/[0.04]">
+    <Icon icon="terminal" size={20} />
+    <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-white">Habilitación guiada</h3>
+    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400"><code className="font-mono text-[0.9em]">npx facturas init</code> genera la clave y el CSR y te dice qué abrir en ARCA. <code className="font-mono text-[0.9em]">npx facturas check</code> nombra la capa que falta.</p>
+  </a>
+  <a href="/guides/avoid-duplicates" className="group block p-6 bg-background-light dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-white/[0.04]">
+    <Icon icon="shield-check" size={20} />
+    <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-white">Sin duplicados al reintentar</h3>
+    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">ARCA no recibe claves de idempotencia. Con un store y una clave tuya, un reintento consulta el número reservado en vez de emitir otro.</p>
+  </a>
+  <a href="/reference/configuration" className="group block p-6 bg-background-light dark:bg-background-dark hover:bg-gray-50 dark:hover:bg-white/[0.04]">
+    <Icon icon="plug" size={20} />
+    <h3 className="mt-4 text-base font-semibold text-gray-900 dark:text-white">Directo a ARCA</h3>
+    <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Sin proxy ni servicio alojado de por medio. La clave privada nunca sale de tu servidor.</p>
+  </a>
+</div>
 
-`indeterminate` existe porque ARCA, a diferencia de Stripe, no recibe una clave
-de idempotencia. Si la conexión se corta después del envío, nadie sabe si el
-comprobante quedó emitido. `facturas` asocia una clave de tu aplicación a un
-store compartido, y así un reintento recupera el número reservado en vez de
-emitir una segunda factura. Está explicado en
-[Evitar comprobantes duplicados](/guides/avoid-duplicates).
+<div className="max-w-5xl mx-auto mt-28 rounded-3xl border border-gray-950/10 dark:border-white/10 bg-gray-950/[0.02] dark:bg-white/[0.02] p-6 sm:p-10 lg:p-12">
+  <div className="grid lg:grid-cols-5 gap-10 lg:gap-16">
+    <div className="lg:col-span-2">
+      <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Hecho en La Pyme</div>
+      <h2 className="mt-3 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Nació facturando ventas reales</h2>
+      <p className="mt-4 text-gray-600 dark:text-gray-400">
+        <code className="font-mono text-[0.9em]">facturas</code> es el SDK con el que La Pyme factura las ventas de sus clientes, pymes argentinas que venden en el local y online. La API salió de lo que necesita un ERP en producción. Lo publicamos para que no tengas que resolver ARCA desde cero.
+      </p>
+      <a href="https://lapyme.com.ar" className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-white hover:opacity-80">
+        Conocé La Pyme
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7" /><path d="M7 7h10v10" /></svg>
+      </a>
+    </div>
+    <div className="lg:col-span-3 grid gap-8">
+      <a href="/guides/avoid-duplicates" className="group flex gap-4">
+        <div className="shrink-0 w-10 h-10 rounded-xl border border-gray-950/10 dark:border-white/10 bg-background-light dark:bg-background-dark flex items-center justify-center"><Icon icon="store" size={18} /></div>
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white group-hover:underline underline-offset-4">Mostrador y tienda online</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Una venta entra por el local, Tiendanube o Mercado Libre, a veces al mismo tiempo. Con un store, cada una recibe su número y un reintento no emite otra factura.</p>
+        </div>
+      </a>
+      <a href="/guides/credit-notes" className="group flex gap-4">
+        <div className="shrink-0 w-10 h-10 rounded-xl border border-gray-950/10 dark:border-white/10 bg-background-light dark:bg-background-dark flex items-center justify-center"><Icon icon="undo-2" size={18} /></div>
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white group-hover:underline underline-offset-4">Cambios y devoluciones</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Se corrigen con una nota de crédito sobre la factura original. <code className="font-mono text-[0.9em]">issueCreditNote()</code> toma de ahí la clase y el receptor.</p>
+        </div>
+      </a>
+      <a href="/guides/taxpayers" className="group flex gap-4">
+        <div className="shrink-0 w-10 h-10 rounded-xl border border-gray-950/10 dark:border-white/10 bg-background-light dark:bg-background-dark flex items-center justify-center"><Icon icon="id-card" size={18} /></div>
+        <div>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white group-hover:underline underline-offset-4">Clientes que piden factura A</h3>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Con el CUIT o el DNI, el Padrón trae la condición de IVA del cliente en el formato que acepta <code className="font-mono text-[0.9em]">issue()</code>.</p>
+        </div>
+      </a>
+    </div>
+  </div>
+</div>
 
-## Del primer comprobante a producción
+<div className="max-w-5xl mx-auto mt-28">
+  <div className="max-w-2xl mx-auto text-center">
+    <h2 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Cuatro resultados, ninguno escondido</h2>
+    <p className="mt-4 text-gray-600 dark:text-gray-400">
+      Los resultados fiscales se devuelven, no se lanzan, y tu código trata los cuatro. Los errores de input y de configuración sí se lanzan, antes de escribir en ARCA.
+    </p>
+  </div>
+  <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="rounded-2xl border border-gray-950/10 dark:border-white/10 p-5">
+      <div className="flex items-center gap-2 font-mono text-sm font-medium text-gray-900 dark:text-white"><span className="w-2 h-2 rounded-full bg-emerald-500" />authorized</div>
+      <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">ARCA autorizó el comprobante. Guardá el número, el CAE, su vencimiento y el QR.</p>
+    </div>
+    <div className="rounded-2xl border border-gray-950/10 dark:border-white/10 p-5">
+      <div className="flex items-center gap-2 font-mono text-sm font-medium text-gray-900 dark:text-white"><span className="w-2 h-2 rounded-full bg-red-500" />rejected</div>
+      <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">ARCA lo rechazó de forma definitiva. Revisá los motivos. No cambies el input ligado a la clave.</p>
+    </div>
+    <div className="rounded-2xl border border-gray-950/10 dark:border-white/10 p-5">
+      <div className="flex items-center gap-2 font-mono text-sm font-medium text-gray-900 dark:text-white"><span className="w-2 h-2 rounded-full bg-amber-500" />indeterminate</div>
+      <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">Todavía no se puede demostrar si ARCA lo autorizó. Conciliá antes de reintentar.</p>
+    </div>
+    <div className="rounded-2xl border border-gray-950/10 dark:border-white/10 p-5">
+      <div className="flex items-center gap-2 font-mono text-sm font-medium text-gray-900 dark:text-white"><span className="w-2 h-2 rounded-full bg-violet-500" />conflict</div>
+      <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">El número reservado pertenece a otro comprobante. Detené el flujo e investigá.</p>
+    </div>
+  </div>
+  <p className="max-w-2xl mx-auto mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+    <code className="font-mono text-[0.9em]">indeterminate</code> existe porque ARCA no recibe una clave de idempotencia. Si la conexión se corta después del envío, nadie sabe si el comprobante quedó emitido. <a href="/guides/avoid-duplicates" className="whitespace-nowrap font-medium text-gray-900 dark:text-white underline underline-offset-4 decoration-gray-950/20 dark:decoration-white/30">Cómo evitar duplicados</a>
+  </p>
+</div>
 
-<Steps>
-  <Step title="Habilitá ARCA">
-    Conseguí el certificado, autorizalo para Facturación Electrónica y habilitá un punto de venta. El CLI te guía y [Habilitación en ARCA](/getting-started/arca-setup) tiene cada pantalla.
-  </Step>
-  <Step title="Emití en homologación">
-    Configurá las variables de entorno, corré `npx facturas check` y emití tu primera factura de prueba con el [inicio rápido](/getting-started/quickstart).
-  </Step>
-  <Step title="Pasá a producción">
-    Sumá un store, claves de idempotencia y el tratamiento de cada resultado. La lista completa está en [Pasar a producción](/guides/production).
-  </Step>
-</Steps>
+<div className="max-w-5xl mx-auto mt-28">
+  <div className="max-w-2xl mx-auto text-center">
+    <h2 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Una API para emitir y recuperar</h2>
+    <p className="mt-4 text-gray-600 dark:text-gray-400">
+      Cada método recibe datos de tu negocio y devuelve el resultado fiscal ya normalizado.
+    </p>
+  </div>
+  <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <a href="/reference/client#issue" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">issue()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Emite una factura A, B o C y devuelve uno de los cuatro resultados.</p>
+    </a>
+    <a href="/reference/client#preview" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">preview()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Muestra el pedido que enviaría <code className="font-mono text-[0.9em]">issue()</code>, sin I/O. Sirve para revisar y para tests.</p>
+    </a>
+    <a href="/reference/client#recover" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">recover()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Concilia una reserva que quedó incierta. Nunca emite otra vez.</p>
+    </a>
+    <a href="/reference/client#issuecreditnote" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">issueCreditNote()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Acredita líneas, importes o el comprobante entero. La clase y el receptor salen del original.</p>
+    </a>
+    <a href="/reference/client#issuedebitnote" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">issueDebitNote()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Suma a la cuenta de un comprobante autorizado, con líneas explícitas.</p>
+    </a>
+    <a href="/guides/taxpayers" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">padron</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Consulta la condición de IVA de un CUIT, en el formato que acepta <code className="font-mono text-[0.9em]">issue()</code>.</p>
+    </a>
+  </div>
+</div>
 
-## Una API para emitir y recuperar
+<div className="max-w-5xl mx-auto mt-28">
+  <div className="max-w-2xl mx-auto text-center">
+    <h2 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Del primer comprobante a producción</h2>
+  </div>
+  <div className="mt-10 grid md:grid-cols-3 gap-4">
+    <a href="/getting-started/arca-setup" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-6 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-xs text-gray-500 dark:text-gray-400">01</div>
+      <h3 className="mt-3 text-base font-semibold text-gray-900 dark:text-white">Habilitá ARCA</h3>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Conseguí el certificado, autorizalo para Facturación Electrónica y habilitá un punto de venta. El CLI te guía.</p>
+    </a>
+    <a href="/getting-started/quickstart" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-6 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-xs text-gray-500 dark:text-gray-400">02</div>
+      <h3 className="mt-3 text-base font-semibold text-gray-900 dark:text-white">Emití en homologación</h3>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Configurá las variables de entorno, corré <code className="font-mono text-[0.9em]">npx facturas check</code> y emití tu primera factura de prueba.</p>
+    </a>
+    <a href="/guides/production" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-6 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-xs text-gray-500 dark:text-gray-400">03</div>
+      <h3 className="mt-3 text-base font-semibold text-gray-900 dark:text-white">Pasá a producción</h3>
+      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Sumá un store, claves de idempotencia y el tratamiento de cada resultado.</p>
+    </a>
+  </div>
+</div>
 
-`issue()` emite facturas a partir de datos de tu negocio y `preview()` te
-muestra el pedido antes de enviarlo. Para corregir un comprobante usá
-`issueCreditNote()` o `issueDebitNote()`. Si una respuesta queda incierta,
-`recover()` consulta la reserva sin emitir otra vez. Cada método, con sus
-opciones y resultados, está en la referencia del [cliente](/reference/client).
+<div className="max-w-3xl mx-auto mt-28 text-center">
+  <h2 className="text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">Emití tu primera factura hoy</h2>
+  <p className="mt-4 text-gray-600 dark:text-gray-400">
+    El inicio rápido te lleva de cero a un CAE en homologación.
+  </p>
+  <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+    <a href="/getting-started/quickstart" className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-white px-5 py-2.5 text-sm font-medium text-white dark:text-gray-900 hover:opacity-90">
+      Ir al inicio rápido
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+    </a>
+  </div>
+  <p className="mt-10 text-xs text-gray-500 dark:text-gray-500">
+    <code className="font-mono text-[0.9em]">facturas</code> está antes de la versión 1.0. Fijá la versión exacta y revisá el <a href="https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md" className="underline underline-offset-4">changelog</a> antes de actualizar.
+  </p>
+</div>
 
-Para mantenimiento, diagnósticos y consultas técnicas, la referencia documenta
-los [módulos de transporte](/reference/arca-services) que usa el cliente por
-debajo. La emisión normal siempre entra por los métodos de la fachada.
-
-<Info>
-  `facturas` está antes de la versión 1.0. Fijá la versión exacta y revisá el [changelog](https://github.com/LaPyme/facturas/blob/main/packages/arca/CHANGELOG.md) antes de actualizar.
-</Info>
+</div>

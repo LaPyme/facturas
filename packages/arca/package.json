@@ -1,7 +1,7 @@
 {
   "name": "facturas",
   "version": "0.17.0",
-  "description": "SDK de facturación electrónica con ARCA / AFIP para Node.js: facturas, notas de crédito y débito, y Padrón con una sola API.",
+  "description": "SDK de TypeScript para facturación electrónica con ARCA / AFIP: facturas, notas de crédito y débito, y Padrón con una sola API.",
   "type": "module",
   "license": "Apache-2.0",
   "author": "LaPyme",

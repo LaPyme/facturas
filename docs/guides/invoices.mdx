@@ -31,7 +31,7 @@ const factura = await arca.issue({
 
 ## Evitar duplicados al reintentar
 
-ARCA no recibe una clave de idempotencia como Stripe. Si la conexión se corta
+ARCA no recibe una clave de idempotencia. Si la conexión se corta
 después del envío, repetir la llamada sin guardar el intento puede duplicar la
 factura. `facturas` facilita la deduplicación con un `store`: guarda el número
 reservado, el input y el resultado. Pasale el ID estable de tu venta como
