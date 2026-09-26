@@ -758,7 +758,7 @@ function createEphemeralSessionStore(
 function toSalesPointReport(point: WsfeSalesPoint): CliSalesPointReport {
   return {
     number: point.number,
-    blocked: (point.blocked ?? "N").trim().toUpperCase().startsWith("S"),
+    blocked: point.blocked,
     ...(point.emissionType === undefined ? {} : { system: point.emissionType }),
   };
 }

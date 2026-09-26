@@ -1,7 +1,7 @@
 ---
 title: "Cliente"
 description: "Cada método de createArcaClient(), con su firma, sus opciones y lo que devuelve."
-keywords: ["createArcaClient", "issue", "preview", "recover", "issueCreditNote", "issueDebitNote", "IssueOutcome", "IssuedVoucher"]
+keywords: ["createArcaClient", "issue", "preview", "lookup", "recover", "issueCreditNote", "issueDebitNote", "IssueOutcome", "IssuedVoucher"]
 ---
 
 `createArcaClient()` devuelve el cliente. Sus métodos son la API para emitir:
@@ -16,6 +16,7 @@ reciben datos de tu negocio y devuelven el resultado fiscal ya normalizado.
 | `previewCreditNote()` | Muestra la nota de crédito, leyendo el original | [Notas de crédito](/guides/credit-notes#vista-previa-de-notas) |
 | `previewDebitNote()` | Muestra la nota de débito, leyendo el original | [Notas de crédito](/guides/credit-notes#vista-previa-de-notas) |
 | `recover()` | Concilia una reserva sin emitir | [Evitar comprobantes duplicados](/guides/avoid-duplicates) |
+| `lookup()` | Consulta un comprobante autorizado | [Consultar un comprobante](#lookup) |
 
 `client.wsfe`, `client.wsmtxca` y `client.padron` son los módulos técnicos que
 el cliente usa por debajo. Están en
@@ -68,6 +69,7 @@ llamada. Devuelve:
 | --- | --- |
 | `voucherClass` | `"A"`, `"B"` o `"C"` |
 | `voucherType` | El código de ARCA, por ejemplo `6` para Factura B |
+| `date` | La fecha del comprobante, `YYYY-MM-DD`. Es la misma que devuelve `issue()`, también cuando el input no trae `date` |
 | `header` | La [cabecera fiscal](#fiscalheader), la misma que trae un resultado autorizado |
 | `amounts` | Los [importes](#importes) que se enviarían |
 | `request` | El pedido para ARCA, sin el número de comprobante |
@@ -128,6 +130,35 @@ confirma que el número está vacío, devuelve `indeterminate` con
 con la misma clave. Si no hay reserva para esa clave, lanza `ArcaInputError`
 con `code === "ARCA_INPUT_RESERVATION_NOT_FOUND"`. `RecoveryOptions` acepta
 `representedTaxId`, `forceRefresh`, `include` y `abortSignal`.
+
+## `lookup()`
+
+```ts
+lookup(
+  voucher: { salesPoint: number; voucherType: number; number: number },
+  options?: PreviewOptions,
+): Promise<VoucherSummary | null>;
+```
+
+Consulta un comprobante autorizado por sus coordenadas, las mismas que recibe
+`for` en una nota de crédito. Solo lee: no usa el store ni reserva número.
+Devuelve `null` si ARCA no tiene ese comprobante y lanza ante cualquier otro
+error del proveedor. Con `service: "wsmtxca"` consulta WSMTXCA.
+
+El resultado es un `VoucherSummary`, el mismo que traen `originals` y un
+`conflict`: importes en centavos, fechas `YYYY-MM-DD`, y sin la respuesta cruda.
+Un campo que ARCA omite no aparece.
+
+```ts
+const comprobante = await arca.lookup({
+  salesPoint: 3,
+  voucherType: 6,
+  number: 41,
+});
+if (comprobante) {
+  console.log(comprobante.date, comprobante.totalAmount, comprobante.cae);
+}
+```
 
 ## Opciones de emisión
 

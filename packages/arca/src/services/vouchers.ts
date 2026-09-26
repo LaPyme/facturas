@@ -100,6 +100,15 @@ export type RecoveryOptions = Pick<
   "representedTaxId" | "forceRefresh" | "include" | "abortSignal"
 >;
 export type VouchersService = {
+  /**
+   * Consults one authorized voucher by its coordinates, the same shape a
+   * credit note's `for` takes. Returns `null` when ARCA has no such voucher and
+   * throws on any other provider error. Reads only: no store and no reserve.
+   */
+  lookup(
+    voucher: VoucherCoordinates,
+    options?: PreviewOptions
+  ): Promise<VoucherSummary | null>;
   /** Consults a durable reservation. Never allocates or authorizes a voucher. */
   recover<O extends RecoveryOptions = { include?: never }>(
     idempotencyKey: string,
@@ -216,6 +225,8 @@ export function createVouchersService(
     return createWsmtxcaIssuanceService(wsmtxca);
   };
   return {
+    lookup: async (voucher, options) =>
+      lookupVoucher(select(options), voucher, options ?? {}),
     recover: async (key, options) =>
       recoverOperation(
         select,
@@ -362,6 +373,7 @@ function toPreview(
   return {
     voucherClass,
     voucherType: data.voucherType,
+    date: toIsoDate(data.voucherDate) ?? data.voucherDate,
     header: fiscalHeader(data),
     amounts,
     request: options.service === "wsmtxca" ? wsmtxcaRequest(data) : data,
@@ -1517,6 +1529,66 @@ function validateFceAssociations(
 }
 
 /** One read of one original, checked against the coordinates that asked for it. */
+const LOOKUP_BOUNDS = [
+  ["salesPoint", 99_999],
+  ["voucherType", 999],
+  ["number", 99_999_999],
+] as const;
+
+async function lookupVoucher(
+  wsfe: IssueWsfeService,
+  voucher: VoucherCoordinates,
+  inputOptions: PreviewOptions
+): Promise<VoucherSummary | null> {
+  const options = cloneOptions(inputOptions);
+  assertIssueKeys(
+    options,
+    ["representedTaxId", "service", "forceRefresh", "abortSignal"],
+    "options",
+    "lookup()"
+  );
+  assertIssueObject(voucher, "voucher");
+  assertIssueKeys(
+    voucher,
+    ["salesPoint", "voucherType", "number"],
+    "voucher",
+    "lookup()"
+  );
+  for (const [field, max] of LOOKUP_BOUNDS) {
+    const value = voucher[field];
+    if (!Number.isSafeInteger(value) || value < 1 || value > max) {
+      throw new ArcaInputError(
+        `lookup() requires voucher.${field} to be an integer from 1 through ${max}.`,
+        { code: "ARCA_INPUT_INVALID_VALUE", field: `voucher.${field}` }
+      );
+    }
+  }
+  const found = await wsfe.lookupVoucher({
+    representedTaxId: options.representedTaxId,
+    forceRefresh: options.forceRefresh,
+    ...(options.abortSignal === undefined
+      ? {}
+      : { abortSignal: options.abortSignal }),
+    salesPoint: voucher.salesPoint,
+    voucherType: voucher.voucherType,
+    number: voucher.number,
+  });
+  if (found.kind === "not_found") {
+    return null;
+  }
+  if (
+    found.voucher.salesPoint !== voucher.salesPoint ||
+    found.voucher.voucherType !== voucher.voucherType ||
+    found.voucher.voucherNumber !== voucher.number
+  ) {
+    throw new ArcaServiceError(
+      "ARCA returned a voucher with other coordinates than the one requested",
+      { service: found.service, operation: found.operation }
+    );
+  }
+  return toVoucherSummary(found.voucher);
+}
+
 async function lookupOriginal(
   wsfe: IssueWsfeService,
   target: VoucherCoordinates,

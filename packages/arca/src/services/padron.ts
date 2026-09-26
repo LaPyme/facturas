@@ -16,11 +16,34 @@ export type PadronTax = {
   regime: "general" | "monotributo";
 };
 
+/** The domicilio fiscal. A field ARCA omits is absent. */
+export type PadronAddress = {
+  street?: string;
+  city?: string;
+  postalCode?: string;
+  /** ARCA's province code, the one invoices and IIBB registrations use. */
+  provinceId?: number;
+  province?: string;
+};
+
+/** One economic activity registered under a regime. */
+export type PadronActivity = {
+  /** The six-digit NAES code, zero-padded, such as `011211`. */
+  id: string;
+  description?: string;
+  /** ARCA's ordering; `1` is the main activity. */
+  order?: number;
+  /** The period the activity starts, as `YYYY-MM`. */
+  since?: string;
+  regime: "general" | "monotributo";
+};
+
 /** Result of a taxpayer lookup via Padron A5. */
 export type PadronTaxpayerResult = {
   taxId: string;
   personType?: string;
   name?: string;
+  address?: PadronAddress;
   /**
    * The receiver condition to invoice this taxpayer under, derived from its
    * active IVA registrations: 30 is responsable inscripto, 20 monotributo, 32
@@ -30,6 +53,12 @@ export type PadronTaxpayerResult = {
    */
   condition?: ReceiverCondition;
   taxes: PadronTax[];
+  activities: PadronActivity[];
+  /**
+   * The constancia's own errors, such as an unresolved domicilio. Empty when
+   * there are none. A taxpayer with errors has no `condition`.
+   */
+  errors: string[];
   raw: Record<string, unknown>;
 };
 
@@ -84,19 +113,23 @@ export function createPadronService(
       const idPersona = record.idPersona ?? datosGenerales?.idPersona;
       const tipoPersona = record.tipoPersona ?? datosGenerales?.tipoPersona;
       const taxes = extractPadronTaxes(record);
+      const errors = constanciaErrors(record);
       // A constancia with an unresolved error may be missing registrations, so
       // their absence proves nothing about the receiver's condition.
-      const condition = hasConstanciaError(record)
-        ? undefined
-        : deriveReceiverCondition(taxes);
+      const condition =
+        errors.length > 0 ? undefined : deriveReceiverCondition(taxes);
+      const address = extractPadronAddress(datosGenerales?.domicilioFiscal);
       return {
         taxId: String(idPersona ?? taxId),
         ...(tipoPersona === undefined
           ? {}
           : { personType: String(tipoPersona) }),
         ...(datosGenerales ? { name: extractPadronName(datosGenerales) } : {}),
+        ...(address === undefined ? {} : { address }),
         ...(condition === undefined ? {} : { condition }),
         taxes,
+        activities: extractPadronActivities(record),
+        errors,
         raw: record,
       };
     },
@@ -154,10 +187,6 @@ function constanciaErrors(record: Record<string, unknown>): string[] {
   );
 }
 
-function hasConstanciaError(record: Record<string, unknown>): boolean {
-  return constanciaErrors(record).length > 0;
-}
-
 function isPadronNotFound(record: Record<string, unknown>): boolean {
   return constanciaErrors(record).some((message) =>
     NOT_FOUND_PHRASES.some((phrase) => plainText(message).includes(phrase))
@@ -198,6 +227,96 @@ function extractPadronTaxes(record: Record<string, unknown>): PadronTax[] {
     }
   }
   return taxes;
+}
+
+function rowsOf(value: unknown): Record<string, unknown>[] {
+  return (Array.isArray(value) ? value : value ? [value] : []).filter(
+    (row): row is Record<string, unknown> =>
+      row !== null && typeof row === "object"
+  );
+}
+
+function extractPadronActivities(
+  record: Record<string, unknown>
+): PadronActivity[] {
+  const activities: PadronActivity[] = [];
+  const seen = new Set<string>();
+  for (const [regime, field, key] of [
+    ["general", "datosRegimenGeneral", "actividad"],
+    ["monotributo", "datosMonotributo", "actividad"],
+    ["monotributo", "datosMonotributo", "actividadMonotributista"],
+  ] as const) {
+    const bucket = record[field] as Record<string, unknown> | undefined;
+    for (const row of rowsOf(bucket?.[key])) {
+      const activity = toPadronActivity(row, regime);
+      if (activity && !seen.has(`${regime}:${activity.id}`)) {
+        seen.add(`${regime}:${activity.id}`);
+        activities.push(activity);
+      }
+    }
+  }
+  return activities;
+}
+
+// ARCA answers the NAES code as a number, which drops its leading zero.
+function toPadronActivity(
+  row: Record<string, unknown>,
+  regime: PadronActivity["regime"]
+): PadronActivity | undefined {
+  const digits = String(row.idActividad ?? "").replace(/\D/g, "");
+  if (digits === "" || Number(digits) === 0) {
+    return undefined;
+  }
+  const order = Number(row.orden);
+  const period = String(row.periodo ?? "");
+  return {
+    id: digits.padStart(6, "0"),
+    ...(typeof row.descripcionActividad === "string"
+      ? { description: row.descripcionActividad }
+      : {}),
+    ...(row.orden !== undefined && Number.isSafeInteger(order)
+      ? { order }
+      : {}),
+    ...(/^\d{6}$/.test(period)
+      ? { since: `${period.slice(0, 4)}-${period.slice(4)}` }
+      : {}),
+    regime,
+  };
+}
+
+function extractPadronAddress(value: unknown): PadronAddress | undefined {
+  if (value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const raw = value as Record<string, unknown>;
+  const provinceId =
+    raw.idProvincia === undefined || raw.idProvincia === null
+      ? Number.NaN
+      : Number(raw.idProvincia);
+  const address: PadronAddress = {
+    ...optionalText("street", raw.direccion),
+    ...optionalText("city", raw.localidad),
+    ...optionalText("postalCode", raw.codPostal),
+    ...(Number.isSafeInteger(provinceId) &&
+    String(raw.idProvincia).trim() !== ""
+      ? { provinceId }
+      : {}),
+    ...optionalText("province", raw.descripcionProvincia),
+  };
+  return Object.keys(address).length === 0 ? undefined : address;
+}
+
+function optionalText<K extends string>(
+  key: K,
+  value: unknown
+): Partial<Record<K, string>> {
+  const text =
+    typeof value === "string"
+      ? value.trim()
+      : typeof value === "number"
+        ? String(value)
+        : "";
+  return text === "" ? {} : ({ [key]: text } as Record<K, string>);
 }
 
 /** One active IVA registration decides; none is a consumidor final; two is nobody's call. */

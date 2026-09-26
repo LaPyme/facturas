@@ -216,6 +216,9 @@ const nota = await arca.issueCreditNote(
 - `issueDebitNote()` tiene el mismo contrato sin `all: true`.
 - `previewCreditNote()` y `previewDebitNote()` son asincrónicas porque
   consultan el original.
+- `arca.lookup({ salesPoint, voucherType, number })` consulta un comprobante
+  autorizado, en centavos y fechas `YYYY-MM-DD`. Devuelve `null` si ARCA no lo
+  tiene.
 - `associatedPeriod: { from, to }` en lugar de `for` ajusta un período. Es la
   alternativa cuando no hay un comprobante puntual.
 

@@ -390,23 +390,16 @@ describe("createWsmtxcaService", () => {
     const service = createWsmtxcaService(options);
 
     await expect(
-      service.getVoucher({
+      service.lookupVoucher({
         representedTaxId: "20304050607",
         voucherType: 6,
         salesPoint: 8,
         voucherNumber: 25,
       })
-    ).resolves.toEqual({
-      invoiceDate: "2026-03-01",
-      voucher: {
-        fechaEmision: "20260301",
-      },
-      messages: [],
-      raw: {
-        comprobanteResponse: {
-          fechaEmision: "20260301",
-        },
-      },
+    ).resolves.toMatchObject({
+      kind: "found",
+      service: "wsmtxca",
+      voucher: { invoiceDate: "2026-03-01" },
     });
 
     expect(options.soap.execute).toHaveBeenCalledWith({
@@ -477,7 +470,7 @@ describe("createWsmtxcaService", () => {
       salesPoint: 8,
       forceRefresh: true,
     });
-    await service.getVoucher({
+    await service.lookupVoucher({
       representedTaxId: "20304050607",
       voucherType: 6,
       salesPoint: 8,
@@ -743,7 +736,7 @@ describe("createWsmtxcaService", () => {
     });
 
     await expect(
-      service.getVoucher({
+      service.lookupVoucher({
         voucherType: 6,
         salesPoint: 8,
         voucherNumber: 25,

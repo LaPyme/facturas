@@ -340,4 +340,118 @@ describe("toArcaSafeErrorMetadata", () => {
       message: "failure",
     });
   });
+
+  it("keeps each class's typed fields and drops the private ones", async () => {
+    const { toArcaSafeErrorMetadata } = await import("./errors");
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaInputError("Bad", {
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "input.items",
+          expected: "a non-empty array",
+        })
+      )
+    ).toEqual({
+      name: "ArcaInputError",
+      message: "Bad",
+      code: "ARCA_INPUT_INVALID_VALUE",
+      field: "input.items",
+      expected: "a non-empty array",
+    });
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaAuthenticationError("Rejected", {
+          reason: "unauthorized_computer",
+          service: "wsfe",
+          operation: "FECAESolicitar",
+          providerCode: 600,
+        })
+      )
+    ).toEqual({
+      name: "ArcaAuthenticationError",
+      message: "Rejected",
+      code: "ARCA_AUTHENTICATION_ERROR",
+      reason: "unauthorized_computer",
+      service: "wsfe",
+      operation: "FECAESolicitar",
+      providerCode: 600,
+    });
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaTransportError("Unavailable", {
+          statusCode: 503,
+          contentType: "text/html",
+          responseBodyPreview: "private",
+        })
+      )
+    ).toEqual({
+      name: "ArcaTransportError",
+      message: "Unavailable",
+      code: "ARCA_TRANSPORT_ERROR",
+      statusCode: 503,
+      contentType: "text/html",
+    });
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaSoapFaultError("Fault", { faultCode: "soap:Server" })
+      )
+    ).toEqual({
+      name: "ArcaSoapFaultError",
+      message: "Fault",
+      code: "ARCA_SOAP_FAULT",
+      faultCode: "soap:Server",
+    });
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaInvalidSoapResponseError("Invalid", {
+          service: "wsmtxca",
+          operation: "consultarComprobante",
+          endpointUrl: "https://private.example",
+          statusCode: 200,
+          contentType: "text/xml",
+          responseBodyPreview: "private",
+        })
+      )
+    ).toEqual({
+      name: "ArcaInvalidSoapResponseError",
+      message: "Invalid",
+      code: "ARCA_INVALID_SOAP_RESPONSE",
+      service: "wsmtxca",
+      operation: "consultarComprobante",
+      statusCode: 200,
+      contentType: "text/xml",
+    });
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaServiceError("Rejected", {
+          serviceCode: 10_016,
+          service: "wsfe",
+          operation: "FECAESolicitar",
+          result: "R",
+          resultLevel: "detail",
+          results: { header: "R", detail: "R" },
+          cae: "74123456789012",
+          issues: [
+            {
+              service: "wsfe",
+              operation: "FECAESolicitar",
+              source: "error",
+              category: "business",
+              code: "10016",
+              message: "private",
+            },
+          ],
+        })
+      )
+    ).toEqual({
+      name: "ArcaServiceError",
+      message: "Rejected",
+      code: "ARCA_SERVICE_ERROR",
+      serviceCode: "10016",
+      service: "wsfe",
+      operation: "FECAESolicitar",
+      result: "R",
+      resultLevel: "detail",
+    });
+  });
 });

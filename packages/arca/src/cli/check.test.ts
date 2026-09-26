@@ -125,7 +125,7 @@ describe("runCheck env layer", () => {
     writeFileSync(join(directory, "arca.key"), VALID.privateKeyPem);
     const context = createContext({
       env: { ARCA_TAX_ID: "20123456786", ARCA_ENVIRONMENT: "test" },
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     const code = await run(context, {
@@ -177,7 +177,7 @@ describe("runCheck file discovery", () => {
     const context = createContext({
       env: {},
       cwd: directory,
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     await run(context, {});
@@ -221,7 +221,7 @@ describe("runCheck file discovery", () => {
     const context = createContext({
       env: {},
       cwd: directory,
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     expect(await run(context, { env: "production" })).toBe(0);
@@ -369,7 +369,7 @@ describe("runCheck certificate layer", () => {
         ARCA_CERTIFICATE_PEM: EXPIRING.certificatePem,
         ARCA_PRIVATE_KEY_PEM: EXPIRING.privateKeyPem,
       }),
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     expect(await run(context, {})).toBe(0);
@@ -571,8 +571,8 @@ describe("runCheck sales points layer", () => {
     const context = createContext({
       env: fullEnv(),
       salesPoints: [
-        { number: 3, blocked: "N", emissionType: "CAE" },
-        { number: 4, blocked: "N", emissionType: "CAE" },
+        { number: 3, blocked: false, emissionType: "CAE" },
+        { number: 4, blocked: false, emissionType: "CAE" },
       ],
     });
 
@@ -643,7 +643,7 @@ describe("runCheck sales points layer", () => {
   it("fails when the requested point is not listed", async () => {
     const context = createContext({
       env: fullEnv(),
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     expect(await run(context, { salesPoint: 9 })).toBe(1);
@@ -679,7 +679,7 @@ describe("runCheck sales points layer", () => {
   it("fails when the requested point is blocked", async () => {
     const context = createContext({
       env: fullEnv(),
-      salesPoints: [{ number: 3, blocked: "S", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: true, emissionType: "CAE" }],
     });
 
     expect(await run(context, { salesPoint: 3 })).toBe(1);
@@ -690,8 +690,8 @@ describe("runCheck sales points layer", () => {
     const context = createContext({
       env: fullEnv(),
       salesPoints: [
-        { number: 3, blocked: "N", emissionType: "CAE" },
-        { number: 4, blocked: "N", emissionType: "CAE" },
+        { number: 3, blocked: false, emissionType: "CAE" },
+        { number: 4, blocked: false, emissionType: "CAE" },
       ],
     });
 
@@ -753,7 +753,7 @@ describe("runCheck --json", () => {
   it("carries the sales points as data", async () => {
     const context = createContext({
       env: fullEnv(),
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     await runCheck(
@@ -771,7 +771,7 @@ describe("runCheck --json", () => {
   it("never prints the ticket, the certificate or the key", async () => {
     const context = createContext({
       env: fullEnv(),
-      salesPoints: [{ number: 3, blocked: "N", emissionType: "CAE" }],
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
     });
 
     await runCheck(

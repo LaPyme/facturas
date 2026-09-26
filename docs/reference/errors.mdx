@@ -59,6 +59,35 @@ crudos del proveedor ni los valores de las credenciales.
 `endpointUrl`, `statusCode`, `contentType` y una vista previa redactada del
 cuerpo, para saber qué respondió en lugar de ARCA.
 
+### Guardar un error
+
+`toArcaSafeErrorMetadata(error)` reduce cualquier error a lo que se puede
+loguear o guardar: `name`, `message`, `code` y los campos tipados de cada clase:
+
+| Clase | Campos |
+| --- | --- |
+| `ArcaInputError` | `field`, `expected` |
+| `ArcaAuthenticationError` | `reason`, `service`, `operation`, `providerCode` |
+| `ArcaTransportError` | `statusCode`, `contentType` |
+| `ArcaInvalidSoapResponseError` | `service`, `operation`, `statusCode`, `contentType` |
+| `ArcaSoapFaultError` | `faultCode` |
+| `ArcaServiceError` | `serviceCode` como string, `service`, `operation`, `result`, `resultLevel` |
+
+Nunca incluye la causa, el stack, la respuesta cruda, la vista previa del
+cuerpo, la URL del endpoint, los `issues` ni el CAE. Es el mismo `error` que
+trae `lookup.kind === "failed"` en un `indeterminate`.
+
+```ts
+import { toArcaSafeErrorMetadata } from "facturas";
+
+try {
+  await arca.issue(venta);
+} catch (error) {
+  await guardarFalla(ventaId, toArcaSafeErrorMetadata(error));
+  throw error;
+}
+```
+
 ## Códigos de `ArcaInputError`
 
 `ArcaInputError` se lanza antes de llamar a ARCA. Además del `code`, expone

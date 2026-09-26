@@ -1,5 +1,7 @@
 export type {
   CreatePadronServiceOptions,
+  PadronActivity,
+  PadronAddress,
   PadronService,
   PadronTax,
   PadronTaxIdLookupResult,

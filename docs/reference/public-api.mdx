@@ -54,8 +54,8 @@ incluye métodos de WSFE como `getVoucherTypes()`,
 ## API pública (semver)
 
 Los métodos normales de emisión cubiertos por semver son `issue`, `preview`,
-`recover`, `issueCreditNote`, `issueDebitNote`, `previewCreditNote` y
-`previewDebitNote`. Los módulos técnicos `wsfe`, `wsmtxca` y `padron` también
+`recover`, `issueCreditNote`, `issueDebitNote`, `previewCreditNote`,
+`previewDebitNote` y `lookup`. Los módulos técnicos `wsfe`, `wsmtxca` y `padron` también
 forman parte de la API pública.
 
 Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
@@ -75,6 +75,7 @@ esa misma URL en cada resultado autorizado.
 Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher`, `FiscalHeader` y `VouchersService`:
 `DebitNoteInput`, `NotePreview`, `PeriodNoteInput`, `PreviewOptions`,
+`VoucherCoordinates`, `VoucherSummary`,
 `RecoveryOptions`, `IssueRequest`, `IssuanceService`, `FceOptions`,
 `InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
 `ItemLine`, `WsmtxcaLine` y `WsmtxcaIssueRequest`. `ItemLine` es el ítem de la

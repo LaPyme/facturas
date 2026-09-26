@@ -42,6 +42,8 @@ export type ArcaClient = {
   previewCreditNote: VouchersService["previewCreditNote"];
   /** Derives a debit note; reads the original but reserves no number. */
   previewDebitNote: VouchersService["previewDebitNote"];
+  /** Consults one authorized voucher; `null` when ARCA has no such voucher. */
+  lookup: VouchersService["lookup"];
   wsfe: WsfeService;
   wsmtxca: WsmtxcaService;
   padron: PadronService;
@@ -51,8 +53,8 @@ export type ArcaClient = {
  * Creates an ARCA client from the given configuration.
  * Validates the config, wires WSAA authentication and SOAP transport,
  * and returns an object with `issue()`, `preview()`, `issueCreditNote()`,
- * `issueDebitNote()`, `previewCreditNote()`, `previewDebitNote()`, `recover()`
- * and the `.wsfe`, `.wsmtxca`, and `.padron` service modules.
+ * `issueDebitNote()`, `previewCreditNote()`, `previewDebitNote()`, `recover()`,
+ * `lookup()` and the `.wsfe`, `.wsmtxca`, and `.padron` service modules.
  *
  * @throws {ArcaConfigurationError} When the config is missing or invalid.
  */
@@ -94,6 +96,7 @@ export function createArcaClient(config: ArcaClientOptions = {}): ArcaClient {
     issueDebitNote: vouchers.issueDebitNote,
     previewCreditNote: vouchers.previewCreditNote,
     previewDebitNote: vouchers.previewDebitNote,
+    lookup: vouchers.lookup,
     wsfe,
     wsmtxca,
     padron: createPadronService({ config: normalizedConfig, auth, soap }),

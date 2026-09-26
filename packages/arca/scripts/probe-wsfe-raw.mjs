@@ -54,7 +54,7 @@ console.log(
 
 try {
   if (operation === "lookup") {
-    const result = await client.wsfe.getVoucherInfo({
+    const result = await client.wsfe.lookupVoucher({
       representedTaxId,
       salesPoint,
       voucherType,

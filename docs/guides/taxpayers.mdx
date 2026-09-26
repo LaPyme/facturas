@@ -2,7 +2,7 @@
 title: "Consultar contribuyentes"
 sidebarTitle: "Padrón"
 description: "Consultá el Padrón de ARCA para saber a quién facturás y con qué condición de IVA."
-keywords: ["Padrón", "constancia de inscripción", "condición de IVA", "CUIT", "DNI", "A5", "A13"]
+keywords: ["Padrón", "constancia de inscripción", "condición de IVA", "domicilio fiscal", "actividades", "CUIT", "DNI", "A5", "A13"]
 ---
 
 Antes de emitir una factura a una empresa necesitás su condición frente al
@@ -59,12 +59,30 @@ explica [Errores](/reference/errors).
 | `taxId` | El CUIT, como string de 11 dígitos |
 | `personType` | `FISICA` o `JURIDICA`, cuando ARCA lo informa |
 | `name` | La razón social, o el apellido y nombre de una persona física |
+| `address` | El domicilio fiscal: `street`, `city`, `postalCode`, `provinceId` y `province`. Cada campo aparece solo si ARCA lo informa |
 | `condition` | La condición de receptor para `to.condition`, cuando se puede decidir |
 | `taxes` | Cada impuesto informado, con `id`, `description`, `state` y `regime` |
+| `activities` | Cada actividad económica, con `id`, `description`, `order`, `since` y `regime` |
+| `errors` | Los errores de la constancia, como un domicilio sin resolver. Vacío si no hay |
 | `raw` | La respuesta completa de ARCA, para lo que el SDK no normaliza |
 
 Devuelve `null` cuando ARCA dice que el CUIT no existe. Cualquier otro error
 del servicio se lanza.
+
+`provinceId` es el código de provincia de ARCA, donde `0` es la Ciudad de
+Buenos Aires. El `id` de una actividad es el código NAES de seis dígitos, como string y
+con ceros a la izquierda, por ejemplo `"011211"`. `order` `1` es la actividad
+principal y `since` es el período de alta, `YYYY-MM`. Una actividad inscripta a
+la vez en `actividad` y `actividadMonotributista` aparece una sola vez.
+
+```ts
+const contribuyente = await arca.padron.getTaxpayerDetails("20123456786");
+
+if (contribuyente?.errors.length) {
+  console.warn(contribuyente.errors.join(", "));
+}
+console.log(contribuyente?.address?.city, contribuyente?.activities[0]?.id);
+```
 
 ### Cómo se decide `condition`
 
@@ -81,9 +99,9 @@ del servicio se lanza.
 `condition` no viene en dos casos: cuando las inscripciones se contradicen, por
 ejemplo dos de la tabla activas a la vez, y cuando la constancia trae un error
 distinto de "no existe". En ese último caso a la respuesta le pueden faltar
-inscripciones, así que su ausencia no prueba nada. Las dos veces el SDK no
-adivina, y la decisión queda en tu aplicación: pedísela al cliente o revisá
-`taxes` y `raw`.
+inscripciones, así que su ausencia no prueba nada, y el error viene en `errors`.
+Las dos veces el SDK no adivina, y la decisión queda en tu aplicación: pedísela
+al cliente o revisá `taxes` y `raw`.
 
 ## Buscar el CUIT por documento
 

@@ -457,7 +457,7 @@ function createContext(options: {
   cwd?: string;
   bare?: boolean;
   outcome?: IssueOutcome;
-  salesPoints?: { number: number; blocked: string; emissionType: string }[];
+  salesPoints?: { number: number; blocked: boolean; emissionType: string }[];
   salesPointsError?: unknown;
   /** What `client.issue` rejects with, once the layers have all passed. */
   issueError?: unknown;
@@ -534,7 +534,7 @@ function createContext(options: {
             options.salesPointsError === undefined
               ? Promise.resolve(
                   options.salesPoints ?? [
-                    { number: 3, blocked: "N", emissionType: "CAE" },
+                    { number: 3, blocked: false, emissionType: "CAE" },
                   ]
                 )
               : Promise.reject(options.salesPointsError),
