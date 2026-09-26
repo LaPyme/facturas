@@ -1,5 +1,21 @@
 # facturas
 
+## 0.17.0
+
+### Minor Changes
+
+- e498ac2: Tidy the public surface before launch.
+  
+  - The WSFE catalog methods (`getSalesPoints()`, `getVoucherTypes()`, `getDocumentTypes()` and the rest) and `wsmtxca.getSalesPoints()` take their options argument optionally, so `client.wsfe.getSalesPoints()` type-checks.
+  - The CLI takes `--cuit` in every command. `check` and `issue` no longer accept `--tax-id`.
+  - `ArcaFiscalService` is gone. Use `IssuanceService`, the same `"wsfe" | "wsmtxca"` union.
+  - `WsfeAuthorizeVoucherInput` and `WsmtxcaAuthorizeVoucherInput` are now `WsfeIssueInput` and `WsmtxcaIssueInput`, after the `issue()` method they feed.
+  - `resolveArcaEnvironment()` is removed. Pass `"test"` or `"production"` directly.
+
+### Patch Changes
+
+- d3c8ecd: Point the README links at facturas-sdk.dev, fill in the package homepage, author and keywords, and document every error code, including `ArcaInvalidSoapResponseError` and the `ArcaInputError` codes.
+
 ## 0.16.1
 
 ### Patch Changes
