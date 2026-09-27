@@ -39,6 +39,10 @@ export async function issueDetailedInvoice(
         quantity: 1,
         unit: 7,
         unitPrice: "100.000000",
+        // El GTIN del producto. Lo que no tiene GTIN usa un código genérico
+        // de ARCA_WSMTXCA_GENERIC_CODES; este es "Ventas varias".
+        matrixCode: "7790001001054",
+        matrixUnits: 1,
       },
     ],
   } satisfies IssueInput;

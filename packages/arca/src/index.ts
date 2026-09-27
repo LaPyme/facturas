@@ -18,6 +18,7 @@ export {
   ARCA_INVOICE_CLASS_BY_ISSUER,
   ARCA_ISSUER_CONDITION_IDS,
   ARCA_RECEIVER_CONDITION_IDS,
+  ARCA_WSMTXCA_GENERIC_CODES,
 } from "./constants";
 export type {
   ArcaAuthenticationErrorOptions,

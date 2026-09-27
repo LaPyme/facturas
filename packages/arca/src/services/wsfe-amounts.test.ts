@@ -320,6 +320,8 @@ const LINE = {
   quantity: 2,
   unit: 7,
   unitPrice: "50.000000",
+  matrixCode: "7790001001054",
+  matrixUnits: 2,
 };
 const withLines = <T extends object>(items: readonly T[]) =>
   items.map((item) => ({ ...LINE, ...item }));
@@ -429,6 +431,8 @@ describe("WSMTXCA lines derived from the same items", () => {
       quantity: 1,
       unit: 7,
       unitPrice: "100.02",
+      matrixCode: "7790001001054",
+      matrixUnits: 1,
       net: 10_002,
       vat: 21 as const,
     }));
@@ -447,6 +451,8 @@ describe("WSMTXCA lines derived from the same items", () => {
       quantity: 1,
       unit: 7,
       unitPrice: "0.016529",
+      matrixCode: "7790001001054",
+      matrixUnits: 1,
       gross: 2,
       vat: 21 as const,
     }));
@@ -523,6 +529,15 @@ describe("WSMTXCA lines derived from the same items", () => {
         vatCondition: 3,
       },
     ]);
+  });
+  it.each([97, 99])("lets unit %i omit the matrix fields", (unit) => {
+    const { matrixCode: _code, matrixUnits: _units, ...line } = LINE;
+    expect(() =>
+      deriveWsmtxcaLines(
+        { voucherClass: "C", items: [{ ...line, unit, amount: 100 }] },
+        0
+      )
+    ).not.toThrow();
   });
   it.each([
     ["items[1].description", { description: "" }],

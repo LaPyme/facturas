@@ -33,5 +33,9 @@ describe("barrel exports", () => {
     expect(constantsBarrel.ARCA_VAT_RATES.IVA_21).toBe(5);
     expect(constantsBarrel.ISO_CURRENCIES.ARS).toBe("ARS");
     expect(constantsBarrel.ARCA_CURRENCY_IDS.USD).toBe("DOL");
+    expect(arca.ARCA_WSMTXCA_GENERIC_CODES).toBe(
+      constantsBarrel.ARCA_WSMTXCA_GENERIC_CODES
+    );
+    expect(Object.keys(arca.ARCA_WSMTXCA_GENERIC_CODES)).toHaveLength(13);
   });
 });

@@ -1,3 +1,4 @@
+import { ARCA_DOCUMENT_TYPES } from "../constants";
 import { ArcaError, ArcaInputError } from "../errors";
 import {
   isWithinArcaTolerance,
@@ -53,7 +54,31 @@ const iso = (value: string | undefined) => {
   return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
 };
 
+/** Rule 100: WSMTXCA authorizes classes A and B only, never class C. */
+const WSMTXCA_VOUCHER_TYPES = new Set([
+  1, 2, 3, 6, 7, 8, 51, 52, 53, 201, 202, 203, 206, 207, 208,
+]);
+
+/**
+ * Rules 108 and 128: an unidentified receiver sends neither field. The keys
+ * stay, undefined, so the consultation match still checks ARCA sent none.
+ */
+function wsmtxcaReceiverDocument(data: FiscalHeader) {
+  const unidentified =
+    data.documentType === ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL;
+  return {
+    codigoTipoDocumento: unidentified ? undefined : data.documentType,
+    numeroDocumento: unidentified ? undefined : data.documentNumber,
+  };
+}
+
 export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
+  if (!WSMTXCA_VOUCHER_TYPES.has(data.voucherType)) {
+    invalid(
+      "voucherType",
+      "WSMTXCA authorizes class A and B vouchers only; issue class C through WSFE"
+    );
+  }
   const legacy = data.details !== undefined;
   const authorized = data.authorizedLines !== undefined;
   const lines = data.lines ?? data.authorizedLines ?? data.details;
@@ -112,8 +137,7 @@ export function wsmtxcaRequest(data: FiscalHeader, number?: number) {
       numeroPuntoVenta: data.salesPoint,
       ...(number === undefined ? {} : { numeroComprobante: number }),
       fechaEmision: iso(data.voucherDate),
-      codigoTipoDocumento: data.documentType,
-      numeroDocumento: data.documentNumber,
+      ...wsmtxcaReceiverDocument(data),
       condicionIVAReceptor: data.receiverVatConditionId,
       importeGravado: data.netAmount,
       importeNoGravado: data.nonTaxableAmount,
@@ -328,7 +352,7 @@ export function matchWsmtxcaDetails(
     const expected = request[key];
     const actual = raw[key];
     if (expected === undefined) {
-      if (!emptyWire(actual)) {
+      if (!(emptyWire(actual) || unidentifiedEcho(data, key, actual))) {
         return "conflict";
       }
       continue;
@@ -343,6 +367,23 @@ export function matchWsmtxcaDetails(
     missing ||= result === "incomplete";
   }
   return missing ? "incomplete" : "match";
+}
+/**
+ * An omitted receiver document may come back as ARCA's own 99/0 for an
+ * unidentified receiver. Any other document is a different voucher.
+ */
+function unidentifiedEcho(
+  data: FiscalHeader,
+  key: string,
+  actual: unknown
+): boolean {
+  if (data.documentType !== ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL) {
+    return false;
+  }
+  if (key === "codigoTipoDocumento") {
+    return String(actual) === String(ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL);
+  }
+  return key === "numeroDocumento" && String(actual) === "0";
 }
 function emptyWire(value: unknown): boolean {
   return (

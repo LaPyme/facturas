@@ -19,6 +19,29 @@ export const ARCA_DOCUMENT_TYPES = {
 } as const;
 
 /**
+ * ARCA's generic WSMTXCA item codes, keyed by the `matrixCode` to send.
+ * RG 2904, Anexo VII: for concepts outside the issuer's main line of goods,
+ * which carry their GTIN instead. Samples and promotional material use
+ * `7790001001054` (Ventas varias).
+ * https://www.afip.gob.ar/fe/documentos/codigosGenericosYEspecificos.xls
+ */
+export const ARCA_WSMTXCA_GENERIC_CODES = {
+  "7790001001030": "Descuentos y bonificaciones comerciales",
+  "7790001001047": "Conceptos financieros",
+  "7790001001054": "Ventas varias",
+  "7790001001061": "Bienes de uso",
+  "7790001001078": "Servicios prestados",
+  "7790001001085": "Fletes",
+  "7790001001092": "Alquileres",
+  "7790001001115": "Depósito y servicios de logística",
+  "7790001001122": "Repuestos y accesorios",
+  "7790001001139": "Ajustes impositivos",
+  "7790001001146": "Actividades comerciales no codificadas",
+  "7790001001153": "Venta de material de rezago",
+  "7790001001856": "Anticipos y señas",
+} as const;
+
+/**
  * Common receiver IVA condition identifiers used by WSFE.
  * Allowed values depend on the voucher class and ARCA's live catalog.
  */

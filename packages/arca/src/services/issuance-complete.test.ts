@@ -565,6 +565,8 @@ const line = {
   quantity: 1,
   unit: 7,
   unitPrice: "100.000000",
+  matrixCode: "7790001001054",
+  matrixUnits: 1,
 };
 const detailed: IssueInput = {
   ...invoice,
@@ -1019,6 +1021,124 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       recoveredByMatch: true,
     });
   });
+  it("omits an unidentified receiver's document and recovers either echo", async () => {
+    const { client, soap, vouchers, calls } = transportFixture();
+    const input: IssueInput = {
+      ...invoice,
+      to: { condition: "consumidor_final" },
+      items: [{ ...line, gross: 12_100, vat: 21 }],
+    };
+    const options = { service: "wsmtxca" as const, idempotencyKey: "cf" };
+    const preview = client.preview(input, { service: "wsmtxca" });
+    expect(preview.header).toMatchObject({
+      documentType: 99,
+      documentNumber: "0",
+    });
+    const request = preview.request.comprobanteCAERequest;
+    expect(request.codigoTipoDocumento).toBeUndefined();
+    expect(request.numeroDocumento).toBeUndefined();
+    expect(await client.issue(input, options)).toMatchObject({
+      kind: "authorized",
+      voucher: { voucherType: 6, header: preview.header },
+    });
+    const sent = soap.execute.mock.calls.find(
+      ([arg]) => arg.operation === "autorizarComprobante"
+    )?.[0].body.comprobanteCAERequest;
+    expect(sent.codigoTipoDocumento).toBeUndefined();
+    expect(sent.numeroDocumento).toBeUndefined();
+    expect(await client.recover("cf")).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { header: preview.header },
+    });
+    const raw = vouchers.get(6) as Record<string, unknown>;
+    raw.codigoTipoDocumento = 99;
+    raw.numeroDocumento = "0";
+    expect(await client.recover("cf")).toMatchObject({ kind: "authorized" });
+    raw.codigoTipoDocumento = 96;
+    raw.numeroDocumento = "11111111";
+    expect(await client.recover("cf")).toMatchObject({ kind: "conflict" });
+    expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
+  });
+  it("credits a WSMTXCA original that carries no receiver document", async () => {
+    const { client, soap } = transportFixture();
+    const options = { service: "wsmtxca" as const };
+    await client.issue(
+      {
+        ...invoice,
+        to: { condition: "consumidor_final" },
+        items: [{ ...line, gross: 12_100, vat: 21 }],
+      },
+      options
+    );
+    const note = await client.issueCreditNote(
+      { for: { salesPoint: 1, voucherType: 6, number: 9 }, all: true },
+      options
+    );
+    expect(note).toMatchObject({
+      kind: "authorized",
+      voucher: {
+        voucherType: 8,
+        header: { documentType: 99, documentNumber: "0" },
+      },
+    });
+    const sent = soap.execute.mock.calls
+      .filter(([arg]) => arg.operation === "autorizarComprobante")
+      .at(-1)?.[0].body.comprobanteCAERequest;
+    expect(sent.codigoTipoComprobante).toBe(8);
+    expect(sent.codigoTipoDocumento).toBeUndefined();
+  });
+  it("recovers a v2 record whose unidentified receiver was sent as 99/0", async () => {
+    const { client, store, vouchers, calls } = transportFixture();
+    const input: IssueInput = {
+      ...invoice,
+      to: { condition: "consumidor_final" },
+      items: [{ ...line, gross: 12_100, vat: 21 }],
+    };
+    const derived = deriveWsfeInvoice(input).data;
+    const key = attemptKey("test", "20123456789", "legacy-cf");
+    const json = JSON.stringify({
+      ...legacyWsmtxcaRecord(),
+      voucherType: 6,
+      sent: {
+        ...derived,
+        details: [{ ...line, amount: 12_100, vatCondition: 5 }],
+      },
+    });
+    await store.set(key, json);
+    const found = structuredClone(
+      client.preview(input, { service: "wsmtxca" }).request
+        .comprobanteCAERequest
+    ) as Record<string, unknown>;
+    found.numeroComprobante = 9;
+    found.codigoTipoDocumento = 99;
+    found.numeroDocumento = 0;
+    vouchers.set(6, found);
+    expect(
+      await client.recover("legacy-cf", { include: { request: true } })
+    ).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { header: { documentType: 99, documentNumber: "0" } },
+    });
+    expect(calls).toEqual(["consultarComprobante"]);
+    expect(await store.get(key)).toBe(json);
+  });
+  it("refuses class C through WSMTXCA before any call", async () => {
+    const { client, calls } = transportFixture();
+    const input: IssueInput = {
+      ...invoice,
+      issuer: "monotributo",
+      items: [{ ...line, amount: 10_000 }],
+    };
+    expect(() => client.preview(input, { service: "wsmtxca" })).toThrowError(
+      expect.objectContaining({ name: "ArcaInputError", field: "voucherType" })
+    );
+    await expect(
+      client.issue(input, { service: "wsmtxca" })
+    ).rejects.toMatchObject({ name: "ArcaInputError", field: "voucherType" });
+    expect(calls).toEqual([]);
+  });
   it("returns uncertainty for incomplete consultation and never reissues", async () => {
     const { client, vouchers, calls } = transportFixture();
     const options = { service: "wsmtxca" as const, idempotencyKey: "invoice" };
@@ -1035,6 +1155,14 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     ["items[0].unit", { unit: 1.5 }],
     ["items[0].unitPrice", { unitPrice: "100.0000001" }],
     ["items[0].unitPrice", { unitPrice: undefined }],
+    ["items[0].code", { code: "x".repeat(51) }],
+    ["items[0].matrixCode", { matrixCode: undefined, matrixUnits: undefined }],
+    ["items[0].matrixCode", { matrixCode: undefined }],
+    ["items[0].matrixCode", { matrixCode: " " }],
+    ["items[0].matrixUnits", { matrixUnits: undefined }],
+    ["items[0].matrixUnits", { matrixUnits: 0 }],
+    ["items[0].matrixUnits", { matrixUnits: 1.5 }],
+    ["items[0].matrixUnits", { matrixUnits: 1_000_000 }],
   ])(
     "names %s when WSMTXCA line detail is missing or invalid",
     async (field, change) => {

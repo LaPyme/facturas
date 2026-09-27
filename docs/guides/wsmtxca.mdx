@@ -32,12 +32,32 @@ como el del resultado son de WSMTXCA, sin casts.
 ## Detalle de ítems
 
 El detalle vive en los mismos `items`. Además de la plata, `net` o `gross` con
-`vat`, o `amount` en clase C, cada ítem puede llevar `description`, `quantity`,
-`unit`, `unitPrice` y, opcionalmente, `discount`, `code`, `matrixCode` y
-`matrixUnits`. `{ service: "wsmtxca" }` necesita `description`, `quantity`,
-`unit` y `unitPrice` en todos los ítems. Si falta alguno, se lanza
-`ArcaInputError` con el índice del ítem y el campo. La emisión predeterminada
-ignora estos campos y arma la cabecera fiscal.
+`vat`, cada ítem lleva `description`, `quantity`, `unit`, `unitPrice`,
+`matrixCode` y `matrixUnits`, y opcionalmente `discount` y `code`.
+`{ service: "wsmtxca" }` exige esos campos en todos los ítems. Si falta alguno
+o no cumple las reglas de ARCA, se lanza `ArcaInputError` con el índice del
+ítem y el campo, antes de cualquier llamada. La emisión predeterminada ignora
+estos campos y arma la cabecera fiscal.
+
+| Campo | Regla |
+| --- | --- |
+| `matrixCode` | El GTIN del producto. Obligatorio salvo que `unit` sea 97 o 99 |
+| `matrixUnits` | Unidades enteras del GTIN, de 1 a 999999. Va siempre junto con `matrixCode` |
+| `code` | Tu código interno, texto libre de hasta 50 caracteres. ARCA no lo valida |
+
+Lo que no tiene GTIN porque no es parte de la mercadería que vendés
+habitualmente, como fletes, servicios, alquileres o muestras, usa uno de los
+códigos genéricos de ARCA. `ARCA_WSMTXCA_GENERIC_CODES` los lista con su
+descripción:
+
+```ts
+import { ARCA_WSMTXCA_GENERIC_CODES } from "facturas";
+
+ARCA_WSMTXCA_GENERIC_CODES["7790001001085"]; // "Fletes"
+```
+
+Un GTIN que ARCA no tiene registrado no rechaza el comprobante: lo autoriza
+con una observación.
 
 Este bloque sale de
 [examples/emision-completa.ts](https://github.com/LaPyme/facturas/blob/main/examples/emision-completa.ts):
@@ -55,14 +75,18 @@ const input = {
       quantity: 1,
       unit: 7,
       unitPrice: "100.000000",
+      // El GTIN del producto. Lo que no tiene GTIN usa un código genérico
+      // de ARCA_WSMTXCA_GENERIC_CODES; este es "Ventas varias".
+      matrixCode: "7790001001054",
+      matrixUnits: 1,
     },
   ],
 } satisfies IssueInput;
 ```
 
 El SDK deriva de ahí las filas del servicio: la condición de IVA sale de la
-alícuota del ítem (21 → 5, 10,5 → 4, 0 → 3, 2,5 → 9, 5 → 8, 27 → 6, exento → 2,
-no gravado → 1, y clase C → 3), el importe del ítem incluye el IVA, y un ítem
+alícuota del ítem (21 → 5, 10,5 → 4, 0 → 3, 2,5 → 9, 5 → 8, 27 → 6, exento → 2
+y no gravado → 1), el importe del ítem incluye el IVA, y un ítem
 de clase A además informa su importe de IVA. Como la cabecera y las líneas
 salen de los mismos ítems, no hay dos descripciones de la misma plata que
 puedan discrepar: el IVA por línea se concilia con el redondeo agrupado por
@@ -79,6 +103,19 @@ centavos.
 
 El SDK arma las dos codificaciones que requiere ARCA. La aplicación no construye
 listas SOAP.
+
+## Clases y receptor
+
+WSMTXCA autoriza solo comprobantes de clase A y B, incluidas las facturas con
+leyenda de retención y las FCE. Un comprobante de clase C con
+`{ service: "wsmtxca" }` se rechaza con `ArcaInputError` en `voucherType`
+antes de cualquier llamada. Emitilo por WSFE.
+
+Un consumidor final sin identificar no lleva documento: el SDK no envía
+`codigoTipoDocumento` ni `numeroDocumento`, como pide ARCA. La cabecera del
+resultado igual lo informa como `documentType: 99` y `documentNumber: "0"`,
+igual que en WSFE, y el QR usa esos valores. Si el importe llega al umbral de
+identificación, el receptor necesita `cuit` o `dni`, igual que en WSFE.
 
 ## Previsualizar
 

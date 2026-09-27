@@ -121,3 +121,40 @@ voucher date against the day of submission in Argentina before any I/O.
 Not checked locally: the date must be on or after the last voucher of the same
 type and sales point (WSFE 10016, WSMTXCA 104), and an FCE note on or after its
 associated invoice. Both need a provider read, and ARCA stays authoritative.
+
+## WSMTXCA
+
+- [Linked official manual](https://www.arca.gob.ar/fe/ayuda/documentos/wsmtxca-RG-2904.pdf).
+- Version: 0.25.8.
+- Retrieved: 2026-09-27.
+- SHA-256: `8dbb73ea4c8d201a73c62e19759bb440801c168f04365261d9b207cf1a1eaaf4`.
+
+The PDF is not committed. Verify a downloaded copy against the checksum above.
+No homologation run backs these rows; they come from the manual alone.
+
+| Rule | Physical PDF pages | Contract |
+| --- | --- | --- |
+| 100 | 38 | Voucher types 1, 2, 3, 6, 7, 8, 51, 52, 53, 201-203 and 206-208 only. Class C goes through WSFE. |
+| 108 | 40 | `codigoTipoDocumento` and `numeroDocumento` travel together or not at all. |
+| 128 / 129 | 44 | The receiver document is optional. It is required for class A, retention-legend and FCE types, which also require document type 80, and for 6, 7 and 8 at or above the RG 4444 amount. The SDK omits both fields for document type 99 and reads an omitted document back as 99/0. |
+| 500 / 503 | 63-64 | `unidadesMtx` and `codigoMtx` are required unless `codigoUnidadMedida` is 97 or 99. |
+| 501 / 502 | 64 | `unidadesMtx` is a whole number from 1 with at most six digits. |
+| 504 | 63 | An unregistered GTIN in `codigoMtx` is an observation, not a rejection. |
+| 505 | 64 | `codigo` is optional, at most 50 characters. |
+| 520 | 66 | `unidadesMtx` and `codigoMtx` travel together. |
+
+The SDK derives no synthetic lines: the VAT adjustment is absorbed by the
+caller's lines, so the ajuste IVA code rule does not apply.
+
+### Generic item codes
+
+- [Official list](https://www.afip.gob.ar/fe/documentos/codigosGenericosYEspecificos.xls),
+  section "B - CÓDIGOS GENÉRICOS", 13 codes.
+- Retrieved: 2026-09-27.
+- SHA-256: `1e5cead89fe9c9fdc1b9fb9a6da121d7c28eec56fdb33597d6777f74268c9522`.
+- [RG 2904, Anexo VII](https://www.afip.gob.ar/fe/regimenes-especiales/autorizacion.asp):
+  generic codes are for concepts outside the issuer's main line of goods;
+  samples and promotional material use Ventas varias.
+
+`ARCA_WSMTXCA_GENERIC_CODES` mirrors section B. Section C lists
+sector-specific codes, which the SDK does not ship.

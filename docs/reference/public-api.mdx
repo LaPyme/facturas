@@ -80,7 +80,8 @@ Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 `InvoiceFamily`, `IssuanceFields`, `Tribute`, `VoucherAmounts`,
 `ItemLine`, `WsmtxcaLine` y `WsmtxcaIssueRequest`. `ItemLine` es el ítem de la
 fachada, con su plata y el detalle de línea que usa WSMTXCA. `WsmtxcaLine` es
-la fila que devuelven las consultas de WSMTXCA.
+la fila que devuelven las consultas de WSMTXCA. `ARCA_WSMTXCA_GENERIC_CODES`
+lista los códigos genéricos de ARCA para `matrixCode`, con su descripción.
 
 `include: { rawResponse: true, request: true }` agrega la respuesta cruda de
 ARCA y el request fiscal a cualquiera de los cuatro resultados, y

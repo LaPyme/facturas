@@ -1,4 +1,8 @@
-import type { ReceiverCondition, VoucherClass } from "../constants";
+import {
+  ARCA_DOCUMENT_TYPES,
+  type ReceiverCondition,
+  type VoucherClass,
+} from "../constants";
 import { ArcaInputError } from "../errors";
 import {
   assertArcaMinorUnits,
@@ -103,6 +107,29 @@ function invalid(reason: string): never {
     code: "ARCA_INPUT_INVALID_VALUE",
   });
 }
+/**
+ * WSMTXCA omits the document of an unidentified receiver, so an original
+ * with neither field is the 99/0 receiver WSFE would have reported.
+ */
+function originalReceiverDocument(original: WsfeVoucherInfo): {
+  documentType: number;
+  documentNumber: number;
+} {
+  if (
+    original.documentType === undefined &&
+    original.documentNumber === undefined
+  ) {
+    return {
+      documentType: ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL,
+      documentNumber: 0,
+    };
+  }
+  return {
+    documentType: required(original.documentType, "documentType"),
+    documentNumber: Number(required(original.documentNumber, "documentNumber")),
+  };
+}
+
 function required<T>(value: T | undefined, field: string): T {
   if (value === undefined || value === null) {
     invalid(`original is missing ${field}`);
@@ -369,8 +396,7 @@ function prepareOneCreditNote(
     salesPoint: input.salesPoint ?? required(original.salesPoint, "salesPoint"),
     voucherType: note.voucherType,
     concept: required(original.concept, "concept"),
-    documentType: required(original.documentType, "documentType"),
-    documentNumber: Number(required(original.documentNumber, "documentNumber")),
+    ...originalReceiverDocument(original),
     receiverVatConditionId: resolveReceiverCondition(original, input),
     currencyId: required(original.currencyId, "currencyId"),
     ...(original.sameCurrencyForeignCancellation === undefined
