@@ -134,7 +134,9 @@ No homologation run backs these rows; they come from the manual alone.
 
 | Rule | Physical PDF pages | Contract |
 | --- | --- | --- |
+| 10010 | 37 | The issuer must be registered in Codificación de Productos, opción Factura con Detalle. |
 | 100 | 38 | Voucher types 1, 2, 3, 6, 7, 8, 51, 52, 53, 201-203 and 206-208 only. Class C goes through WSFE. |
+| 101 | 39 | The sales point must be of the "CAE Codificación de Productos - Web Services" type and not blocked. |
 | 108 | 40 | `codigoTipoDocumento` and `numeroDocumento` travel together or not at all. |
 | 128 / 129 | 44 | The receiver document is optional. It is required for class A, retention-legend and FCE types, which also require document type 80, and for 6, 7 and 8 at or above the RG 4444 amount. The SDK omits both fields for document type 99 and reads an omitted document back as 99/0. |
 | 500 / 503 | 63-64 | `unidadesMtx` and `codigoMtx` are required unless `codigoUnidadMedida` is 97 or 99. |
@@ -142,6 +144,10 @@ No homologation run backs these rows; they come from the manual alone.
 | 504 | 63 | An unregistered GTIN in `codigoMtx` is an observation, not a rejection. |
 | 505 | 64 | `codigo` is optional, at most 50 characters. |
 | 520 | 66 | `unidadesMtx` and `codigoMtx` travel together. |
+
+With WSFE rule 10005 (v4.7, physical page 40: the sales point must be of the
+RECE type), rules 10010 and 101 make the sales point's type decide the
+service, which is what the WSMTXCA guide documents.
 
 The SDK derives no synthetic lines: the VAT adjustment is absorbed by the
 caller's lines, so the ajuste IVA code rule does not apply.

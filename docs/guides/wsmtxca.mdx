@@ -13,6 +13,24 @@ funcionalidad. Es un servicio específico de ARCA que lleva el detalle de cada
 La API de negocio no cambia. Seguís usando `issue()`, `issueCreditNote()`,
 `issueDebitNote()` y las vistas previas.
 
+## Cuándo corresponde
+
+Lo define el alta en ARCA, no el comprobante. WSMTXCA autoriza solo si el
+contribuyente está empadronado en Codificación de Productos, opción Factura con
+Detalle, y el punto de venta es del tipo "Codificación de Productos - Web
+Services" y no está bloqueado. WSFE, el servicio por defecto, rechaza un punto
+de venta que no sea del tipo RECE. Cada punto de venta pertenece entonces a un
+solo servicio:
+
+| Tipo del punto de venta en ARCA | Servicio |
+| --- | --- |
+| RECE para aplicativo y web services | WSFE, sin `service` |
+| Codificación de Productos - Web Services | `{ service: "wsmtxca" }` |
+
+`client.wsmtxca.getSalesPoints()` lista los puntos de venta habilitados para
+WSMTXCA. Un comprobante enviado por el servicio que no corresponde vuelve
+`rejected`: WSFE lo rechaza con 10005 y WSMTXCA con 10010 o 101.
+
 ## Indicar el servicio requerido
 
 La selección es explícita y se pasa en el segundo argumento. El SDK no detecta

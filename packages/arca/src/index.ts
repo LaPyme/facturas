@@ -10,6 +10,7 @@ export {
 } from "./config";
 export type {
   IssuerCondition,
+  IssuerConditionId,
   ReceiverCondition,
   VoucherClass,
 } from "./constants";
@@ -26,6 +27,7 @@ export type {
   ArcaInputErrorCode,
   ArcaInputErrorOptions,
   ArcaSafeErrorMetadata,
+  VoucherDateWindow,
 } from "./errors";
 export {
   ArcaAuthenticationError,
@@ -55,7 +57,9 @@ export type {
   IssuanceFields,
   Tribute,
   VoucherAmounts,
+  VoucherTypeInfo,
 } from "./services/issuance-fields";
+export { describeVoucherType } from "./services/issuance-fields";
 export type {
   WsmtxcaIssueRequest,
   WsmtxcaLine,
@@ -121,7 +125,13 @@ export type {
   VatRate,
 } from "./services/wsfe-amounts";
 export type { CreditNoteInput } from "./services/wsfe-credit-note";
-export type { IssueCommon, IssueInput, Receiver } from "./services/wsfe-derive";
+export type {
+  IssueCommon,
+  IssueInput,
+  Receiver,
+  VoucherDateWindowInput,
+} from "./services/wsfe-derive";
+export { voucherDateWindow } from "./services/wsfe-derive";
 export type {
   VoucherCoordinates,
   VoucherSummary,

@@ -66,7 +66,7 @@ loguear o guardar: `name`, `message`, `code` y los campos tipados de cada clase:
 
 | Clase | Campos |
 | --- | --- |
-| `ArcaInputError` | `field`, `expected` |
+| `ArcaInputError` | `field`, `expected`, `window` |
 | `ArcaAuthenticationError` | `reason`, `service`, `operation`, `providerCode` |
 | `ArcaTransportError` | `statusCode`, `contentType` |
 | `ArcaInvalidSoapResponseError` | `service`, `operation`, `statusCode`, `contentType` |
@@ -92,13 +92,23 @@ try {
 
 `ArcaInputError` se lanza antes de llamar a ARCA. Además del `code`, expone
 `field` con el campo que falló y, cuando aplica, `expected` con lo que el SDK
-esperaba.
+esperaba. Con `ARCA_INPUT_DATE_OUTSIDE_WINDOW` trae también
+`window: { from, to }`, las fechas que ARCA acepta ese día en `YYYY-MM-DD`.
+
+Desde `issue()`, `issueCreditNote()` o `issueDebitNote()`, un `ArcaInputError`
+garantiza que esa llamada no envió ningún pedido de autorización: ARCA no emitió
+nada por ella. Pudo haber hecho consultas antes, como leer el comprobante
+original de una nota, pero no reservó la `idempotencyKey`, así que corregís el
+input y reintentás con la misma clave. La excepción es
+`ARCA_INPUT_IDEMPOTENCY_MISMATCH`: esta llamada tampoco envió nada, pero la
+clave ya pertenece a otra que sí pudo haber emitido.
 
 | `code` | Cuándo |
 | --- | --- |
 | `ARCA_INPUT_IDEMPOTENCY_MISMATCH` | La clave de idempotencia ya se usó con otro input, otra operación u otro contribuyente representado |
 | `ARCA_INPUT_RESERVATION_NOT_FOUND` | `recover()` recibió una clave sin reserva guardada |
 | `ARCA_INPUT_INVALID_DATE` | Una fecha no tiene formato `YYYY-MM-DD` o no existe en el calendario |
+| `ARCA_INPUT_DATE_OUTSIDE_WINDOW` | La fecha del comprobante cae fuera de la [ventana que acepta ARCA](/guides/invoices#datos-de-la-factura) el día del envío |
 | `ARCA_INPUT_INVALID_AMOUNT` | Un importe no es un entero no negativo en centavos o supera el límite de ARCA |
 | `ARCA_INPUT_AMOUNT_PRECISION` | Un importe tiene más decimales de los que admite su campo en ARCA |
 | `ARCA_INPUT_AMOUNT_MISMATCH` | El total no concilia con los ítems y el IVA dentro de la tolerancia de ARCA |

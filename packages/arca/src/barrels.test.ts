@@ -37,5 +37,7 @@ describe("barrel exports", () => {
       constantsBarrel.ARCA_WSMTXCA_GENERIC_CODES
     );
     expect(Object.keys(arca.ARCA_WSMTXCA_GENERIC_CODES)).toHaveLength(13);
+    expect(arca.describeVoucherType).toBeTypeOf("function");
+    expect(arca.voucherDateWindow).toBeTypeOf("function");
   });
 });

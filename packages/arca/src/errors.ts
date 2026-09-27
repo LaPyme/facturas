@@ -31,6 +31,7 @@ export type ArcaInputErrorCode =
   | "ARCA_INPUT_IDEMPOTENCY_MISMATCH"
   | "ARCA_INPUT_RESERVATION_NOT_FOUND"
   | "ARCA_INPUT_INVALID_DATE"
+  | "ARCA_INPUT_DATE_OUTSIDE_WINDOW"
   | "ARCA_INPUT_INVALID_AMOUNT"
   | "ARCA_INPUT_AMOUNT_PRECISION"
   | "ARCA_INPUT_AMOUNT_MISMATCH"
@@ -39,23 +40,34 @@ export type ArcaInputErrorCode =
   | "ARCA_INPUT_MISSING_FIELD"
   | "ARCA_INPUT_RESERVED_FIELD";
 
+/** The first and last day ARCA accepts, both `YYYY-MM-DD` and inclusive. */
+export type VoucherDateWindow = { from: string; to: string };
+
 export type ArcaInputErrorOptions = ErrorOptions & {
   code: ArcaInputErrorCode;
   field?: string;
   expected?: string;
+  window?: VoucherDateWindow;
 };
 
-/** Thrown when caller-provided input data is missing or invalid. */
+/**
+ * Thrown when caller-provided input data is missing or invalid. From
+ * `issue()`, `issueCreditNote()` or `issueDebitNote()` it means that call sent
+ * no authorization request, so ARCA issued nothing for it.
+ */
 export class ArcaInputError extends ArcaError {
   declare readonly code: ArcaInputErrorCode;
   override readonly name: string = "ArcaInputError";
   readonly field?: string;
   readonly expected?: string;
+  /** With `ARCA_INPUT_DATE_OUTSIDE_WINDOW`, the dates ARCA accepts today. */
+  readonly window?: VoucherDateWindow;
 
   constructor(message: string, options: ArcaInputErrorOptions) {
     super(message, options.code, options);
     this.field = options.field;
     this.expected = options.expected;
+    this.window = options.window;
   }
 }
 
@@ -254,6 +266,7 @@ export type ArcaSafeErrorMetadata = {
   faultCode?: string;
   field?: string;
   expected?: string;
+  window?: VoucherDateWindow;
   /** ArcaServiceError's provider code, always as a string. */
   serviceCode?: string;
   result?: string;
@@ -273,7 +286,11 @@ export function toArcaSafeErrorMetadata(error: unknown): ArcaSafeErrorMetadata {
   }
   const fields: Partial<ArcaSafeErrorMetadata> = { code: error.code };
   if (error instanceof ArcaInputError) {
-    Object.assign(fields, { field: error.field, expected: error.expected });
+    Object.assign(fields, {
+      field: error.field,
+      expected: error.expected,
+      window: error.window,
+    });
   } else if (error instanceof ArcaAuthenticationError) {
     Object.assign(fields, {
       service: error.service,

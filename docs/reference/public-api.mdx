@@ -70,7 +70,16 @@ esta clave y hay que emitir bajo una clave nueva. Está documentado en
 `arcaQrUrl()` y `arcaQrPayload()` arman la URL y el JSON del QR de un
 comprobante impreso desde datos guardados, con `ArcaQrInput` y
 `ArcaQrPayload` como tipos y `ARCA_QR_URL` como base. `IssuedVoucher.qr` trae
-esa misma URL en cada resultado autorizado.
+esa misma URL en cada resultado autorizado, e `IssuedVoucher.qrPayload` su JSON.
+
+`voucherDateWindow()` calcula sin I/O la
+[ventana de fechas](/guides/invoices#datos-de-la-factura) que `issue()` controla
+antes de enviar, con `VoucherDateWindowInput` y `VoucherDateWindow` como tipos.
+`describeVoucherType()` dice qué es un tipo de comprobante que emite el SDK:
+`{ family, voucherClass, kind }`, con `kind` igual a `"invoice"`,
+`"debit_note"` o `"credit_note"`, y `VoucherTypeInfo` como tipo.
+`IssuerConditionId` es el código de ARCA que `issuer` acepta en lugar del
+nombre.
 
 Tipos exportados para emitir, además de `IssueInput`, `IssueOptions`,
 `IssueOutcome`, `IssuePreview`, `IssuedVoucher`, `FiscalHeader` y `VouchersService`:

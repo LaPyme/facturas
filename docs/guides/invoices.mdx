@@ -181,10 +181,25 @@ en Buenos Aires:
 | Factura FCE por WSFE | 5 días antes | 1 día después |
 | Nota FCE por WSFE | 5 días antes | El límite de su concepto |
 
-Una fecha fuera de esa ventana lanza `ArcaInputError` con `field: "date"`, y el
-mensaje dice qué fechas acepta ARCA ese día. Un reintento con la misma
-`idempotencyKey` devuelve lo que ARCA ya autorizó aunque la ventana se haya
-movido.
+Una fecha fuera de esa ventana lanza `ArcaInputError` con
+`code: "ARCA_INPUT_DATE_OUTSIDE_WINDOW"`, `field: "date"` y
+`window: { from, to }`, las fechas que acepta ARCA ese día en `YYYY-MM-DD`. Un
+reintento con la misma `idempotencyKey` devuelve lo que ARCA ya autorizó aunque
+la ventana se haya movido.
+
+Para mostrar la ventana antes de emitir, por ejemplo como límites de un
+selector de fecha, `voucherDateWindow()` la calcula sin I/O con la misma regla:
+
+```ts
+import { voucherDateWindow } from "facturas";
+
+const { from, to } = voucherDateWindow({ voucherType: 6, concept: "services" });
+```
+
+`concept` es `"products"` si lo omitís, como en `issue()`. `service: "wsmtxca"`
+aplica la ventana de WSMTXCA y `now` fija el momento del envío, que por defecto
+es ahora. ARCA igual rechaza una fecha anterior al último comprobante del mismo
+tipo y punto de venta.
 
 Los receptores que no son consumidor final requieren un `cuit` de 11 dígitos.
 Un consumidor final acepta un `cuit` o un `dni`, o ninguno por debajo del
@@ -219,8 +234,11 @@ marca la cancelación en la misma moneda extranjera y no se acepta en ARS. Para
 monedas que no son `ARS` ni `USD`, pasá `currency: { id: "060" }` con un
 `exchangeRate` explícito. ARCA controla la elegibilidad.
 
-`to.condition` también acepta el número de la condición de IVA del receptor del
-catálogo de ARCA, con `cuit`, `dni` o `document: { type, number }`. Los campos
+`issuer` también acepta el código de ARCA de la condición del emisor: `1`
+responsable inscripto, `6` monotributo, `4` exento y `15` no alcanzado, como en
+`ARCA_ISSUER_CONDITION_IDS`. Del mismo modo, `to.condition` acepta el número de
+la condición de IVA del receptor del catálogo de ARCA, con `cuit`, `dni` o
+`document: { type, number }`. Los campos
 `optionalFields`, `buyers` y `activities` pasan tal cual a ARCA. No dupliques
 ahí lo que ya informa `fce`.
 
@@ -282,7 +300,9 @@ recuperación para guardar la cabecera.
 codificar el código QR del comprobante impreso según la especificación de ARCA,
 armada con el CUIT emisor, el total, la moneda, el CAE y el documento del
 receptor que se envió de verdad. Falta solo si ARCA devolvió un CAE que la
-especificación no puede codificar: una autorización nunca se pierde por su QR. Para reimprimir un comprobante guardado sin
+especificación no puede codificar: una autorización nunca se pierde por su QR.
+`qrPayload` trae el JSON que esa URL lleva en base64, para guardarlo o
+mostrarlo sin decodificar la URL. Para reimprimir un comprobante guardado sin
 volver a emitir, `arcaQrUrl()` arma la misma URL a partir de esos datos. Solo
 `request` conserva la forma de ARCA, con importes en pesos y fechas `YYYYMMDD`.
 

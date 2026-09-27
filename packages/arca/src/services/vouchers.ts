@@ -39,7 +39,7 @@ import {
   matchWsmtxcaDetails,
   wsmtxcaRequest,
 } from "./issuance-wsmtxca";
-import { arcaQrUrl } from "./qr";
+import { type ArcaQrInput, arcaQrPayload, arcaQrUrl } from "./qr";
 import type {
   FiscalHeader,
   IssuedVoucher,
@@ -1928,7 +1928,7 @@ function issuedVoucher(
     cae,
     caeExpiry: toIsoDate(caeExpiry) ?? caeExpiry,
     amounts,
-    ...(qr === undefined ? {} : { qr }),
+    ...qr,
   };
 }
 
@@ -1986,12 +1986,12 @@ function voucherQr({
   taxId: string | undefined;
   date: string;
   cae: string;
-}): string | undefined {
+}): Pick<IssuedVoucher, "qr" | "qrPayload"> {
   if (taxId === undefined) {
-    return undefined;
+    return {};
   }
   try {
-    return arcaQrUrl({
+    const input: ArcaQrInput = {
       taxId,
       ...attempted,
       date,
@@ -2004,9 +2004,10 @@ function voucherQr({
         : { exchangeRate: data.exchangeRate }),
       cae,
       document: { type: data.documentType, number: data.documentNumber },
-    });
+    };
+    return { qr: arcaQrUrl(input), qrPayload: arcaQrPayload(input) };
   } catch {
-    return undefined;
+    return {};
   }
 }
 

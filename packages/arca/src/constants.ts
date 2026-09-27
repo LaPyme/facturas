@@ -106,6 +106,10 @@ export const ARCA_ISSUER_CONDITION_IDS = {
   no_alcanzado: 15,
 } as const satisfies Record<IssuerCondition, number>;
 
+/** The ARCA identifier of each issuer condition, accepted wherever a name is. */
+export type IssuerConditionId =
+  (typeof ARCA_ISSUER_CONDITION_IDS)[IssuerCondition];
+
 // RG 5866/2026, art. 1(f), effective 2026-07-01 (art. 4).
 // https://www.argentina.gob.ar/normativa/nacional/norma-427092/texto
 export const ARCA_FINAL_CONSUMER_IDENTIFICATION_THRESHOLD_MINOR_UNITS =

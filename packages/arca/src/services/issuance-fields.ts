@@ -60,7 +60,26 @@ export function voucherFamily(type: number): {
   throw new ArcaInputError("Unsupported invoice or note type.", {
     code: "ARCA_INPUT_INVALID_VALUE",
     field: "voucherType",
+    expected: "an invoice or note type the SDK issues",
   });
+}
+
+export type VoucherTypeInfo = {
+  family: InvoiceFamily;
+  voucherClass: VoucherClass;
+  kind: "invoice" | "debit_note" | "credit_note";
+};
+
+const KINDS = ["invoice", "debit_note", "credit_note"] as const;
+
+/** What an ARCA voucher type the SDK issues is. Pure; throws for any other. */
+export function describeVoucherType(voucherType: number): VoucherTypeInfo {
+  const { family, voucherClass, types } = voucherFamily(voucherType);
+  return {
+    family,
+    voucherClass,
+    kind: KINDS[types.indexOf(voucherType)] as VoucherTypeInfo["kind"],
+  };
 }
 export function invoiceType(
   family: InvoiceFamily,

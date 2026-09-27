@@ -5,6 +5,7 @@ import type {
   ArcaFiscalIssue,
   IssuanceService,
 } from "./fiscal-evidence";
+import type { ArcaQrPayload } from "./qr";
 import type { WsfeVoucherInput } from "./wsfe";
 import type { IssueAmounts } from "./wsfe-amounts";
 import type { VoucherCoordinates, VoucherSummary } from "./wsfe-identity";
@@ -59,6 +60,8 @@ export type IssuedVoucher = VoucherCoordinates & {
    * authorization is never lost over its QR.
    */
   qr?: string;
+  /** The JSON `qr` carries in base64 after `?p=`. Present whenever `qr` is. */
+  qrPayload?: ArcaQrPayload;
 };
 
 export type ServiceFor<O extends IssueOptions> = "service" extends keyof O

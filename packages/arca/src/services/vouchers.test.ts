@@ -296,6 +296,7 @@ describe("vouchers.issue", () => {
       tipoCodAut: "E",
       codAut: 74_123_456_789_012,
     });
+    expect(result.voucher.qrPayload).toEqual(payload);
     expect(result.voucher).toMatchObject({
       date: "2026-09-04",
       caeExpiry: "2026-09-14",
@@ -314,6 +315,9 @@ describe("vouchers.issue", () => {
       voucher: { cae: "cae-77" },
     });
     expect(kept.kind === "authorized" && kept.voucher).not.toHaveProperty("qr");
+    expect(kept.kind === "authorized" && kept.voucher).not.toHaveProperty(
+      "qrPayload"
+    );
     const noIssuer = await createVouchersService(odd.wsfe).issue(input);
     expect(noIssuer.kind).toBe("authorized");
   });

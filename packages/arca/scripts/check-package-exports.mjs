@@ -29,6 +29,8 @@ const entrypoints = [
       "toArcaSafeErrorMetadata",
       "ARCA_FINAL_CONSUMER_IDENTIFICATION_THRESHOLD_MINOR_UNITS",
       "ARCA_WSMTXCA_GENERIC_CODES",
+      "describeVoucherType",
+      "voucherDateWindow",
       ...publicErrorClasses,
       "isArcaAuthenticationError",
     ],

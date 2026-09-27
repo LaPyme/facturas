@@ -80,8 +80,9 @@ comprobante, el IVA de cabecera y el pedido para ARCA. No armes esos valores a
 mano.
 
 - `issuer` es la condición fiscal real del emisor: `"monotributo"`,
-  `"responsable_inscripto"`, `"exento"` o `"no_alcanzado"`. Es una afirmación
-  legal: preguntala si no la sabés, nunca la infieras.
+  `"responsable_inscripto"`, `"exento"` o `"no_alcanzado"`, o su código de
+  ARCA (`6`, `1`, `4`, `15`). Es una afirmación legal: preguntala si no la
+  sabés, nunca la infieras.
 - Un responsable inscripto emite A a receptores RI o monotributistas y B al
   resto. Los demás emisores emiten C.
 - Los importes son enteros en centavos. `150_000` es ARS 1.500,00. Nunca uses
@@ -96,7 +97,9 @@ mano.
   moneda es `ARS`. Para servicios pasá `service: { from, to, dueDate }`.
 - ARCA acepta una fecha de hasta 5 días antes o después de hoy para productos,
   sin pasar al mes siguiente, y 10 para servicios. `preview()` e `issue()`
-  lanzan `ArcaInputError` con `field: "date"` fuera de esa ventana.
+  lanzan `ArcaInputError` con `code: "ARCA_INPUT_DATE_OUTSIDE_WINDOW"` y
+  `window: { from, to }` fuera de esa ventana. `voucherDateWindow()` la
+  calcula antes, sin I/O.
 
 `arca.preview(input)` es sincrónico y no hace I/O. Devuelve la clase, el tipo,
 los importes y el pedido exacto. Compará `preview(input).amounts.sentTotal`
@@ -133,10 +136,12 @@ switch (factura.kind) {
 }
 ```
 
-`voucher.qr` es la URL que codifica el QR del comprobante impreso. Lo que sí
-se lanza son los errores de input (`ArcaInputError`, con un `code` como
-`ARCA_INPUT_INVALID_AMOUNT`) y de configuración (`ArcaConfigurationError`),
-siempre antes de escribir en ARCA.
+`voucher.qr` es la URL que codifica el QR del comprobante impreso y
+`voucher.qrPayload` su JSON. Lo que sí se lanza son los errores de input
+(`ArcaInputError`, con un `code` como `ARCA_INPUT_INVALID_AMOUNT`) y de
+configuración (`ArcaConfigurationError`), siempre antes de escribir en ARCA. Un
+`ArcaInputError` significa que ARCA no emitió nada por esa llamada: corregí el
+input y reintentá.
 
 ## Reintentos sin duplicados
 

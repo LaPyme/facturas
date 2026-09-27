@@ -5,10 +5,12 @@ import {
   type IssuerCondition,
   type ReceiverCondition,
 } from "../constants";
+import { toArcaSafeErrorMetadata } from "../errors";
 import {
   assertVoucherDateWindow,
   deriveWsfeInvoice,
   type IssueInput,
+  voucherDateWindow,
 } from "./wsfe-derive";
 
 const base: IssueInput = {
@@ -55,6 +57,29 @@ describe("WSFE invoice derivation", () => {
       }
     }
   });
+  it("takes the issuer's ARCA id the same as its name", () => {
+    for (const [issuer, id] of Object.entries(ARCA_ISSUER_CONDITION_IDS)) {
+      const items =
+        issuer === "responsable_inscripto"
+          ? [{ net: 10_000, vat: 21 as const }]
+          : [{ amount: 10_000 }];
+      const to = { condition: "monotributo" as const, cuit: "20123456786" };
+      expect(derive({ ...base, issuer: id, to, items })).toEqual(
+        derive({ ...base, issuer, to, items })
+      );
+    }
+  });
+  it.each([0, 5, 13, 16, Number.NaN, "1"])(
+    "rejects %j as an issuer",
+    (issuer) => {
+      expect(() => derive({ ...base, issuer })).toThrowError(
+        expect.objectContaining({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "issuer",
+        })
+      );
+    }
+  );
   it("derives unidentified and DNI final consumers", () => {
     expect(deriveWsfeInvoice(base).data).toMatchObject({
       documentType: 99,
@@ -282,6 +307,13 @@ describe("ARCA's voucher date window", () => {
     expect(check("20261001", 1)).toThrow(
       "date must be from 2026-09-21 through 2026-09-30, the window ARCA accepts on 2026-09-26."
     );
+    expect(check("20261001", 1)).toThrow(
+      expect.objectContaining({
+        code: "ARCA_INPUT_DATE_OUTSIDE_WINDOW",
+        field: "date",
+        window: { from: "2026-09-21", to: "2026-09-30" },
+      })
+    );
     expect(() =>
       assertVoucherDateWindow(
         { voucherDate: "20260827", concept: 1, voucherType: 11 },
@@ -308,5 +340,67 @@ describe("ARCA's voucher date window", () => {
       expect(check("20260920", 2, type)).toThrow();
       expect(check("20260916", 2, type, "wsmtxca")).not.toThrow();
     }
+  });
+});
+
+describe("voucherDateWindow", () => {
+  // 02:00 UTC is still the 26th in Buenos Aires.
+  const now = new Date("2026-09-27T02:00:00Z");
+
+  it("returns the window the date check applies, anchored in Argentina", () => {
+    expect(voucherDateWindow({ voucherType: 11, now })).toEqual({
+      from: "2026-09-21",
+      to: "2026-09-30",
+    });
+    expect(
+      voucherDateWindow({ voucherType: 6, concept: "services", now })
+    ).toEqual({ from: "2026-09-16", to: "2026-10-06" });
+    expect(
+      voucherDateWindow({ voucherType: 201, concept: "services", now })
+    ).toEqual({ from: "2026-09-21", to: "2026-09-27" });
+    expect(
+      voucherDateWindow({
+        voucherType: 201,
+        concept: "services",
+        service: "wsmtxca",
+        now,
+      })
+    ).toEqual({ from: "2026-09-16", to: "2026-10-06" });
+  });
+
+  it("agrees with the window on the error issue() throws", () => {
+    let thrown: unknown;
+    try {
+      assertVoucherDateWindow(
+        { voucherDate: "20261010", concept: 3, voucherType: 203 },
+        "wsfe",
+        "20260926"
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    const window = voucherDateWindow({
+      voucherType: 203,
+      concept: "products_and_services",
+      now,
+    });
+    expect(thrown).toMatchObject({ window });
+    expect(toArcaSafeErrorMetadata(thrown)).toMatchObject({
+      code: "ARCA_INPUT_DATE_OUTSIDE_WINDOW",
+      field: "date",
+      window,
+    });
+  });
+
+  it.each([
+    [{ voucherType: 99 }, "voucherType"],
+    [{ voucherType: 11, concept: "goods" }, "concept"],
+    [{ voucherType: 11, service: "wsfex" }, "service"],
+    [{ voucherType: 11, now: new Date(Number.NaN) }, "now"],
+    [{ voucherType: 11, today: now }, "today"],
+  ])("rejects %j", (input, field) => {
+    expect(() =>
+      voucherDateWindow(input as Parameters<typeof voucherDateWindow>[0])
+    ).toThrowError(expect.objectContaining({ name: "ArcaInputError", field }));
   });
 });
