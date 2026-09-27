@@ -1,5 +1,24 @@
 # facturas
 
+## 0.20.0
+
+### Minor Changes
+
+- 46b0525: Expose the date window, accept issuer ids and return the QR payload.
+  
+  - A voucher date outside ARCA's window now throws `ArcaInputError` with `code: "ARCA_INPUT_DATE_OUTSIDE_WINDOW"` instead of `ARCA_INPUT_INVALID_VALUE`, and carries `window: { from, to }` in `YYYY-MM-DD`. `field` stays `"date"`. `toArcaSafeErrorMetadata()` keeps `window`.
+  - New `voucherDateWindow({ voucherType, concept?, service?, now? })` returns the same window with no I/O, for example to bound a date picker.
+  - `issuer` accepts ARCA's condition ids `1`, `6`, `4` and `15` wherever it accepts `"responsable_inscripto"`, `"monotributo"`, `"exento"` and `"no_alcanzado"`, like `to.condition` already did. The new `IssuerConditionId` type names them, and an idempotency key replays the same voucher whichever spelling the retry uses.
+  - An authorized `voucher` carries `qrPayload`, the JSON its `qr` URL encodes, whenever it carries `qr`.
+  - New `describeVoucherType(voucherType)` returns `{ family, voucherClass, kind }` for any invoice or note type the SDK issues.
+  - The docs state that an `ArcaInputError` from `issue()`, `issueCreditNote()` or `issueDebitNote()` means that call sent no authorization request, and when a sales point needs `{ service: "wsmtxca" }`.
+- 46b0525: Follow the WSMTXCA manual for the receiver document, voucher classes and item codes.
+  
+  - An unidentified final consumer (document type 99) no longer sends `codigoTipoDocumento` or `numeroDocumento` to WSMTXCA, per rules 108 and 128. The result header still reports `documentType: 99` and `documentNumber: "0"`, and recovery accepts a consultation that omits the document or echoes 99/0, whole or in part. Credit and debit notes treat such an original as 99/0 the same way.
+  - `{ service: "wsmtxca" }` with a class C voucher throws `ArcaInputError` with `field: "voucherType"` before any call (rule 100), including a note whose original is class C and an invoice whose items would fail line checks.
+  - WSMTXCA items need `matrixCode` and `matrixUnits` unless `unit` is 97 or 99. `matrixUnits` is a whole number from 1 to 999999, the two travel together, and `code` is at most 50 characters (rules 500–505 and 520). Violations throw `ArcaInputError` naming the item and field before any call.
+  - New `ARCA_WSMTXCA_GENERIC_CODES` lists ARCA's 13 generic item codes with their descriptions, for concepts that have no GTIN.
+
 ## 0.19.0
 
 ### Minor Changes
