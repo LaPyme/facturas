@@ -13,7 +13,7 @@
 
 ### Minor Changes
 
-- d5c1d8e: Close the gaps the app worked around.
+- d5c1d8e: Return data callers previously had to derive or fetch themselves.
   
   - `preview()`, `previewCreditNote()` and `previewDebitNote()` return `date`, the voucher date as `YYYY-MM-DD`.
   - `wsfe.getSalesPoints()` returns the WSMTXCA shape: `blocked` is a boolean and `deletedAt` a `YYYY-MM-DD` date, absent while the point is active.
@@ -147,7 +147,7 @@
 
   Removals. `client.cancel()` and `VouchersService.cancel` are gone with no alias: `cancel(target)` becomes `issueCreditNote({ for: target, all: true })`. The exact layer loses the aliases and throwing methods deprecated in 0.9.0: `wsfe.authorizeVoucherOutcome()`, `wsmtxca.authorizeVoucherOutcome()`, `wsfe.authorizeVoucher()`, `wsmtxca.authorizeVoucher()` and `wsfe.createNextVoucher()`, together with the `WsfeAuthorizationResult` and `WsmtxcaAuthorizationResult` types they returned. Use `client.issue()`, or reserve a number and call `wsfe.issue()`.
 
-  Reservations now record `operation: "creditNote"`. A stored 0.9 record with `operation: "cancel"` is rejected as an invalid structure with `ArcaConfigurationError`; no released consumer wrote one, since `cancel()` shipped in 0.9.0 without adoption. A keyed replay of a credit note consults only the reserved note and reports `amounts` from the stored request, so `computedTotal` equals `sentTotal` and `vatAdjustment` is `0` on that path.
+  Reservations now record `operation: "creditNote"`. A stored 0.9 record with `operation: "cancel"` is rejected as an invalid structure with `ArcaConfigurationError`. A keyed replay of a credit note consults only the reserved note and reports `amounts` from the stored request, so `computedTotal` equals `sentTotal` and `vatAdjustment` is `0` on that path.
 
   Declared type widening: `VouchersService` gains `issueCreditNote` and `preview` and loses `cancel`; hand-built typed mocks must follow. `issue()` is unchanged in signature, behaviour and results.
 
