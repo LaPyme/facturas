@@ -1060,7 +1060,7 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(await client.recover("cf")).toMatchObject({ kind: "conflict" });
     expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
   });
-  it("credits a WSMTXCA original that carries no receiver document", async () => {
+  it("credits and debits a WSMTXCA original that carries no receiver document", async () => {
     const { client, soap } = transportFixture();
     const options = { service: "wsmtxca" as const };
     await client.issue(
@@ -1087,6 +1087,26 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       .at(-1)?.[0].body.comprobanteCAERequest;
     expect(sent.codigoTipoComprobante).toBe(8);
     expect(sent.codigoTipoDocumento).toBeUndefined();
+    expect(
+      await client.issueDebitNote(
+        {
+          for: { salesPoint: 1, voucherType: 6, number: 9 },
+          items: [{ ...line, gross: 1210, vat: 21 }],
+        },
+        options
+      )
+    ).toMatchObject({
+      kind: "authorized",
+      voucher: {
+        voucherType: 7,
+        header: { documentType: 99, documentNumber: "0" },
+      },
+    });
+    const debit = soap.execute.mock.calls
+      .filter(([arg]) => arg.operation === "autorizarComprobante")
+      .at(-1)?.[0].body.comprobanteCAERequest;
+    expect(debit.codigoTipoComprobante).toBe(7);
+    expect(debit.codigoTipoDocumento).toBeUndefined();
   });
   it("recovers a v2 record whose unidentified receiver was sent as 99/0", async () => {
     const { client, store, vouchers, calls } = transportFixture();
