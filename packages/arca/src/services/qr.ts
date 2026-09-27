@@ -47,7 +47,12 @@ export type ArcaQrPayload = {
 
 /** Builds the URL a printed voucher's QR must encode. Pure, no I/O. */
 export function arcaQrUrl(input: ArcaQrInput): string {
-  const json = JSON.stringify(arcaQrPayload(input));
+  return qrUrlForPayload(arcaQrPayload(input));
+}
+
+/** @internal The URL for a payload `arcaQrPayload()` already built. */
+export function qrUrlForPayload(payload: ArcaQrPayload): string {
+  const json = JSON.stringify(payload);
   return `${ARCA_QR_URL}?p=${Buffer.from(json, "utf8").toString("base64")}`;
 }
 

@@ -1159,6 +1159,70 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     ).rejects.toMatchObject({ name: "ArcaInputError", field: "voucherType" });
     expect(calls).toEqual([]);
   });
+  it("refuses class C before validating WSMTXCA line detail", () => {
+    const { client } = transportFixture();
+    const { matrixCode: _code, matrixUnits: _units, ...bare } = line;
+    const input: IssueInput = {
+      ...invoice,
+      issuer: 6,
+      items: [{ ...bare, amount: 10_000 }],
+    };
+    expect(() => client.preview(input, { service: "wsmtxca" })).toThrowError(
+      expect.objectContaining({ field: "voucherType" })
+    );
+  });
+  it.each([
+    ["credit", "issueCreditNote", { all: true }],
+    ["debit", "issueDebitNote", { items: [{ ...line, amount: 100 }] }],
+  ] as const)(
+    "refuses a class C %s note through WSMTXCA before looking up the original",
+    async (_kind, method, rest) => {
+      const { client, calls } = transportFixture();
+      const note = { for: { salesPoint: 1, voucherType: 11, number: 9 } };
+      await expect(
+        client[method]({ ...note, ...rest } as never, { service: "wsmtxca" })
+      ).rejects.toMatchObject({ name: "ArcaInputError", field: "voucherType" });
+      expect(calls).toEqual([]);
+    }
+  );
+  it.each([[{ codigoTipoDocumento: 99 }], [{ numeroDocumento: "0" }]])(
+    "credits a WSMTXCA original that echoes part of 99/0: %j",
+    async (echo) => {
+      const { client, vouchers } = transportFixture();
+      const options = { service: "wsmtxca" as const };
+      await client.issue(
+        {
+          ...invoice,
+          to: { condition: "consumidor_final" },
+          items: [{ ...line, gross: 12_100, vat: 21 }],
+        },
+        options
+      );
+      Object.assign(vouchers.get(6) as Record<string, unknown>, echo);
+      expect(
+        await client.issueCreditNote(
+          { for: { salesPoint: 1, voucherType: 6, number: 9 }, all: true },
+          options
+        )
+      ).toMatchObject({
+        kind: "authorized",
+        voucher: { header: { documentType: 99, documentNumber: "0" } },
+      });
+    }
+  );
+  it("replays a keyed issue whether the issuer is named or given its id", async () => {
+    const { client, calls } = transportFixture();
+    const options = { service: "wsmtxca" as const, idempotencyKey: "same" };
+    const named = await client.issue(detailed, options);
+    expect(named.kind).toBe("authorized");
+    expect(
+      await client.issue({ ...detailed, issuer: 1 }, options)
+    ).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 9, cae: "12345678901234" },
+    });
+    expect(calls.filter((c) => c === "autorizarComprobante")).toHaveLength(1);
+  });
   it("returns uncertainty for incomplete consultation and never reissues", async () => {
     const { client, vouchers, calls } = transportFixture();
     const options = { service: "wsmtxca" as const, idempotencyKey: "invoice" };

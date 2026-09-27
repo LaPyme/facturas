@@ -35,6 +35,13 @@ export type IssuanceFields = {
   activities?: WsfeVoucherInput["activities"];
 };
 
+/** ARCA's concept id for each `concept` the facade takes. */
+export const CONCEPT_IDS = {
+  products: 1,
+  services: 2,
+  products_and_services: 3,
+} as const;
+
 export const FAMILIES = {
   ordinary: { A: [1, 2, 3], B: [6, 7, 8], C: [11, 12, 13] },
   retention_legend: { A: [51, 52, 53] },
@@ -124,9 +131,7 @@ export function applyIssuanceFields(
     Object.assign(data, reviewedHeaderAmounts(fields.amounts));
   }
   if (fields.concept) {
-    data.concept = { products: 1, services: 2, products_and_services: 3 }[
-      fields.concept
-    ];
+    data.concept = CONCEPT_IDS[fields.concept];
   }
   if (fields.dueDate) {
     data.paymentDueDate = fields.dueDate;

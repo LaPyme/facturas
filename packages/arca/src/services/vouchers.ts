@@ -34,12 +34,13 @@ import {
   voucherFamily,
 } from "./issuance-fields";
 import {
+  assertWsmtxcaVoucherType,
   createWsmtxcaIssuanceService,
   type FiscalHeader as IssuanceHeader,
   matchWsmtxcaDetails,
   wsmtxcaRequest,
 } from "./issuance-wsmtxca";
-import { type ArcaQrInput, arcaQrPayload, arcaQrUrl } from "./qr";
+import { arcaQrPayload, qrUrlForPayload } from "./qr";
 import type {
   FiscalHeader,
   IssuedVoucher,
@@ -72,6 +73,7 @@ import {
   deriveWsfeInvoice,
   type IssueInput,
   issueDocumentNumber,
+  issuerConditionName,
 } from "./wsfe-derive";
 import {
   matchWsfeVoucherIdentity,
@@ -370,6 +372,7 @@ function attachLines(prepared: Prepared, options: IssueOptions): void {
   if (options.service !== "wsmtxca") {
     return;
   }
+  assertWsmtxcaVoucherType(prepared.data.voucherType);
   if (prepared.lineSource === undefined) {
     throw new ArcaInputError(
       "WSMTXCA needs items with line detail; a reviewed amounts breakdown has no lines.",
@@ -434,6 +437,15 @@ async function issueInvoice(
   );
 }
 
+/** Hashes `issuer: 1` and `issuer: "responsable_inscripto"` alike. */
+function withIssuerName(input: unknown): unknown {
+  if (input === null || typeof input !== "object" || !("issuer" in input)) {
+    return input;
+  }
+  const name = issuerConditionName(input.issuer);
+  return name === undefined ? input : { ...input, issuer: name };
+}
+
 async function runOperation(
   wsfe: IssueWsfeService,
   operation: ArcaAttemptRecord["operation"],
@@ -462,7 +474,7 @@ async function runOperation(
       ? undefined
       : String(options.representedTaxId);
   const inputHash = canonicalHash({
-    input,
+    input: withIssuerName(input),
     representedTaxId,
     ...(options.service === "wsmtxca" ? { service: "wsmtxca" } : {}),
     ...(options.number === undefined ? {} : { number: options.number }),
@@ -1489,6 +1501,7 @@ async function prepareNote(
   }
   const targets = creditNoteTargets(note);
   validateFceAssociations(note, targets, options.service ?? "wsfe");
+  validateNoteService(targets, options);
   const originals: WsfeVoucherInfo[] = [];
   for (const target of targets) {
     originals.push(await lookupOriginal(wsfe, target, options));
@@ -1522,6 +1535,19 @@ async function prepareNote(
   }
   validatePrepared(prepared, options);
   return { ...prepared, originals: originals.map(toVoucherSummary) };
+}
+
+/** A note has its original's class, so refuse class C before any lookup. */
+function validateNoteService(
+  targets: readonly VoucherCoordinates[],
+  options: IssueOptions
+): void {
+  if (options.service !== "wsmtxca") {
+    return;
+  }
+  for (const target of targets) {
+    assertWsmtxcaVoucherType(target.voucherType);
+  }
 }
 
 /** Provider rules differ for FCE notes; ordinary multi-original notes remain valid. */
@@ -1991,7 +2017,7 @@ function voucherQr({
     return {};
   }
   try {
-    const input: ArcaQrInput = {
+    const qrPayload = arcaQrPayload({
       taxId,
       ...attempted,
       date,
@@ -2004,8 +2030,8 @@ function voucherQr({
         : { exchangeRate: data.exchangeRate }),
       cae,
       document: { type: data.documentType, number: data.documentNumber },
-    };
-    return { qr: arcaQrUrl(input), qrPayload: arcaQrPayload(input) };
+    });
+    return { qr: qrUrlForPayload(qrPayload), qrPayload };
   } catch {
     return {};
   }

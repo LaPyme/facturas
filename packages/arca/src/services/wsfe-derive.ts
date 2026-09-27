@@ -12,12 +12,14 @@ import {
   type VoucherClass,
 } from "../constants";
 import { ArcaError, ArcaInputError, type VoucherDateWindow } from "../errors";
+import { toIsoDate } from "../internal/dates";
 import {
   normalizeArcaAmountToMinorUnits,
   serializeArcaExchangeRate,
 } from "../internal/decimal";
 import {
   applyIssuanceFields,
+  CONCEPT_IDS,
   FAMILIES,
   type InvoiceFamily,
   ISSUANCE_KEYS,
@@ -263,15 +265,20 @@ export function reviewedInvoiceAmounts(
   };
 }
 
+/** The name of an issuer condition given as its ARCA identifier, if one is. */
+export function issuerConditionName(
+  issuer: unknown
+): IssuerCondition | undefined {
+  return (Object.keys(ARCA_ISSUER_CONDITION_IDS) as IssuerCondition[]).find(
+    (condition) => ARCA_ISSUER_CONDITION_IDS[condition] === issuer
+  );
+}
+
 /** The issuer's condition by name, given its name or its ARCA identifier. */
 function issuerCondition(issuer: unknown): IssuerCondition {
-  if (typeof issuer === "number") {
-    const name = (
-      Object.keys(ARCA_ISSUER_CONDITION_IDS) as IssuerCondition[]
-    ).find((condition) => ARCA_ISSUER_CONDITION_IDS[condition] === issuer);
-    if (name !== undefined) {
-      return name;
-    }
+  const name = issuerConditionName(issuer);
+  if (name !== undefined) {
+    return name;
   }
   if (
     typeof issuer !== "string" ||
@@ -489,8 +496,6 @@ export type VoucherDateWindowInput = {
   now?: Date;
 };
 
-const CONCEPT_IDS = { products: 1, services: 2, products_and_services: 3 };
-
 /**
  * The dates ARCA accepts for a voucher sent now, the same window `issue()`
  * checks before any call. Pure, no I/O. ARCA still rejects a date before the
@@ -575,7 +580,7 @@ export function assertVoucherDateWindow(
 }
 
 function isoDay(date: WsfeDateInput): string {
-  return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+  return toIsoDate(date) ?? date;
 }
 
 /** Day arithmetic on `YYYYMMDD`; `Date.UTC` rolls overflowing days and months. */

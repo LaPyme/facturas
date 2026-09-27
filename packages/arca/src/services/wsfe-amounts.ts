@@ -253,7 +253,8 @@ export type WsmtxcaSettlement = {
  * so the two can never describe different money. Per-line VAT is reconciled
  * against the grouped Half Even arithmetic of `calculateWsfeAmounts()`: the
  * rounding residual of a rate, and the header's VAT adjustment, land on lines
- * of that rate, so the lines sum to the header exactly.
+ * of that rate, so the lines sum to the header exactly. WSMTXCA authorizes
+ * classes A and B only, so every item carries its `vat`.
  */
 export function deriveWsmtxcaLines(
   input: WsfeAmountsInput,
@@ -270,7 +271,6 @@ export function deriveWsmtxcaSettlement(
   if (!Array.isArray(input.items) || input.items.length === 0) {
     invalidItem("items", "a non-empty array of items");
   }
-  const isVat = input.voucherClass === "A" || input.voucherClass === "B";
   const drafts: LineDraft[] = [];
   const groups = new Map<SupportedVatRate, { net: bigint; gross: bigint }>();
   for (const [index, item] of input.items.entries()) {
@@ -278,7 +278,7 @@ export function deriveWsmtxcaSettlement(
     if (item === null || typeof item !== "object" || Array.isArray(item)) {
       invalidItem(path, "an item object");
     }
-    drafts.push(lineDraft(item, path, isVat, groups));
+    drafts.push(lineDraft(item, path, groups));
   }
   reconcileGroups(drafts, groups);
   absorbAdjustment(drafts, BigInt(vatAdjustment));
@@ -304,20 +304,9 @@ export function deriveWsmtxcaSettlement(
 function lineDraft(
   item: VatItem | AmountItem,
   path: string,
-  isVat: boolean,
   groups: Map<SupportedVatRate, { net: bigint; gross: bigint }>
 ): LineDraft {
   const line = assertItemLine(item, path);
-  if (!isVat) {
-    // A class C line bears no VAT at all, so it reports the 0% condition.
-    const amount = classCAmount(item, path);
-    return {
-      line: { ...line, vatCondition: RATES[0].id, amount: 0 },
-      vat: 0n,
-      amount,
-      amountFormula: { numerator: amount, denominator: 1n },
-    };
-  }
   const { amount, field, rate } = vatItemAmount(item, path);
   if (rate === "exempt" || rate === "untaxed") {
     return {

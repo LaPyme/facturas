@@ -386,13 +386,6 @@ describe("WSMTXCA lines derived from the same items", () => {
         (line) => line.vatCondition
       )
     ).toEqual([5, 4, 3, 9, 8, 6, 2, 1]);
-    // A class C line bears no VAT, so it reports the 0% condition and no amount.
-    expect(
-      deriveWsmtxcaLines(
-        { voucherClass: "C", items: withLines([{ amount: 500 }]) },
-        0
-      )
-    ).toEqual([{ ...LINE, discount: 0, vatCondition: 3, amount: 500 }]);
   });
   it("reports the VAT amount on class A lines only", () => {
     const input = { items: withLines([{ gross: 12_100, vat: 21 as const }]) };
@@ -504,11 +497,12 @@ describe("WSMTXCA lines derived from the same items", () => {
     expect(
       deriveWsmtxcaLines(
         {
-          voucherClass: "C",
+          voucherClass: "B",
           items: [
             {
               ...LINE,
-              amount: 100,
+              gross: 100,
+              vat: 21,
               discount: 25,
               code: "SKU-1",
               matrixCode: "MTX-1",
@@ -526,7 +520,7 @@ describe("WSMTXCA lines derived from the same items", () => {
         code: "SKU-1",
         matrixCode: "MTX-1",
         matrixUnits: 3,
-        vatCondition: 3,
+        vatCondition: 5,
       },
     ]);
   });
@@ -534,7 +528,7 @@ describe("WSMTXCA lines derived from the same items", () => {
     const { matrixCode: _code, matrixUnits: _units, ...line } = LINE;
     expect(() =>
       deriveWsmtxcaLines(
-        { voucherClass: "C", items: [{ ...line, unit, amount: 100 }] },
+        { voucherClass: "B", items: [{ ...line, unit, gross: 100, vat: 21 }] },
         0
       )
     ).not.toThrow();
@@ -551,11 +545,11 @@ describe("WSMTXCA lines derived from the same items", () => {
     expect(() =>
       deriveWsmtxcaLines(
         {
-          voucherClass: "C",
+          voucherClass: "B",
           items: [
-            { ...LINE, amount: 100 },
-            { ...LINE, ...change, amount: 100 },
-          ] as AmountItem[],
+            { ...LINE, gross: 100, vat: 21 },
+            { ...LINE, ...change, gross: 100, vat: 21 },
+          ] as VatItem[],
         },
         0
       )

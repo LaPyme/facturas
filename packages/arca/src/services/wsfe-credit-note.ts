@@ -108,16 +108,19 @@ function invalid(reason: string): never {
   });
 }
 /**
- * WSMTXCA omits the document of an unidentified receiver, so an original
- * with neither field is the 99/0 receiver WSFE would have reported.
+ * WSMTXCA omits the document of an unidentified receiver, or echoes part of
+ * ARCA's 99/0. An original whose fields are each absent or that 99/0 is the
+ * receiver WSFE would have reported, as the consultation match accepts.
  */
 function originalReceiverDocument(original: WsfeVoucherInfo): {
   documentType: number;
   documentNumber: number;
 } {
+  const { documentType, documentNumber } = original;
   if (
-    original.documentType === undefined &&
-    original.documentNumber === undefined
+    (documentType === undefined ||
+      documentType === ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL) &&
+    (documentNumber === undefined || String(documentNumber) === "0")
   ) {
     return {
       documentType: ARCA_DOCUMENT_TYPES.CONSUMIDOR_FINAL,
