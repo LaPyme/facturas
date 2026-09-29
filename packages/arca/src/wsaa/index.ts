@@ -388,8 +388,8 @@ async function refreshWsaaCredentials(options: {
     service: options.service,
     expiresAt: credentials.expiresAt,
   });
-  options.cache.set(options.cacheKey, credentials);
   await setStoredCredentials(options.config, options.sessionKey, credentials);
+  options.cache.set(options.cacheKey, credentials);
   return credentials;
 }
 
