@@ -483,10 +483,13 @@ export function createWsfeService(
       lastNumber < 0 ||
       lastNumber > 99_999_999
     ) {
-      throw new ArcaInvalidSoapResponseError("Invalid WSFE last authorized number", {
-        service: "wsfe",
-        operation: "FECompUltimoAutorizado",
-      });
+      throw new ArcaInvalidSoapResponseError(
+        "Invalid WSFE last authorized number",
+        {
+          service: "wsfe",
+          operation: "FECompUltimoAutorizado",
+        }
+      );
     }
     return lastNumber + 1;
   }

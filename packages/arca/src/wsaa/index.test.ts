@@ -460,9 +460,7 @@ describe("createWsaaAuthModule", () => {
     mockPostXml
       .mockResolvedValueOnce(
         createHttpResponse(
-          createWsaaSoapResponse(
-            createLoginTicketResponseXml(firstCredentials)
-          )
+          createWsaaSoapResponse(createLoginTicketResponseXml(firstCredentials))
         )
       )
       .mockResolvedValueOnce(
