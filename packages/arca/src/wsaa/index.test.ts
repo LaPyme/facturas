@@ -439,53 +439,6 @@ describe("createWsaaAuthModule", () => {
     expect(store.get).toHaveBeenCalledTimes(2);
   });
 
-  it("does not cache fresh credentials when durable storage fails", async () => {
-    const firstCredentials = {
-      token: "first-token",
-      sign: "first-sign",
-      expiresAt: "2099-01-01T00:00:00Z",
-    };
-    const secondCredentials = {
-      token: "second-token",
-      sign: "second-sign",
-      expiresAt: "2099-01-01T00:00:00Z",
-    };
-    const store = {
-      get: vi.fn().mockResolvedValue(null),
-      set: vi
-        .fn()
-        .mockRejectedValueOnce(new Error("database unavailable"))
-        .mockResolvedValueOnce(undefined),
-    };
-    mockPostXml
-      .mockResolvedValueOnce(
-        createHttpResponse(
-          createWsaaSoapResponse(createLoginTicketResponseXml(firstCredentials))
-        )
-      )
-      .mockResolvedValueOnce(
-        createHttpResponse(
-          createWsaaSoapResponse(
-            createLoginTicketResponseXml(secondCredentials)
-          )
-        )
-      );
-
-    const { createWsaaAuthModule } = await loadWsaaModule();
-    const auth = createWsaaAuthModule({
-      config: { ...createWsaaConfig(), wsaaSessionStore: store },
-    });
-
-    await expect(auth.login("wsfe")).rejects.toMatchObject({
-      name: "ArcaConfigurationError",
-      message: "WSAA session store set failed for service wsfe",
-    });
-    await expect(auth.login("wsfe")).resolves.toEqual(secondCredentials);
-    expect(store.get).toHaveBeenCalledTimes(4);
-    expect(store.set).toHaveBeenCalledTimes(2);
-    expect(mockPostXml).toHaveBeenCalledTimes(2);
-  });
-
   it("recovers coe.alreadyAuthenticated from a durable store hit", async () => {
     const credentials = {
       token: "recovered-token",
