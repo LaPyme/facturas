@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ArcaTransportError } from "../errors";
+import { ArcaInvalidSoapResponseError, ArcaTransportError } from "../errors";
 import type { WsfeVoucherInput } from "./wsfe";
 import { createWsfeService } from "./wsfe";
 
@@ -1023,6 +1023,54 @@ describe("createWsfeService", () => {
         voucherType: 6,
       })
     ).resolves.toBe(42);
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["null", null],
+    ["empty", ""],
+    ["whitespace", "   "],
+    ["boolean", true],
+    ["negative", -1],
+    ["fraction", 1.5],
+    ["exponent string", "1e2"],
+    ["too many digits", "100000000"],
+    ["non-numeric", "not-a-number"],
+  ] as const)("rejects invalid last authorized number: %s", async (_label, rawNumber) => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce(
+      createWsfeOperationResult("FECompUltimoAutorizado", { CbteNro: rawNumber })
+    );
+    const failure = await createWsfeService(options)
+      .getNextVoucherNumber({ salesPoint: 1, voucherType: 6 })
+      .catch((error: unknown) => error);
+
+    if (!(failure instanceof ArcaInvalidSoapResponseError)) {
+      throw new Error("Expected invalid WSFE response error");
+    }
+    expect(failure).toMatchObject({
+      service: "wsfe",
+      operation: "FECompUltimoAutorizado",
+    });
+    expect(failure.cause).toBeUndefined();
+    expect(failure.message).toBe("Invalid WSFE last authorized number");
+  });
+
+  it.each([
+    [0, 1],
+    ["0", 1],
+    [41, 42],
+    ["41", 42],
+    [99_999_999, 100_000_000],
+  ] as const)("accepts explicit last authorized number %s", async (rawNumber, expectedNext) => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce(
+      createWsfeOperationResult("FECompUltimoAutorizado", { CbteNro: rawNumber })
+    );
+
+    await expect(
+      createWsfeService(options).getNextVoucherNumber({ salesPoint: 1, voucherType: 6 })
+    ).resolves.toBe(expectedNext);
   });
 
   it("fails fast on invalid public date inputs", () => {

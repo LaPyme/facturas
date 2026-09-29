@@ -474,7 +474,21 @@ export function createWsfeService(
         CbteTipo: voucherType,
       }
     );
-    return Number(result.CbteNro ?? 0) + 1;
+    const rawNumber = result.CbteNro;
+    const lastNumber = Number(rawNumber);
+    if (
+      (typeof rawNumber !== "string" && typeof rawNumber !== "number") ||
+      !/^\d+$/.test(String(rawNumber).trim()) ||
+      !Number.isSafeInteger(lastNumber) ||
+      lastNumber < 0 ||
+      lastNumber > 99_999_999
+    ) {
+      throw new ArcaInvalidSoapResponseError("Invalid WSFE last authorized number", {
+        service: "wsfe",
+        operation: "FECompUltimoAutorizado",
+      });
+    }
+    return lastNumber + 1;
   }
 
   async function getWsfeCatalog(
