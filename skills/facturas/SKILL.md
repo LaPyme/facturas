@@ -192,7 +192,7 @@ lo que dice `lookup.kind`:
 | `not_found` | ARCA confirmó que el número está vacío. Llamá otra vez al método original con la misma clave y el mismo input |
 | `failed`, `aborted` | La consulta no terminó. Esperá y volvé a llamar a `recover()` o repetí la llamada original con la misma clave |
 | `incomplete` | ARCA tiene un comprobante en el número reservado, pero la consulta no trae los datos para probar que es este. No emitas otro. Probá `recover()` una vez más y, si sigue igual, que lo revise una persona con `reason` y `attempted` |
-| `blocked` | Otra reserva frena la secuencia. Conciliá primero la clave `by` con `recover()` y después repetí |
+| `blocked` | Otra reserva frena la secuencia. Conciliá primero la clave `by` con `recover()` desde el emisor `byTaxId` y después repetí |
 | `superseded` | La secuencia siguió sin esta clave. Emití con una clave nueva |
 
 `recover()` sobre una clave sin reserva lanza
