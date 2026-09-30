@@ -115,10 +115,16 @@ Del original el SDK toma la clase y por lo tanto el tipo de nota
 la moneda y el tipo de cambio, el concepto y, para los conceptos 2 y 3, las
 fechas de servicio, con el vencimiento elevado a la fecha de la nota. La
 aplicación aporta `for`, el modo (`items` o `amounts`, con un `total` opcional,
-o `all: true`) y, como mucho, el `salesPoint` de la nota, que por defecto es el
+o `all: true`) y puede elegir el `salesPoint` de la nota, que por defecto es el
 del original, y `date`, que por defecto es hoy en Buenos Aires. Una nota
-vinculada no tiene campos `issuer`, `to` ni `currency`. Solo las notas por
+vinculada no tiene campos `issuer` ni `currency`. Solo las notas por
 período los llevan, porque no hay original de donde tomarlos.
+
+Si la consulta del original no informa la condición de IVA del receptor,
+pasá `to.condition`. Esto puede ocurrir con comprobantes anteriores a ese
+campo. Si el original ya informa la condición, podés omitir `to` o aportar la
+misma condición. `to` solo admite `condition`. El tipo y el número de documento
+del receptor siempre salen del original.
 
 La forma de los ítems sigue la clase del original. Una nota de clase C acepta
 ítems `{ amount }`. Las notas de clase A y B aceptan ítems `{ gross | net, vat }`

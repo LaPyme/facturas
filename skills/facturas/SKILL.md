@@ -220,7 +220,10 @@ const nota = await arca.issueCreditNote(
 - La forma de los ítems sigue la clase del original: `{ amount }` en C,
   `{ gross | net, vat }` en A y B.
 - La clase, el receptor, la moneda y el concepto salen del original. La nota
-  no lleva `issuer`, `to` ni `currency`.
+  no lleva `issuer` ni `currency`. Si la consulta del original no informa la
+  condición de IVA del receptor, pasá `to.condition`. Si ya la informa,
+  podés omitir `to` o aportar la misma condición. `to` solo admite `condition`.
+  El tipo y el número de documento del receptor siempre salen del original.
 - `issueDebitNote()` tiene el mismo contrato sin `all: true`.
 - `previewCreditNote()` y `previewDebitNote()` son asincrónicas porque
   consultan el original.
