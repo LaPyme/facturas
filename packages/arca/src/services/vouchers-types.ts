@@ -144,10 +144,16 @@ export type IssueOutcome<O extends IssueOptions = { include?: never }> = (
         | { kind: "failed"; error: ArcaSafeErrorMetadata }
         /** The caller's deadline fired; the reservation stays for recover(). */
         | { kind: "aborted" }
-        /** An unresolved claim holds this sequence; resolve `by` and retry. */
-        | { kind: "blocked"; by: string }
-        /** The sequence moved past this key: it can never write. Use a new one. */
-        | { kind: "superseded"; by: string };
+        /**
+         * An unresolved claim holds this sequence; resolve `by` and retry. The
+         * key was reserved under the issuer CUIT `byTaxId`.
+         */
+        | { kind: "blocked"; by: string; byTaxId: string }
+        /**
+         * The sequence moved past this key: it can never write. Use a new one.
+         * `by` took the number under the issuer CUIT `byTaxId`.
+         */
+        | { kind: "superseded"; by: string; byTaxId: string };
     }
   | {
       kind: "conflict";

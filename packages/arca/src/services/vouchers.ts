@@ -517,6 +517,7 @@ async function runOperation(
         environment,
         taxId,
         sequence: sequenceRecord,
+        sequenceTaxId: sequence.taxId,
         coordinates: sequence.coordinates,
         select: select ?? (() => wsfe),
         options,
@@ -571,7 +572,7 @@ async function runOperation(
     const claimed: ArcaSequenceRecord = {
       v: 1,
       key: idempotencyKey,
-      taxId,
+      issuerTaxId: taxId,
       number,
       claimedAt: new Date().toISOString(),
     };
@@ -770,7 +771,11 @@ async function settledOutcome(
       number: settled.number,
     },
     attempt: replayEvidence(reservation.service),
-    lookup: { kind: "superseded", by: settled.by },
+    lookup: {
+      kind: "superseded",
+      by: settled.by,
+      byTaxId: settled.byTaxId ?? taxId,
+    },
     ...requestEvidence(
       preparedFromRecord(reservation).data,
       reservation.number,
@@ -2045,6 +2050,8 @@ type SequenceBarrier = {
   environment: ArcaEnvironment;
   taxId: string;
   sequence: string;
+  /** The taxpayer whose numbering the sequence follows. */
+  sequenceTaxId: string;
   coordinates: Omit<VoucherCoordinates, "number">;
   select: SelectService;
   options: IssueOptions;
@@ -2068,6 +2075,7 @@ async function runSequenceBarrier({
   environment,
   taxId,
   sequence,
+  sequenceTaxId,
   coordinates,
   select,
   options,
@@ -2084,7 +2092,7 @@ async function runSequenceBarrier({
   }
   // The claim may belong to another issuer representing the same taxpayer: its
   // reservation and settled record live under that issuer's CUIT.
-  const owner = claimed.taxId ?? taxId;
+  const owner = claimed.issuerTaxId ?? taxId;
   const settled = settledKey(environment, owner, claimed.key);
   if ((await storeCall(() => store.get(settled))) !== null) {
     return {};
@@ -2105,7 +2113,7 @@ async function runSequenceBarrier({
       kind: "indeterminate",
       attempted: { ...coordinates, number: record.number },
       attempt: replayEvidence(options.service),
-      lookup: { kind: "blocked", by: claimed.key },
+      lookup: { kind: "blocked", by: claimed.key, byTaxId: owner },
     },
   };
   const outcome = await recordConflict(
@@ -2113,7 +2121,13 @@ async function runSequenceBarrier({
     settled,
     await consultReservation(
       select,
-      record,
+      // This call's certificate may not be the one that claimed. Without a
+      // represented CUIT, it would read its own numbering instead of the one
+      // the claim advanced.
+      {
+        ...record,
+        representedTaxId: record.representedTaxId ?? sequenceTaxId,
+      },
       {
         forceRefresh: options.forceRefresh,
         ...(options.abortSignal === undefined
@@ -2158,7 +2172,8 @@ function readSequenceRecord(json: string): ArcaSequenceRecord {
     if (
       record?.v !== 1 ||
       typeof record.key !== "string" ||
-      (record.taxId !== undefined && typeof record.taxId !== "string") ||
+      (record.issuerTaxId !== undefined &&
+        typeof record.issuerTaxId !== "string") ||
       !Number.isSafeInteger(record.number)
     ) {
       throw new Error("Invalid sequence structure");

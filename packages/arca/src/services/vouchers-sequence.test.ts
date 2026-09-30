@@ -479,7 +479,7 @@ describe("issuers sharing a sequence", () => {
       JSON.parse(
         (await store.get(sequenceKey("test", "30712345678", 1, 11))) ?? "null"
       )
-    ).toMatchObject({ key: "sale-1", taxId: first, number: 77 });
+    ).toMatchObject({ key: "sale-1", issuerTaxId: first, number: 77 });
   });
   it("blocks another issuer on the unresolved claim", async () => {
     const { wsfe } = provider();
@@ -495,7 +495,7 @@ describe("issuers sharing a sequence", () => {
     ).toMatchObject({
       kind: "indeterminate",
       attempted: { number: 77 },
-      lookup: { kind: "blocked", by: "sale-1" },
+      lookup: { kind: "blocked", by: "sale-1", byTaxId: first },
     });
     expect(wsfe.issue).toHaveBeenCalledTimes(writes);
   });
@@ -526,7 +526,7 @@ describe("issuers sharing a sequence", () => {
       expect(recovered).toMatchObject({
         kind: "indeterminate",
         attempted: { number: 77 },
-        lookup: { kind: "superseded", by: key },
+        lookup: { kind: "superseded", by: key, byTaxId: second },
       });
       expect(recovered).not.toHaveProperty("voucher");
       expect(wsfe.issue).toHaveBeenCalledTimes(writes);
@@ -566,7 +566,7 @@ describe("issuers sharing a sequence", () => {
     const arca = service(store, wsfe);
     await strand(arca, wsfe, "sale-1");
     const sequence = sequenceKey("test", "30712345678", 1, 11);
-    const { taxId: _, ...legacy } = JSON.parse(
+    const { issuerTaxId: _, ...legacy } = JSON.parse(
       (await store.get(sequence)) ?? "null"
     ) as ArcaSequenceRecord;
     await store.set(sequence, JSON.stringify(legacy));
@@ -576,7 +576,23 @@ describe("issuers sharing a sequence", () => {
       await arca.issue(input, { ...represented, idempotencyKey: "sale-2" })
     ).toMatchObject({
       kind: "indeterminate",
-      lookup: { kind: "blocked", by: "sale-1" },
+      lookup: { kind: "blocked", by: "sale-1", byTaxId: first },
+    });
+  });
+  it("names the caller as the successor of a record written before it named one", async () => {
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const a = service(store, wsfe, first);
+    await strand(a, wsfe, "sale-1");
+    await a.issue(input, { ...represented, idempotencyKey: "sale-2" });
+    const settled = settledKey("test", first, "sale-1");
+    const { byTaxId: _, ...legacy } = JSON.parse(
+      (await store.get(settled)) ?? "null"
+    );
+    await store.set(settled, JSON.stringify(legacy));
+    expect(await a.recover("sale-1", represented)).toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "superseded", by: "sale-2", byTaxId: first },
     });
   });
   it("refuses a marker whose issuer is not a string", async () => {
@@ -586,10 +602,63 @@ describe("issuers sharing a sequence", () => {
     await strand(arca, wsfe, "sale-1");
     const sequence = sequenceKey("test", "30712345678", 1, 11);
     const marker = JSON.parse((await store.get(sequence)) ?? "null");
-    await store.set(sequence, JSON.stringify({ ...marker, taxId: 20_123 }));
+    await store.set(
+      sequence,
+      JSON.stringify({ ...marker, issuerTaxId: 20_123 })
+    );
     await expect(
       arca.issue(input, { ...represented, idempotencyKey: "sale-2" })
     ).rejects.toThrow("Invalid ARCA sequence record");
+  });
+  it("consults an unrepresented claim in the numbering it advanced", async () => {
+    // The taxpayer issues with its own certificate, so its reservation names
+    // no represented CUIT. An accountant representing it shares the store.
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const taxpayer = service(store, wsfe, "30712345678");
+    wsfe.issue.mockImplementationOnce(() =>
+      Promise.resolve({
+        ...base,
+        kind: "indeterminate" as const,
+        reason: "transport_error" as const,
+      })
+    );
+    wsfe.lookupVoucher.mockRejectedValueOnce(new Error("offline"));
+    expect(
+      (await taxpayer.issue(input, { idempotencyKey: "sale-1" })).kind
+    ).toBe("indeterminate");
+    // The accountant's own numbering holds another voucher at 77.
+    const own = provider();
+    const sent = wsfe.issue.mock.calls[0]?.[0].data as WsfeVoucherInput;
+    own.land(77, {
+      ...sent,
+      totalAmount: 250,
+      netAmount: 250,
+    });
+    const accountant = {
+      ...wsfe,
+      lookupVoucher: vi.fn(
+        (request: { representedTaxId?: string | number; number: number }) =>
+          request.representedTaxId === undefined
+            ? own.wsfe.lookupVoucher(request)
+            : wsfe.lookupVoucher(request)
+      ),
+    };
+    expect(
+      await service(store, accountant, first).issue(input, {
+        ...represented,
+        idempotencyKey: "sale-2",
+      })
+    ).toMatchObject({ kind: "authorized", voucher: { number: 77 } });
+    expect(
+      JSON.parse(
+        (await store.get(settledKey("test", "30712345678", "sale-1"))) ?? "null"
+      )
+    ).toMatchObject({ kind: "superseded", by: "sale-2", byTaxId: first });
+    expect(await taxpayer.recover("sale-1")).toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "superseded", by: "sale-2", byTaxId: first },
+    });
   });
   it("refuses a superseded record whose successor's issuer is not a string", async () => {
     const { wsfe } = provider();

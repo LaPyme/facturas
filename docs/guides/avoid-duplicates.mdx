@@ -35,8 +35,9 @@ venta quedan fuera de la coordinación.
 
 Antes de reservar un número, el SDK revisa si la operación anterior quedó sin
 resolver. Primero consulta ARCA. Si todavía no puede saber qué pasó, devuelve
-`indeterminate` con `lookup: { kind: "blocked", by: <clave> }` sin reservar ni
-emitir nada. Conciliá esa clave con `recover()` y repetí la llamada.
+`indeterminate` con `lookup: { kind: "blocked", by: <clave>, byTaxId }` sin
+reservar ni emitir nada. `byTaxId` es el CUIT del emisor que reservó esa clave.
+Conciliá la clave con `recover()` desde ese emisor y repetí la llamada.
 
 El bloqueo se renueva mientras el proceso está activo. Si el proceso se cae, el
 bloqueo vence, pero la reserva pendiente sigue frenando la secuencia. Así, otro
@@ -166,7 +167,7 @@ probó que el número estaba vacío y se lo dio a la clave `by`, reservada bajo 
 CUIT emisor `byTaxId`. Un registro sin `byTaxId` es de una versión anterior y
 nombra una clave del mismo emisor. La clave vieja consulta el
 número una vez y nunca reenvía. Devuelve `indeterminate` con
-`lookup: { kind: "superseded", by }` si el número sigue vacío o si el
+`lookup: { kind: "superseded", by, byTaxId }` si el número sigue vacío o si el
 comprobante que hay ahí es de `by` o de una clave que a su vez se lo quitó a
 `by`. Emití bajo una clave nueva. Devuelve `conflict` solo si alguna clave de
 esa cadena anotó un conflicto en ese número, porque entonces un desconocido
@@ -187,9 +188,10 @@ Preservá las dos versiones.
 última reserva reclamada en esa secuencia y si ARCA ya informó su desenlace. El
 `taxId` de la clave es el del contribuyente dueño de la numeración, que puede
 ser un representado. El registro nombra la reserva con su `key` y el CUIT del
-emisor que la creó en `taxId`, porque varios emisores con certificados
-distintos pueden representar al mismo contribuyente y compartir el store. Se
-escribe antes que la reserva que nombra.
+emisor que la creó en `issuerTaxId`, porque varios emisores con certificados
+distintos pueden representar al mismo contribuyente y compartir el store. La
+barrera consulta esa reserva con su CUIT representado o, si no lo tiene, con el
+del dueño de la secuencia. Se escribe antes que la reserva que nombra.
 `arca:v1:lock:sequence:...` es la clave del bloqueo. Los dos son registros de
 coordinación, no evidencia fiscal. Se reescriben en cada reclamo y se pueden
 borrar si hacen falta, siempre que ninguna reserva quede sin conciliar. Repetir

@@ -89,7 +89,7 @@ export type ArcaSequenceRecord = {
    * represent the taxpayer that owns the sequence. A marker without it names
    * the caller's own reservation.
    */
-  taxId?: string;
+  issuerTaxId?: string;
   number: number;
   claimedAt: string;
   resolvedAt?: string;
