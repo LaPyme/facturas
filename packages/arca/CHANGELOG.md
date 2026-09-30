@@ -1,5 +1,12 @@
 # facturas
 
+## 0.20.2
+
+### Patch Changes
+
+- edeacf1: Normalize the foreign-currency cancellation flag in WSFE and WSMTXCA lookup results. Ignore the flag on peso vouchers so credit and debit notes can be prepared and uncertain issuance outcomes can be recovered without a false identity conflict. Preserve valid foreign-currency flags, validate WSMTXCA values, and retain raw provider evidence for diagnostics.
+- b95f935: WSMTXCA valida el último número autorizado igual que WSFE. Rechaza respuestas sin un entero decimal explícito entre 0 y 99.999.999, como `"12abc"` o `"1.5"`, con `ArcaInvalidSoapResponseError`. Una respuesta sin número, que antes lanzaba `ArcaServiceError` ("WSMTXCA did not return the last authorized voucher number"), ahora también lanza `ArcaInvalidSoapResponseError` ("Invalid WSMTXCA last authorized number").
+
 ## 0.20.1
 
 ### Patch Changes
