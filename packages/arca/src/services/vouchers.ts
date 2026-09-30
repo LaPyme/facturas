@@ -571,6 +571,7 @@ async function runOperation(
     const claimed: ArcaSequenceRecord = {
       v: 1,
       key: idempotencyKey,
+      taxId,
       number,
       claimedAt: new Date().toISOString(),
     };
@@ -634,8 +635,8 @@ async function runOperation(
           readSettledRecord(recorded),
           options,
           taxId,
-          (other) =>
-            storeCall(() => store.get(settledKey(environment, taxId, other)))
+          (owner, other) =>
+            storeCall(() => store.get(settledKey(environment, owner, other)))
         );
       }
       return await settle(
@@ -707,7 +708,9 @@ function readSettledRecord(json: string): ArcaSettledRecord {
       !Number.isSafeInteger(record.number) ||
       (record.kind === "conflict"
         ? !record.found || typeof record.found !== "object"
-        : record.kind !== "superseded" || typeof record.by !== "string")
+        : record.kind !== "superseded" ||
+          typeof record.by !== "string" ||
+          (record.byTaxId !== undefined && typeof record.byTaxId !== "string"))
     ) {
       throw new Error("Invalid settled structure");
     }
@@ -738,7 +741,7 @@ async function settledOutcome(
   settled: ArcaSettledRecord,
   options: RecoveryOptions,
   taxId: string,
-  settledFor: (key: string) => Promise<string | null>
+  settledFor: (taxId: string, key: string) => Promise<string | null>
 ): Promise<IssueOutcome<IssueOptions>> {
   if (settled.kind === "conflict") {
     return settledConflict(settled, reservation, options);
@@ -755,7 +758,7 @@ async function settledOutcome(
   if (
     !empty &&
     (outcome.kind !== "conflict" ||
-      (await successionDisputed(settled.by, settledFor)))
+      (await successionDisputed(settled, taxId, settledFor)))
   ) {
     return outcome;
   }
@@ -779,16 +782,19 @@ async function settledOutcome(
 /**
  * Follows the keys that took one number from each other. A recorded conflict
  * anywhere along that chain means a stranger reached the number; an
- * unrecorded end means the last key wrote it or still owns the question. A
- * chain too long to walk counts as disputed.
+ * unrecorded end means the last key wrote it or still owns the question. Each
+ * key is read under the issuer that claimed it. A chain too long to walk counts
+ * as disputed.
  */
 async function successionDisputed(
-  key: string,
-  settledFor: (key: string) => Promise<string | null>
+  superseded: Extract<ArcaSettledRecord, { kind: "superseded" }>,
+  taxId: string,
+  settledFor: (taxId: string, key: string) => Promise<string | null>
 ): Promise<boolean> {
-  let next = key;
+  let owner = superseded.byTaxId ?? taxId;
+  let next = superseded.by;
   for (let hop = 0; hop < 16; hop += 1) {
-    const json = await settledFor(next);
+    const json = await settledFor(owner, next);
     if (json === null) {
       return false;
     }
@@ -796,6 +802,7 @@ async function successionDisputed(
     if (record.kind === "conflict") {
       return true;
     }
+    owner = record.byTaxId ?? owner;
     next = record.by;
   }
   return true;
@@ -1835,14 +1842,10 @@ async function recoverOperation(
       readSettledRecord(recorded),
       options,
       (context as StoreContext).taxId,
-      (other) =>
+      (owner, other) =>
         storeCall(() =>
           store.get(
-            settledKey(
-              (context as StoreContext).environment,
-              (context as StoreContext).taxId,
-              other
-            )
+            settledKey((context as StoreContext).environment, owner, other)
           )
         )
     );
@@ -2079,12 +2082,15 @@ async function runSequenceBarrier({
   if (claimed.resolvedAt !== undefined) {
     return {};
   }
-  const settled = settledKey(environment, taxId, claimed.key);
+  // The claim may belong to another issuer representing the same taxpayer: its
+  // reservation and settled record live under that issuer's CUIT.
+  const owner = claimed.taxId ?? taxId;
+  const settled = settledKey(environment, owner, claimed.key);
   if ((await storeCall(() => store.get(settled))) !== null) {
     return {};
   }
   const reservation = await storeCall(() =>
-    store.get(attemptKey(environment, taxId, claimed.key))
+    store.get(attemptKey(environment, owner, claimed.key))
   );
   if (reservation === null) {
     // The marker is written before the reservation: a key without one never
@@ -2114,7 +2120,7 @@ async function runSequenceBarrier({
           ? {}
           : { abortSignal: options.abortSignal }),
       },
-      taxId
+      owner
     )
   );
   if (outcome.kind === "authorized" || outcome.kind === "conflict") {
@@ -2138,6 +2144,7 @@ async function runSequenceBarrier({
         kind: "superseded",
         number: record.number,
         by: supersededBy,
+        byTaxId: taxId,
         settledAt: new Date().toISOString(),
       } satisfies ArcaSettledRecord)
     )
@@ -2151,6 +2158,7 @@ function readSequenceRecord(json: string): ArcaSequenceRecord {
     if (
       record?.v !== 1 ||
       typeof record.key !== "string" ||
+      (record.taxId !== undefined && typeof record.taxId !== "string") ||
       !Number.isSafeInteger(record.number)
     ) {
       throw new Error("Invalid sequence structure");

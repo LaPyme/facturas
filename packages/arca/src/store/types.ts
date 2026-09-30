@@ -61,6 +61,8 @@ export type ArcaSettledRecord =
       kind: "superseded";
       number: number;
       by: string;
+      /** The CUIT `by` was claimed under. Without it, `by` shares this issuer. */
+      byTaxId?: string;
       settledAt: string;
     };
 
@@ -82,6 +84,12 @@ export function attemptKey(
 export type ArcaSequenceRecord = {
   v: 1;
   key: string;
+  /**
+   * The issuer's CUIT: `key` names a reservation under it. Several issuers may
+   * represent the taxpayer that owns the sequence. A marker without it names
+   * the caller's own reservation.
+   */
+  taxId?: string;
   number: number;
   claimedAt: string;
   resolvedAt?: string;

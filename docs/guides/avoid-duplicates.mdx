@@ -161,8 +161,10 @@ el número reservado. `found` es un `VoucherSummary` en centavos y fechas
 `YYYY-MM-DD`. Un registro `v: 1` anterior lo guardó en las unidades de ARCA y
 se normaliza al leerlo. Una repetición con esa clave o un `recover()` devuelven el
 mismo `conflict` sin consultar al proveedor. Con
-`{ v: 1, kind: "superseded", number, by, settledAt }`, la barrera probó que el
-número estaba vacío y se lo dio a la clave `by`. La clave vieja consulta el
+`{ v: 1, kind: "superseded", number, by, byTaxId, settledAt }`, la barrera
+probó que el número estaba vacío y se lo dio a la clave `by`, reservada bajo el
+CUIT emisor `byTaxId`. Un registro sin `byTaxId` es de una versión anterior y
+nombra una clave del mismo emisor. La clave vieja consulta el
 número una vez y nunca reenvía. Devuelve `indeterminate` con
 `lookup: { kind: "superseded", by }` si el número sigue vacío o si el
 comprobante que hay ahí es de `by` o de una clave que a su vez se lo quitó a
@@ -182,7 +184,11 @@ versión anterior no reenvía por WSFE un comprobante que era de WSMTXCA.
 Preservá las dos versiones.
 
 `arca:v1:sequence:{environment}:{taxId}:{salesPoint}:{voucherType}` guarda la
-última reserva reclamada en esa secuencia y si ARCA ya informó su desenlace. Se
+última reserva reclamada en esa secuencia y si ARCA ya informó su desenlace. El
+`taxId` de la clave es el del contribuyente dueño de la numeración, que puede
+ser un representado. El registro nombra la reserva con su `key` y el CUIT del
+emisor que la creó en `taxId`, porque varios emisores con certificados
+distintos pueden representar al mismo contribuyente y compartir el store. Se
 escribe antes que la reserva que nombra.
 `arca:v1:lock:sequence:...` es la clave del bloqueo. Los dos son registros de
 coordinación, no evidencia fiscal. Se reescriben en cada reclamo y se pueden
