@@ -591,6 +591,23 @@ describe("issuers sharing a sequence", () => {
       arca.issue(input, { ...represented, idempotencyKey: "sale-2" })
     ).rejects.toThrow("Invalid ARCA sequence record");
   });
+  it("refuses a superseded record whose successor's issuer is not a string", async () => {
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const a = service(store, wsfe, first);
+    await strand(a, wsfe, "sale-1");
+    await service(store, wsfe, second).issue(input, {
+      ...represented,
+      idempotencyKey: "sale-2",
+    });
+    const settled = settledKey("test", first, "sale-1");
+    const record = JSON.parse((await store.get(settled)) ?? "null");
+    expect(record).toMatchObject({ kind: "superseded", byTaxId: second });
+    await store.set(settled, JSON.stringify({ ...record, byTaxId: 20_987 }));
+    await expect(a.recover("sale-1", represented)).rejects.toThrow(
+      "Invalid ARCA settled record"
+    );
+  });
 });
 
 describe("claim durability", () => {
