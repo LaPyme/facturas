@@ -1870,3 +1870,35 @@ it("maps associated voucher identities from real consultation fields", async () 
     voucher: { associatedVouchers: [{ type: 11, salesPoint: 1, number: 7 }] },
   });
 });
+
+describe("foreign-currency cancellation lookup parsing", () => {
+  it.each([
+    ["PES", "N", undefined],
+    ["PES", "S", undefined],
+    ["DOL", "N", "N"],
+    ["DOL", "S", "S"],
+    ["DOL", "invalid", undefined],
+    ["DOL", undefined, undefined],
+  ] as const)(
+    "parses %s with flag %s as %s",
+    async (currencyId, flag, expected) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValue(
+        createWsfeOperationResult("FECompConsultar", {
+          ResultGet: { CbteDesde: 9, MonId: currencyId, CanMisMonExt: flag },
+        })
+      );
+      const lookup = await createWsfeService(options).lookupVoucher({
+        salesPoint: 1,
+        voucherType: 6,
+        number: 9,
+      });
+      expect(lookup.kind).toBe("found");
+      if (lookup.kind !== "found") {
+        throw new Error("fixture");
+      }
+      expect(lookup.voucher.sameCurrencyForeignCancellation).toBe(expected);
+      expect(lookup.voucher.raw.CanMisMonExt).toBe(flag);
+    }
+  );
+});

@@ -311,10 +311,12 @@ export function wsmtxcaHeader(
       amount: Number(t.importe),
       rate: 0,
     })),
-    sameCurrencyForeignCancellation: raw.cancelaEnMismaMonedaExtranjera as
-      | "S"
-      | "N"
-      | undefined,
+    sameCurrencyForeignCancellation:
+      found.currencyId !== "PES" &&
+      (raw.cancelaEnMismaMonedaExtranjera === "S" ||
+        raw.cancelaEnMismaMonedaExtranjera === "N")
+        ? raw.cancelaEnMismaMonedaExtranjera
+        : undefined,
     optionalFields: rows(raw.arrayDatosAdicionales, "datoAdicional")?.map(
       (v) => ({ id: String(v.t), value: String(v.c1) })
     ),

@@ -8,6 +8,7 @@ import {
 import { createVouchersService } from "./vouchers";
 import type { IssueOptions } from "./vouchers-types";
 import {
+  createWsfeService,
   normalizeWsfeVoucherInput,
   type WsfeAuthorizationOutcome,
   type WsfeIssueInput,
@@ -87,6 +88,73 @@ function found(sent = data, number = 1): WsfeVoucherLookupResult {
     },
   };
 }
+/** Read provider echoes through the same parser used by issuance recovery. */
+function lookupFromArca(sent: WsfeVoucherInput, number: number, flag?: string) {
+  const soap = {
+    execute: vi.fn().mockResolvedValue({
+      result: {
+        ResultGet: {
+          CbteDesde: number,
+          CbteFch: sent.voucherDate,
+          PtoVta: sent.salesPoint,
+          CbteTipo: sent.voucherType,
+          Concepto: sent.concept,
+          DocTipo: sent.documentType,
+          DocNro: sent.documentNumber,
+          CondicionIVAReceptorId: sent.receiverVatConditionId,
+          ImpTotal: sent.totalAmount,
+          ImpTotConc: sent.nonTaxableAmount,
+          ImpNeto: sent.netAmount,
+          ImpOpEx: sent.exemptAmount,
+          ImpTrib: sent.taxAmount,
+          ImpIVA: sent.vatAmount,
+          MonId: sent.currencyId,
+          MonCotiz: sent.exchangeRate,
+          CanMisMonExt: flag,
+          Resultado: "A",
+          CodAutorizacion: "74123456789012",
+          FchVto: "20260915",
+          Iva: {
+            AlicIva: sent.vatRates?.map((rate) => ({
+              Id: rate.id,
+              BaseImp: rate.baseAmount,
+              Importe: rate.amount,
+            })),
+          },
+          CbtesAsoc: {
+            CbteAsoc: sent.associatedVouchers?.map((voucher) => ({
+              Tipo: voucher.type,
+              PtoVta: voucher.salesPoint,
+              Nro: voucher.number,
+              Cuit: voucher.taxId,
+              CbteFch: voucher.voucherDate,
+            })),
+          },
+        },
+      },
+    }),
+  };
+  return createWsfeService({
+    config: {
+      taxId: "20123456789",
+      certificatePem: "cert",
+      privateKeyPem: "key",
+      environment: "test",
+    },
+    auth: {
+      login: vi.fn().mockResolvedValue({
+        token: "token",
+        sign: "sign",
+        expiresAt: "2099-01-01T00:00:00Z",
+      }),
+    },
+    soap,
+  }).lookupVoucher({
+    salesPoint: sent.salesPoint,
+    voucherType: sent.voucherType,
+    number,
+  });
+}
 /** A custom store without withLock: no sequence lock, no barrier, no claim. */
 function withoutLock(store: ArcaStore): ArcaStore {
   return {
@@ -137,24 +205,26 @@ function fake({ coordinated = true } = {}) {
 }
 
 describe("credit note orchestration", () => {
-  it.each(["N", "S"] as const)(
-    "previews and issues peso notes when the original reports CanMisMonExt=%s",
-    async (flag) => {
-      const original = deriveWsfeInvoice({
-        issuer: "responsable_inscripto",
-        salesPoint: 17,
-        date: "20260904",
-        to: { condition: "consumidor_final" },
-        items: [{ gross: 12_100, vat: 21 }],
-      }).data;
-      const linked = {
-        for: { salesPoint: 17, voucherType: 6, number: 1 },
-        date: "20260905" as const,
-      };
-      const modes = [
-        { ...linked, all: true as const },
-        { ...linked, items: [{ gross: 12_100, vat: 21 as const }] },
-        {
+  describe.each(["N", "S"] as const)("peso original echo %s", (flag) => {
+    const original = deriveWsfeInvoice({
+      issuer: "responsable_inscripto",
+      salesPoint: 17,
+      date: "20260904",
+      to: { condition: "consumidor_final" },
+      items: [{ gross: 12_100, vat: 21 }],
+    }).data;
+    const linked = {
+      for: { salesPoint: 17, voucherType: 6, number: 1 },
+      date: "20260905" as const,
+    };
+    const partialModes = [
+      {
+        mode: "items",
+        input: { ...linked, items: [{ gross: 12_100, vat: 21 as const }] },
+      },
+      {
+        mode: "reviewed amounts",
+        input: {
           ...linked,
           amounts: {
             net: 10_000,
@@ -162,48 +232,102 @@ describe("credit note orchestration", () => {
             vatRates: [{ id: 5, base: 10_000, amount: 2100 }],
           },
         },
-      ];
-      for (const input of modes) {
+      },
+    ];
+    it.each([
+      { mode: "full", input: { ...linked, all: true as const } },
+      ...partialModes,
+    ])("previews and issues a $mode credit note", async ({ input }) => {
+      const { service, wsfe } = fake();
+      wsfe.lookupVoucher.mockResolvedValue(
+        await lookupFromArca(original, 1, flag)
+      );
+      const preview = await service.previewCreditNote(input);
+      expect(preview.request).not.toHaveProperty(
+        "sameCurrencyForeignCancellation"
+      );
+      expect(await service.issueCreditNote(input, options)).toMatchObject({
+        kind: "authorized",
+        voucher: { voucherType: 8, voucherClass: "B" },
+      });
+      expect(wsfe.issue).toHaveBeenCalledExactlyOnceWith({
+        data: preview.request,
+        voucherNumber: 9,
+        representedTaxId: undefined,
+      });
+    });
+    it.each(partialModes)(
+      "previews and issues a $mode debit note",
+      async ({ input }) => {
         const { service, wsfe } = fake();
         wsfe.lookupVoucher.mockResolvedValue(
-          found({ ...original, sameCurrencyForeignCancellation: flag })
+          await lookupFromArca(original, 1, flag)
         );
-        const preview = await service.previewCreditNote(input);
+        const preview = await service.previewDebitNote(input);
         expect(preview.request).not.toHaveProperty(
           "sameCurrencyForeignCancellation"
         );
-        const issued = await service.issueCreditNote(input, {
-          ...options,
-          include: { request: true },
-        });
-        expect(issued).toMatchObject({
+        expect(await service.issueDebitNote(input, options)).toMatchObject({
           kind: "authorized",
-          voucher: { voucherType: 8, voucherClass: "B" },
+          voucher: { voucherType: 7, voucherClass: "B" },
         });
-        expect(wsfe.issue).toHaveBeenCalledOnce();
-        expect(wsfe.issue.mock.calls[0][0].data).not.toHaveProperty(
-          "sameCurrencyForeignCancellation"
-        );
-
-        if (!("all" in input)) {
-          const debit = await service.previewDebitNote(input);
-          expect(debit.request).not.toHaveProperty(
-            "sameCurrencyForeignCancellation"
-          );
-          const issuedDebit = await service.issueDebitNote(input, {
-            idempotencyKey: "debit-note-sale",
-          });
-          expect(issuedDebit).toMatchObject({
-            kind: "authorized",
-            voucher: { voucherType: 7, voucherClass: "B" },
-          });
-          expect(wsfe.issue.mock.calls[1][0].data).not.toHaveProperty(
-            "sameCurrencyForeignCancellation"
-          );
-        }
+        expect(wsfe.issue).toHaveBeenCalledExactlyOnceWith({
+          data: preview.request,
+          voucherNumber: 9,
+          representedTaxId: undefined,
+        });
       }
-    }
-  );
+    );
+    it("recovers an uncertain peso credit note with the provider flag echo", async () => {
+      const { service, wsfe } = fake();
+      wsfe.lookupVoucher.mockResolvedValue(
+        await lookupFromArca(original, 1, flag)
+      );
+      wsfe.issue.mockImplementation(async ({ data: sent }) => {
+        wsfe.lookupVoucher.mockResolvedValue(
+          await lookupFromArca(sent, 9, flag)
+        );
+        return {
+          ...base,
+          kind: "indeterminate",
+          reason: "transport_error",
+        };
+      });
+      expect(
+        await service.issueCreditNote(
+          { ...linked, all: true as const },
+          options
+        )
+      ).toMatchObject({
+        kind: "authorized",
+        recoveredByMatch: true,
+        voucher: { voucherType: 8, number: 9 },
+      });
+      expect(wsfe.issue).toHaveBeenCalledOnce();
+      expect(wsfe.getNextVoucherNumber).toHaveBeenCalledOnce();
+      expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(2);
+      expect(await service.recover(options.idempotencyKey)).toMatchObject({
+        kind: "authorized",
+        recoveredByMatch: true,
+      });
+      expect(wsfe.issue).toHaveBeenCalledOnce();
+    });
+    it("previews a note for peso originals with different provider echoes", async () => {
+      const { service, wsfe } = fake();
+      wsfe.lookupVoucher
+        .mockResolvedValueOnce(await lookupFromArca(original, 1, flag))
+        .mockResolvedValueOnce(await lookupFromArca(original, 2));
+      const preview = await service.previewCreditNote({
+        ...linked,
+        for: [linked.for, { ...linked.for, number: 2 }],
+        items: [{ gross: 12_100, vat: 21 }],
+      });
+      expect(preview.request).not.toHaveProperty(
+        "sameCurrencyForeignCancellation"
+      );
+      expect(preview.request.associatedVouchers).toHaveLength(2);
+    });
+  });
   it.each([false, true])(
     "looks up original before numbering; keyed=%s",
     async (keyed) => {

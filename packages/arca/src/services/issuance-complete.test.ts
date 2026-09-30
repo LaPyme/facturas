@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey, sequenceKey } from "../store/types";
-import { wsmtxcaRequest } from "./issuance-wsmtxca";
+import { wsmtxcaHeader, wsmtxcaRequest } from "./issuance-wsmtxca";
 import { createVouchersService } from "./vouchers";
 import {
   createWsfeService,
@@ -1345,4 +1345,41 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       },
     });
   });
+});
+
+describe("WSMTXCA foreign-currency cancellation lookup parsing", () => {
+  it.each([
+    ["PES", "N", undefined],
+    ["PES", "S", undefined],
+    ["DOL", "N", "N"],
+    ["DOL", "S", "S"],
+    ["DOL", "invalid", undefined],
+    ["DOL", undefined, undefined],
+  ] as const)(
+    "parses %s with flag %s as %s",
+    async (currencyId, flag, expected) => {
+      const { config, auth, soap, vouchers } = transportFixture();
+      vouchers.set(1, {
+        numeroComprobante: 9,
+        codigoMoneda: currencyId,
+        cancelaEnMismaMonedaExtranjera: flag,
+      });
+      const lookup = await createWsmtxcaService({
+        config,
+        auth,
+        soap,
+      }).lookupVoucher({
+        salesPoint: 1,
+        voucherType: 1,
+        voucherNumber: 9,
+      });
+      expect(lookup.kind).toBe("found");
+      if (lookup.kind !== "found") {
+        throw new Error("fixture");
+      }
+      const header = wsmtxcaHeader(lookup.voucher);
+      expect(header.sameCurrencyForeignCancellation).toBe(expected);
+      expect(header.raw.cancelaEnMismaMonedaExtranjera).toBe(flag);
+    }
+  );
 });

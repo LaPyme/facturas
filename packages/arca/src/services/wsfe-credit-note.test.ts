@@ -506,14 +506,6 @@ describe("notes against several originals", () => {
   ): CreditNoteInput {
     return { for: targets, items, date: "20260905", ...extra };
   }
-  it("ignores irrelevant foreign-currency flag differences on peso originals", () => {
-    const result = deriveWsfePartialCreditNote(
-      [{ ...classC, sameCurrencyForeignCancellation: "N" }, second],
-      many([{ amount: 150 }])
-    );
-    expect(result.data).not.toHaveProperty("sameCurrencyForeignCancellation");
-    expect(result.data.associatedVouchers).toHaveLength(2);
-  });
   it("associates every original and inherits their common header", () => {
     const { data, voucherClass, amounts } = deriveWsfePartialCreditNote(
       [classC, second],

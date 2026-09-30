@@ -1474,7 +1474,11 @@ function mapWsfeVoucherInfo(raw: Record<string, unknown>): WsfeVoucherInfo {
       endDate: String(period.FchHasta) as WsfeDateInput,
     };
   }
-  if (raw.CanMisMonExt === "S" || raw.CanMisMonExt === "N") {
+  // ARCA can echo this foreign-currency-only flag on peso vouchers.
+  if (
+    voucher.currencyId !== "PES" &&
+    (raw.CanMisMonExt === "S" || raw.CanMisMonExt === "N")
+  ) {
     voucher.sameCurrencyForeignCancellation = raw.CanMisMonExt;
   }
   voucher.optionalFields = mapWsfeLookupDetails(
