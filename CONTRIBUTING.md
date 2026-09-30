@@ -27,6 +27,17 @@ pnpm install
 
 Los tests no llaman a ARCA ni necesitan credenciales.
 
+### Dev container
+
+Si tenés Docker y la extensión Dev Containers de VS Code, abrí el repositorio
+y ejecutá **Dev Containers: Reopen in Container** desde la paleta de comandos.
+El contenedor instala Node.js desde `.nvmrc`, pnpm desde `package.json` y las
+dependencias con `pnpm install --frozen-lockfile`. También incluye Git y `gh`
+para preparar contribuciones.
+
+Si cambia `.nvmrc` o la versión de pnpm, ejecutá
+**Dev Containers: Rebuild Container** para actualizar el entorno.
+
 ## Comandos
 
 Desde la raíz del repositorio:
