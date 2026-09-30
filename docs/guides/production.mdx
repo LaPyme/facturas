@@ -85,9 +85,13 @@ ARCA. Están en [Errores](/reference/errors).
 
 ## 5. Una prueba de humo
 
-Antes de la primera venta real, emití una factura de ARS 1 con
-`items: [{ amount: 100 }]` seguida de una nota de crédito total, con
-`all: true`. Usá tu condición fiscal real en `issuer`.
+Antes de la primera venta real, emití una factura de ARS 1 seguida de una nota
+de crédito total, con `all: true`. Usá tu condición fiscal real en `issuer`.
+
+En clase C, usá `items: [{ amount: 100 }]`. En clase A o B, pasá un ítem con
+`gross: 100` y el `vat` que corresponda a la operación. Las formas de los ítems
+y los valores de `vat` están en
+[Datos de la factura](/guides/invoices#datos-de-la-factura).
 
 <Warning>
   La factura y la nota son documentos reales y quedan en los registros de ARCA. La nota es una operación aparte: si falla, la factura queda pendiente.
