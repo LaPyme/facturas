@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { ArcaSoapFaultError, ArcaTransportError } from "../errors";
+import {
+  ArcaInvalidSoapResponseError,
+  ArcaSoapFaultError,
+  ArcaTransportError,
+} from "../errors";
 import { buildSoapEnvelope } from "../internal/xml";
 import { createWsmtxcaService } from "./wsmtxca";
 
@@ -517,6 +521,73 @@ describe("createWsmtxcaService", () => {
     });
   });
 
+  it.each([
+    ["undefined", undefined],
+    ["null", null],
+    ["empty", ""],
+    ["whitespace", "   "],
+    ["boolean", true],
+    ["negative", -1],
+    ["fraction", 1.5],
+    ["fraction string", "1.5"],
+    ["trailing text", "12abc"],
+    ["exponent string", "1e2"],
+    ["too many digits", "100000000"],
+    ["non-numeric", "not-a-number"],
+  ] as const)(
+    "rejects invalid last authorized number: %s",
+    async (_label, rawNumber) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce({
+        result: {
+          consultarUltimoComprobanteAutorizadoResponse: {
+            numeroComprobante: rawNumber,
+          },
+        },
+      });
+      const failure = await createWsmtxcaService(options)
+        .getLastAuthorizedVoucher({ voucherType: 1, salesPoint: 4 })
+        .catch((error: unknown) => error);
+
+      if (!(failure instanceof ArcaInvalidSoapResponseError)) {
+        throw new Error("Expected invalid WSMTXCA response error");
+      }
+      expect(failure).toMatchObject({
+        service: "wsmtxca",
+        operation: "consultarUltimoComprobanteAutorizado",
+      });
+      expect(failure.cause).toBeUndefined();
+      expect(failure.message).toBe("Invalid WSMTXCA last authorized number");
+    }
+  );
+
+  it.each([
+    [0, 0],
+    ["0", 0],
+    [41, 41],
+    ["41", 41],
+    [99_999_999, 99_999_999],
+  ] as const)(
+    "accepts explicit last authorized number %s",
+    async (rawNumber, expected) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce({
+        result: {
+          consultarUltimoComprobanteAutorizadoResponse: {
+            numeroComprobante: rawNumber,
+          },
+        },
+      });
+
+      await expect(
+        createWsmtxcaService(options).getLastAuthorizedVoucher({
+          voucherType: 1,
+          salesPoint: 4,
+        })
+      ).resolves.toMatchObject({ voucherNumber: expected });
+    }
+  );
+
   it("normalizes only WSMTXCA consult 1503 as exact voucher absence", async () => {
     const notFoundOptions = createBaseOptions();
     notFoundOptions.soap.execute.mockResolvedValueOnce({
@@ -731,8 +802,8 @@ describe("createWsmtxcaService", () => {
         salesPoint: 4,
       })
     ).rejects.toMatchObject({
-      name: "ArcaServiceError",
-      message: "WSMTXCA did not return the last authorized voucher number",
+      name: "ArcaInvalidSoapResponseError",
+      message: "Invalid WSMTXCA last authorized number",
     });
 
     await expect(

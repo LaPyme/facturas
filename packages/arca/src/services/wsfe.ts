@@ -20,6 +20,7 @@ import {
   serializeArcaPercentage,
 } from "../internal/decimal";
 import type { ArcaClientConfig, ArcaRepresentedTaxId } from "../internal/types";
+import { parseLastAuthorizedNumber } from "../internal/voucher-number";
 import type { SoapTransport } from "../soap";
 import type { WsaaAuthModule } from "../wsaa";
 import type {
@@ -474,24 +475,12 @@ export function createWsfeService(
         CbteTipo: voucherType,
       }
     );
-    const rawNumber = result.CbteNro;
-    const lastNumber = Number(rawNumber);
-    if (
-      (typeof rawNumber !== "string" && typeof rawNumber !== "number") ||
-      !/^\d+$/.test(String(rawNumber).trim()) ||
-      !Number.isSafeInteger(lastNumber) ||
-      lastNumber < 0 ||
-      lastNumber > 99_999_999
-    ) {
-      throw new ArcaInvalidSoapResponseError(
-        "Invalid WSFE last authorized number",
-        {
-          service: "wsfe",
-          operation: "FECompUltimoAutorizado",
-        }
-      );
-    }
-    return lastNumber + 1;
+    return (
+      parseLastAuthorizedNumber(result.CbteNro, {
+        service: "wsfe",
+        operation: "FECompUltimoAutorizado",
+      }) + 1
+    );
   }
 
   async function getWsfeCatalog(

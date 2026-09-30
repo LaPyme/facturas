@@ -12,6 +12,7 @@ import {
   executeWithAuthenticationRecovery,
 } from "../internal/authentication";
 import type { ArcaClientConfig, ArcaRepresentedTaxId } from "../internal/types";
+import { parseLastAuthorizedNumber } from "../internal/voucher-number";
 import type { SoapTransport } from "../soap";
 import type { WsaaAuthModule } from "../wsaa";
 import type {
@@ -266,10 +267,9 @@ export function createWsmtxcaService(
     }
 
     return {
-      voucherNumber: parseWsmtxcaVoucherNumber(
+      voucherNumber: parseLastAuthorizedNumber(
         raw.numeroComprobante ?? raw.cbteNro ?? raw.nroComprobante,
-        "WSMTXCA did not return the last authorized voucher number",
-        true
+        { service: "wsmtxca", operation }
       ),
       raw,
     };
@@ -889,20 +889,6 @@ function sumWsmtxcaVatAmounts(value: unknown): number | undefined {
   return amounts.length > 0
     ? amounts.reduce((total, amount) => total + amount, 0)
     : undefined;
-}
-
-function parseWsmtxcaVoucherNumber(
-  value: unknown,
-  message: string,
-  allowZero = false
-) {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  if (!Number.isFinite(parsed) || (allowZero ? parsed < 0 : parsed <= 0)) {
-    throw new ArcaServiceError(message, {
-      service: "wsmtxca",
-    });
-  }
-  return parsed;
 }
 
 function parseOptionalPositiveInteger(value: unknown): number | undefined {
