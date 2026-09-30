@@ -256,6 +256,82 @@ describe("runCheck file discovery", () => {
     expect(context.stdout()).toContain("o pasá --key.");
   });
 
+  it.each(["flag", "environment"])(
+    "completes a discovered certificate with the key from the %s",
+    async (source) => {
+      const directory = createTemporaryDirectory();
+      writeFileSync(join(directory, "arca-test.crt"), VALID.certificatePem);
+      const key = join(directory, "otra.key");
+      if (source === "flag") {
+        writeFileSync(key, VALID.privateKeyPem);
+      }
+      const context = createContext({
+        env:
+          source === "environment"
+            ? { ARCA_PRIVATE_KEY_PEM: VALID.privateKeyPem }
+            : {},
+        cwd: directory,
+      });
+
+      expect(await run(context, source === "flag" ? { key } : {})).toBe(0);
+      expect(context.authOptions?.environment).toBe("test");
+      expect(context.stdout()).toContain("arca-test.crt en este directorio");
+      if (source === "flag") {
+        expect(context.stdout()).toContain("--key");
+      }
+    }
+  );
+
+  it.each(["flag", "environment"])(
+    "completes a discovered key with the certificate from the %s",
+    async (source) => {
+      const directory = createTemporaryDirectory();
+      writeFileSync(join(directory, "arca-test.key"), VALID.privateKeyPem);
+      const certificate = join(directory, "otro.crt");
+      if (source === "flag") {
+        writeFileSync(certificate, VALID.certificatePem);
+      }
+      const context = createContext({
+        env:
+          source === "environment"
+            ? { ARCA_CERTIFICATE_PEM: VALID.certificatePem }
+            : {},
+        cwd: directory,
+      });
+
+      expect(
+        await run(context, source === "flag" ? { cert: certificate } : {})
+      ).toBe(0);
+      expect(context.authOptions?.environment).toBe("test");
+      expect(context.stdout()).toContain("arca-test.key en este directorio");
+      expect(context.stdout()).not.toContain("arca-test.crt");
+      if (source === "flag") {
+        expect(context.stdout()).toContain("--cert");
+      }
+    }
+  );
+
+  it("requires --env when the supplied certificate completes both keys", async () => {
+    const directory = createTemporaryDirectory();
+    writeFileSync(join(directory, "arca-test.key"), VALID.privateKeyPem);
+    writeFileSync(join(directory, "arca-production.key"), VALID.privateKeyPem);
+    const context = createContext({
+      env: { ARCA_CERTIFICATE_PEM: VALID.certificatePem },
+      cwd: directory,
+      salesPoints: [{ number: 3, blocked: false, emissionType: "CAE" }],
+    });
+
+    expect(await run(context, {})).toBe(1);
+    expect(context.stdout()).toContain("arca-test.key y arca-production.key");
+    expect(context.stdout()).toContain(
+      "Elegí con --env test o --env production."
+    );
+    expect(context.login).not.toHaveBeenCalled();
+
+    expect(await run(context, { env: "production" })).toBe(0);
+    expect(context.authOptions?.environment).toBe("production");
+  });
+
   it("prefers the environment variables over the files", async () => {
     const directory = directoryWith("test", SOMEONE_ELSE);
     const context = createContext({

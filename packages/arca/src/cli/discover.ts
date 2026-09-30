@@ -32,7 +32,7 @@ export function privateKeyFileName(environment: ArcaEnvironment): string {
   return `arca-${environment}.key`;
 }
 
-/** A complete pair, read from disk. */
+/** A complete pair and the conventional file names for its environment. */
 export type DiscoveredCredentials = {
   environment: ArcaEnvironment;
   certificateFile: string;
@@ -62,12 +62,14 @@ export type CredentialDiscovery =
 /**
  * Looks for `arca-<entorno>.crt` and `arca-<entorno>.key` in one directory.
  * With an environment already chosen, only that pair is considered.
+ * Supplied PEMs complete a pair and take precedence over its files.
  *
  * @throws When a file exists but cannot be read.
  */
 export function discoverCredentials(
   directory: string,
-  environment?: ArcaEnvironment
+  environment?: ArcaEnvironment,
+  supplied: { certificatePem?: string; privateKeyPem?: string } = {}
 ): CredentialDiscovery {
   const candidates = (
     environment === undefined ? DISCOVERY_ORDER : [environment]
@@ -84,12 +86,16 @@ export function discoverCredentials(
   });
 
   const complete = candidates.filter(
-    (candidate) => candidate.hasCertificate && candidate.hasKey
+    (candidate) =>
+      (candidate.hasCertificate || supplied.certificatePem) &&
+      (candidate.hasKey || supplied.privateKeyPem)
   );
   if (complete.length > 1) {
     return {
       kind: "ambiguous",
-      files: complete.map((candidate) => candidate.certificateFile),
+      files: complete.map((candidate) =>
+        supplied.certificatePem ? candidate.keyFile : candidate.certificateFile
+      ),
     };
   }
 
@@ -101,8 +107,9 @@ export function discoverCredentials(
         environment: pair.environment,
         certificateFile: pair.certificateFile,
         keyFile: pair.keyFile,
-        certificatePem: read(directory, pair.certificateFile),
-        privateKeyPem: read(directory, pair.keyFile),
+        certificatePem:
+          supplied.certificatePem || read(directory, pair.certificateFile),
+        privateKeyPem: supplied.privateKeyPem || read(directory, pair.keyFile),
       },
     };
   }

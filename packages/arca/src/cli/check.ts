@@ -298,7 +298,8 @@ function resolveConfigLayer(
     if (!(certificatePem && privateKeyPem)) {
       discovery = discoverCredentials(
         resolveDirectory(io, flags.dir),
-        toEnvironment(chosenEnvironment)
+        toEnvironment(chosenEnvironment),
+        { certificatePem, privateKeyPem }
       );
     }
   } catch (error) {
@@ -347,7 +348,7 @@ function resolveConfigLayer(
         name: "config",
         ok: true,
         detail: describeSources({
-          ...describeCredentialSource(flags, found),
+          ...describeCredentialSource(flags, found, certificatePem),
           taxId: taxId.source,
           ...describeEnvironmentSource(io, flags, config.environment),
         }),
@@ -453,15 +454,17 @@ function readPem(
  */
 function describeCredentialSource(
   flags: CheckFlags,
-  found: DiscoveredCredentials | undefined
+  found: DiscoveredCredentials | undefined,
+  suppliedCertificate: string | undefined
 ): { credentials?: string } {
-  if (found !== undefined) {
-    return { credentials: `${found.certificateFile} en este directorio` };
-  }
   const named = [
     ...(flags.cert?.trim() ? ["--cert"] : []),
     ...(flags.key?.trim() ? ["--key"] : []),
   ];
+  if (found !== undefined) {
+    const file = suppliedCertificate ? found.keyFile : found.certificateFile;
+    named.push(`${file} en este directorio`);
+  }
   return named.length === 0 ? {} : { credentials: named.join(" y ") };
 }
 
