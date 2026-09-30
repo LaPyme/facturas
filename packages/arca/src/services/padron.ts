@@ -1,5 +1,6 @@
 import type { ReceiverCondition } from "../constants";
 import { ArcaSoapFaultError } from "../errors";
+import { classifyArcaAuthenticationError } from "../internal/authentication";
 import type {
   ArcaClientConfig,
   ArcaPadronServiceName,
@@ -406,6 +407,8 @@ async function executePadronOperation(
       return null;
     }
 
-    throw error;
+    throw (
+      classifyArcaAuthenticationError(error, { service, operation }) ?? error
+    );
   }
 }

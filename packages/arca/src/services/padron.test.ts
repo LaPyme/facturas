@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ArcaSoapFaultError } from "../errors";
+import { ArcaAuthenticationError, ArcaSoapFaultError } from "../errors";
 import { createPadronService } from "./padron";
 
 function createBaseOptions() {
@@ -287,19 +287,52 @@ describe("createPadronService", () => {
     expect(result?.activities).toEqual([]);
   });
 
-  it("returns null on not-found SOAP faults and rethrows other SOAP faults", async () => {
-    const options = createBaseOptions();
-    const service = createPadronService(options);
+  describe.each([
+    {
+      method: "getTaxpayerDetails" as const,
+      service: "padron-a5",
+      operation: "getPersona_v2",
+      input: 20_123_456_789,
+    },
+    {
+      method: "getTaxIdByDocument" as const,
+      service: "padron-a13",
+      operation: "getIdPersonaListByDocumento",
+      input: 12_345_678,
+    },
+  ])("$method SOAP faults", ({ method, service, operation, input }) => {
+    it("classifies authentication faults without retrying", async () => {
+      const options = createBaseOptions();
+      const fault = new ArcaSoapFaultError(
+        "No apareció CUIT en lista de relaciones"
+      );
+      options.soap.execute.mockRejectedValueOnce(fault);
 
-    options.soap.execute.mockRejectedValueOnce(
-      new ArcaSoapFaultError("Persona no existe")
-    );
-    await expect(service.getTaxpayerDetails(99_999_999)).resolves.toBeNull();
+      const result = createPadronService(options)[method](input);
 
-    const fatalFault = new ArcaSoapFaultError("Servicio caido");
-    options.soap.execute.mockRejectedValueOnce(fatalFault);
-    await expect(service.getTaxIdByDocument(12_345_678)).rejects.toBe(
-      fatalFault
-    );
+      await expect(result).rejects.toBeInstanceOf(ArcaAuthenticationError);
+      await expect(result).rejects.toMatchObject({
+        reason: "missing_relationship",
+        service,
+        operation,
+        cause: fault,
+      });
+      expect(options.auth.login).toHaveBeenCalledTimes(1);
+      expect(options.soap.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns null for not-found faults and preserves other faults", async () => {
+      const options = createBaseOptions();
+      const padron = createPadronService(options);
+
+      options.soap.execute.mockRejectedValueOnce(
+        new ArcaSoapFaultError("Persona no existe")
+      );
+      await expect(padron[method](input)).resolves.toBeNull();
+
+      const fault = new ArcaSoapFaultError("Servicio caido");
+      options.soap.execute.mockRejectedValueOnce(fault);
+      await expect(padron[method](input)).rejects.toBe(fault);
+    });
   });
 });
