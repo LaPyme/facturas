@@ -63,6 +63,10 @@ autorizados antes de que existiera ese campo. Para esos originales pasá
 `to: { condition: "consumidor_final" }` con la condición real del receptor. Se
 usa solo si la consulta no la trae, y si la trae tiene que coincidir.
 
+Si ARCA devuelve `CanMisMonExt` en un original en pesos, el SDK omite ese
+indicador al preparar la nota. Solo lo conserva para comprobantes en moneda
+extranjera.
+
 ## Nota total
 
 `all: true` acredita el original completo: espeja sus importes y sus alícuotas

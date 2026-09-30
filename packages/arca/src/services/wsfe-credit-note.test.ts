@@ -64,6 +64,31 @@ function partial(
 }
 
 describe("full credit note derivation", () => {
+  it.each(["N", "S"] as const)(
+    "preserves the foreign-currency cancellation flag %s",
+    (flag) => {
+      const foreign = {
+        ...invoice,
+        currencyId: "DOL",
+        exchangeRate: 1200.5,
+        sameCurrencyForeignCancellation: flag,
+      };
+      const results = [
+        deriveWsfeFullCreditNote(foreign, full("20260905")),
+        deriveWsfePartialCreditNote(
+          [foreign],
+          partial([{ gross: 12_100, vat: 21 }])
+        ),
+      ];
+      for (const result of results) {
+        expect(result.data).toMatchObject({
+          currencyId: "DOL",
+          exchangeRate: 1200.5,
+          sameCurrencyForeignCancellation: flag,
+        });
+      }
+    }
+  );
   it.each([
     [1, 3, "A"],
     [6, 8, "B"],
@@ -481,6 +506,14 @@ describe("notes against several originals", () => {
   ): CreditNoteInput {
     return { for: targets, items, date: "20260905", ...extra };
   }
+  it("ignores irrelevant foreign-currency flag differences on peso originals", () => {
+    const result = deriveWsfePartialCreditNote(
+      [{ ...classC, sameCurrencyForeignCancellation: "N" }, second],
+      many([{ amount: 150 }])
+    );
+    expect(result.data).not.toHaveProperty("sameCurrencyForeignCancellation");
+    expect(result.data.associatedVouchers).toHaveLength(2);
+  });
   it("associates every original and inherits their common header", () => {
     const { data, voucherClass, amounts } = deriveWsfePartialCreditNote(
       [classC, second],

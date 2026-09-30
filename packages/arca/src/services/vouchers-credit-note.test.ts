@@ -137,6 +137,73 @@ function fake({ coordinated = true } = {}) {
 }
 
 describe("credit note orchestration", () => {
+  it.each(["N", "S"] as const)(
+    "previews and issues peso notes when the original reports CanMisMonExt=%s",
+    async (flag) => {
+      const original = deriveWsfeInvoice({
+        issuer: "responsable_inscripto",
+        salesPoint: 17,
+        date: "20260904",
+        to: { condition: "consumidor_final" },
+        items: [{ gross: 12_100, vat: 21 }],
+      }).data;
+      const linked = {
+        for: { salesPoint: 17, voucherType: 6, number: 1 },
+        date: "20260905" as const,
+      };
+      const modes = [
+        { ...linked, all: true as const },
+        { ...linked, items: [{ gross: 12_100, vat: 21 as const }] },
+        {
+          ...linked,
+          amounts: {
+            net: 10_000,
+            vat: 2100,
+            vatRates: [{ id: 5, base: 10_000, amount: 2100 }],
+          },
+        },
+      ];
+      for (const input of modes) {
+        const { service, wsfe } = fake();
+        wsfe.lookupVoucher.mockResolvedValue(
+          found({ ...original, sameCurrencyForeignCancellation: flag })
+        );
+        const preview = await service.previewCreditNote(input);
+        expect(preview.request).not.toHaveProperty(
+          "sameCurrencyForeignCancellation"
+        );
+        const issued = await service.issueCreditNote(input, {
+          ...options,
+          include: { request: true },
+        });
+        expect(issued).toMatchObject({
+          kind: "authorized",
+          voucher: { voucherType: 8, voucherClass: "B" },
+        });
+        expect(wsfe.issue).toHaveBeenCalledOnce();
+        expect(wsfe.issue.mock.calls[0][0].data).not.toHaveProperty(
+          "sameCurrencyForeignCancellation"
+        );
+
+        if (!("all" in input)) {
+          const debit = await service.previewDebitNote(input);
+          expect(debit.request).not.toHaveProperty(
+            "sameCurrencyForeignCancellation"
+          );
+          const issuedDebit = await service.issueDebitNote(input, {
+            idempotencyKey: "debit-note-sale",
+          });
+          expect(issuedDebit).toMatchObject({
+            kind: "authorized",
+            voucher: { voucherType: 7, voucherClass: "B" },
+          });
+          expect(wsfe.issue.mock.calls[1][0].data).not.toHaveProperty(
+            "sameCurrencyForeignCancellation"
+          );
+        }
+      }
+    }
+  );
   it.each([false, true])(
     "looks up original before numbering; keyed=%s",
     async (keyed) => {

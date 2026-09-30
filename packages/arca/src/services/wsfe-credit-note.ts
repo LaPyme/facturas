@@ -395,14 +395,16 @@ function prepareOneCreditNote(
       "original date is later than the note and outside its month (10210)"
     );
   }
+  const currencyId = required(original.currencyId, "currencyId");
   const header: CreditNoteHeader = {
     salesPoint: input.salesPoint ?? required(original.salesPoint, "salesPoint"),
     voucherType: note.voucherType,
     concept: required(original.concept, "concept"),
     ...originalReceiverDocument(original),
     receiverVatConditionId: resolveReceiverCondition(original, input),
-    currencyId: required(original.currencyId, "currencyId"),
-    ...(original.sameCurrencyForeignCancellation === undefined
+    currencyId,
+    ...(currencyId === "PES" ||
+    original.sameCurrencyForeignCancellation === undefined
       ? {}
       : {
           sameCurrencyForeignCancellation:
