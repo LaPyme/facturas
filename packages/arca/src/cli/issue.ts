@@ -53,7 +53,10 @@ export async function runIssue(
     return refuse(io);
   }
 
-  const parameters = await resolveIssueInput(io, flags);
+  const parameters = await resolveIssueInput(
+    json ? { ...io, stdout: io.stderr } : io,
+    flags
+  );
   if (parameters === undefined) {
     return CLI_EXIT.usage;
   }

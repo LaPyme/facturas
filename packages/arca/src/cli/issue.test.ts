@@ -397,6 +397,23 @@ describe("runIssue", () => {
     expect(JSON.parse(context.stdout())).toEqual(AUTHORIZED);
   });
 
+  it("keeps interactive prompts on stderr when JSON output is redirected", async () => {
+    const context = createContext({ outcome: AUTHORIZED });
+    context.stdin.isTTY = true;
+
+    const running = run(context, {}, true);
+    context.stdin.write("3\n");
+    await waitFor(() =>
+      `${context.stdout()}${context.stderr()}`.includes("Emisor")
+    );
+    context.stdin.write("monotributo\n");
+
+    expect(await running).toBe(0);
+    expect(JSON.parse(context.stdout())).toEqual(AUTHORIZED);
+    expect(context.stderr()).toContain("Punto de venta: ");
+    expect(context.stderr()).toContain("Emisor [");
+  });
+
   it("prints the failing check report with --json", async () => {
     const context = createContext({
       salesPointsError: new ArcaAuthenticationError("rechazado", {
