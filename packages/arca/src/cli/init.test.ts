@@ -104,7 +104,8 @@ describe("runInit", () => {
         $ npx facturas check
 
       Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,
-      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md.
+      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM.
+      Ver https://facturas-sdk.dev/getting-started/quickstart
       "
     `);
   });
@@ -168,7 +169,8 @@ describe("runInit", () => {
         $ npx facturas check
 
       Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,
-      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md.
+      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM.
+      Ver https://facturas-sdk.dev/getting-started/quickstart
       "
     `);
   });
@@ -517,7 +519,8 @@ describe("runInit", () => {
         $ npx facturas check
 
       Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,
-      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md.
+      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM.
+      Ver https://facturas-sdk.dev/getting-started/quickstart
       "
     `);
   });
@@ -606,7 +609,8 @@ describe("runInit", () => {
         $ npx facturas check
 
       Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,
-      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md.
+      ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM.
+      Ver https://facturas-sdk.dev/getting-started/quickstart
       "
     `);
   });

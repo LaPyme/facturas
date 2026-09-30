@@ -124,9 +124,8 @@ export async function runInit(
 
   writer.blank();
   writer.dim("Para tu app las variables son ARCA_TAX_ID, ARCA_ENVIRONMENT,");
-  writer.dim(
-    "ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM; ver docs/inicio-rapido.md."
-  );
+  writer.dim("ARCA_CERTIFICATE_PEM y ARCA_PRIVATE_KEY_PEM.");
+  writer.dim("Ver https://facturas-sdk.dev/getting-started/quickstart");
   return code;
 }
 
