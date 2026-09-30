@@ -1,5 +1,11 @@
 # facturas
 
+## 0.20.1
+
+### Patch Changes
+
+- 199cee8: Rechaza respuestas WSFE sin un último número autorizado explícito y válido.
+
 ## 0.20.0
 
 ### Minor Changes
