@@ -3,6 +3,9 @@ import { ArcaConfigurationError } from "../errors";
 import type { ArcaEnvironment } from "../internal/types";
 import type { WsfeVoucherInput } from "../services/wsfe";
 
+/** What a caller may pass to `withLock`: a signal that stops the wait. */
+export type ArcaLockOptions = { signal?: AbortSignal };
+
 /**
  * Durable values. add must atomically create only when the key is absent.
  * withLock runs `fn` exclusively across processes. `options.signal` only stops
@@ -17,7 +20,7 @@ export type ArcaStore = {
   withLock?<T>(
     key: string,
     fn: () => Promise<T>,
-    options?: { signal?: AbortSignal }
+    options?: ArcaLockOptions
   ): Promise<T>;
 };
 

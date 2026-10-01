@@ -1,6 +1,6 @@
 import { ArcaConfigurationError } from "../errors";
-import { ARCA_LEASE_MS, type ArcaLockOptions, withLease } from "./lock";
-import { type ArcaStore, storeCall } from "./types";
+import { ARCA_LEASE_MS, withLease } from "./lock";
+import { type ArcaLockOptions, type ArcaStore, storeCall } from "./types";
 
 type RedisClient = {
   get(key: string): Promise<unknown>;

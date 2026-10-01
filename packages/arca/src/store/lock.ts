@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ArcaLockTimeoutError } from "../errors";
-import { abortable } from "../internal/abort";
+import type { ArcaLockOptions } from "./types";
 
 /**
  * Lease duration and renewal are internal. A holder renews while it works, so
@@ -17,9 +17,6 @@ export type ArcaLeaseDriver = {
   renew(owner: string): Promise<void>;
   release(owner: string): Promise<void>;
 };
-
-/** What a caller may pass to `withLock`: a signal that stops the wait. */
-export type ArcaLockOptions = { signal?: AbortSignal };
 
 /**
  * Runs `fn` while holding a lease other processes honor. A holder that dies
@@ -44,12 +41,15 @@ export async function withLease<T>(
       );
     }
     // An abort ends the wait early; the check below reports it.
-    await abortable(
-      delay(POLL_MS + Math.floor(Math.random() * POLL_MS)),
-      signal
-    ).catch(() => undefined);
+    await delay(POLL_MS + Math.floor(Math.random() * POLL_MS), signal);
     throwIfAborted(key, signal);
     held = await driver.acquire(owner);
+  }
+  if (signal?.aborted) {
+    // The signal fired while the winning acquire was in flight: give the
+    // lease back before any work, so the caller's deadline still holds.
+    await driver.release(owner).catch(() => undefined);
+    throwIfAborted(key, signal);
   }
   const renewal = setInterval(() => {
     driver.renew(owner).catch(() => undefined);
@@ -73,9 +73,18 @@ export function throwIfAborted(key: string, signal?: AbortSignal): void {
   }
 }
 
-function delay(ms: number): Promise<void> {
+/** Sleeps between polls, and wakes early when the signal aborts. */
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
+    const wake = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", wake);
+      resolve();
+    }, ms);
     timer.unref?.();
+    signal?.addEventListener("abort", wake, { once: true });
   });
 }

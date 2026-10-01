@@ -201,17 +201,19 @@ for (const [name, factory] of lockable) {
       });
       controller.abort();
       await expect(waiting).rejects.toMatchObject({ reason: "aborted" });
-      let ran = false;
+      let released = false;
+      let ranWhileHeld: boolean | undefined;
       const next = store.withLock?.("sequence", () => {
-        ran = true;
+        ranWhileHeld = !released;
         return Promise.resolve();
       });
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      expect(ran).toBe(false);
+      // One macrotask is enough for a freed memory lock to run `next`.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      released = true;
       open();
       await holding;
       await next;
-      expect(ran).toBe(true);
+      expect(ranWhileHeld).toBe(false);
     });
   });
 }
@@ -239,6 +241,31 @@ it("gives up on a lease that stays held, without running the work", async () => 
   } finally {
     vi.useRealTimers();
   }
+});
+it("gives the lease back when the signal aborts during the winning acquire", async () => {
+  const controller = new AbortController();
+  const release = vi.fn(() => Promise.resolve());
+  const work = vi.fn(() => Promise.resolve());
+  await expect(
+    withLease(
+      "sequence",
+      {
+        acquire: () => {
+          controller.abort();
+          return Promise.resolve(true);
+        },
+        renew: () => Promise.resolve(),
+        release,
+      },
+      work,
+      { signal: controller.signal }
+    )
+  ).rejects.toMatchObject({
+    name: "ArcaLockTimeoutError",
+    reason: "aborted",
+  });
+  expect(work).not.toHaveBeenCalled();
+  expect(release).toHaveBeenCalledTimes(1);
 });
 it("shares the file lock between independent store instances", async () => {
   const path = await mkdtemp(join(tmpdir(), "arca-store-"));

@@ -540,7 +540,8 @@ async function runOperation(
           }
         : await claim(barrier.reserved);
     },
-    lockOptions(options)
+    // The deadline also bounds the wait: giving up there reserved nothing.
+    { signal: options.abortSignal }
   );
 
   /**
@@ -877,20 +878,8 @@ async function consultKey(
       );
       return await consult(json === null ? stored : readRecord(json));
     },
-    lockOptions(options)
+    { signal: options.abortSignal }
   );
-}
-
-/**
- * The caller's deadline also bounds the wait for the sequence lock: a call that
- * gives up there has reserved and sent nothing, so it can simply be repeated.
- */
-function lockOptions(options: { abortSignal?: AbortSignal }): {
-  signal?: AbortSignal;
-} {
-  return options.abortSignal === undefined
-    ? {}
-    : { signal: options.abortSignal };
 }
 
 /**

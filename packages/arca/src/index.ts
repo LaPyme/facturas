@@ -156,7 +156,7 @@ export { createFileStore } from "./store/file";
 export { createMemoryStore } from "./store/memory";
 export { createPostgresStore } from "./store/postgres";
 export { createRedisStore } from "./store/redis";
-export type { ArcaStore } from "./store/types";
+export type { ArcaLockOptions, ArcaStore } from "./store/types";
 export type {
   ArcaAuthCredentials,
   ArcaAuthOptions,
