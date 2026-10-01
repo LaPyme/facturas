@@ -183,6 +183,36 @@ for (const [name, factory] of lockable) {
       ).rejects.toMatchObject({ reason: "aborted" });
       expect(skipped).not.toHaveBeenCalled();
     });
+    it("keeps the lock held when the last waiter aborts", async () => {
+      const store = await factory();
+      let open: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      let entered = false;
+      const holding = store.withLock?.("sequence", async () => {
+        entered = true;
+        await gate;
+      });
+      await vi.waitFor(() => expect(entered).toBe(true));
+      const controller = new AbortController();
+      const waiting = store.withLock?.("sequence", () => Promise.resolve(), {
+        signal: controller.signal,
+      });
+      controller.abort();
+      await expect(waiting).rejects.toMatchObject({ reason: "aborted" });
+      let ran = false;
+      const next = store.withLock?.("sequence", () => {
+        ran = true;
+        return Promise.resolve();
+      });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      expect(ran).toBe(false);
+      open();
+      await holding;
+      await next;
+      expect(ran).toBe(true);
+    });
   });
 }
 it("gives up on a lease that stays held, without running the work", async () => {

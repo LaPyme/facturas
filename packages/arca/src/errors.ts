@@ -30,10 +30,10 @@ export class ArcaConfigurationError extends ArcaError {
 export type ArcaLockTimeoutReason = "held" | "aborted";
 
 /**
- * Thrown when a call gave up waiting for a store lock before doing any work:
- * nothing was reserved or sent, so the same call can be repeated. `held` means
- * another holder kept the lock past the wait, `aborted` that the caller's
- * `abortSignal` fired first.
+ * Thrown when a call gave up waiting for a store lock. Nothing was sent to
+ * ARCA, and a call that waited for the sequence lock reserved nothing either,
+ * so the same call can be repeated. `held` means another holder kept the lock
+ * past the wait, `aborted` that the caller's `abortSignal` fired first.
  */
 export class ArcaLockTimeoutError extends ArcaError {
   declare readonly code: "ARCA_LOCK_TIMEOUT";

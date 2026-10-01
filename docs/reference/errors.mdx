@@ -12,7 +12,7 @@ string.
 | Clase | `code` | Cuándo |
 | --- | --- | --- |
 | `ArcaConfigurationError` | `ARCA_CONFIGURATION_ERROR` | Configuración del cliente inválida |
-| `ArcaLockTimeoutError` | `ARCA_LOCK_TIMEOUT` | La llamada dejó de esperar el lock del store antes de reservar o enviar nada. `reason` es `held` si otro proceso lo retuvo más que la espera máxima, o `aborted` si venció tu `abortSignal`. Repetí la misma llamada |
+| `ArcaLockTimeoutError` | `ARCA_LOCK_TIMEOUT` | La llamada dejó de esperar un lock del store sin enviar nada a ARCA. Si era el lock de la secuencia, tampoco reservó nada. `reason` es `held` si otro proceso lo retuvo más que la espera máxima, o `aborted` si venció tu `abortSignal`. Repetí la misma llamada |
 | `ArcaInputError` | `ARCA_INPUT_*` | Input inválido de la aplicación o una clave que `recover()` no puede resolver |
 | `ArcaAuthenticationError` | `ARCA_AUTHENTICATION_ERROR` | Rechazo de autenticación explícito del proveedor |
 | `ArcaTransportError` | `ARCA_TRANSPORT_ERROR` | Falla de HTTP o de transporte |

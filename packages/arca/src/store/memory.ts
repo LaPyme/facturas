@@ -38,11 +38,14 @@ export function createMemoryStore(): ArcaStore {
         signal
       ).catch(() => undefined);
       if (signal?.aborted) {
-        // Hand the turn on: whoever queued behind this call waits for it.
+        // Hand the turn on, but keep this call's place until the holder
+        // before it finishes: a caller arriving now must still wait for it.
         release();
-        if (locks.get(key) === queued) {
-          locks.delete(key);
-        }
+        queued.then(() => {
+          if (locks.get(key) === queued) {
+            locks.delete(key);
+          }
+        });
         throwIfAborted(key, signal);
       }
       try {
