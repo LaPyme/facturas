@@ -269,8 +269,9 @@ coincidencia probaría
 consistencia y nunca autoría. La comparación de identidad queda para una
 reserva que ya existía, el único caso en el que el número puede ser una
 escritura propia anterior. Todo `conflict` se anota en el store antes de
-responder. Una repetición con esa clave, o un `recover()`, devuelve el mismo
-`conflict` sin ninguna llamada a ARCA.
+responder, salvo el que encuentra una repetición o un `recover()` después de un
+rechazo en un store sin `withLock`. Una repetición con esa clave, o un
+`recover()`, devuelve el mismo `conflict` sin ninguna llamada a ARCA.
 
 | Resultado | Qué significa y qué hacer |
 | --- | --- |

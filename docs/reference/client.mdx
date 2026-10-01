@@ -128,9 +128,15 @@ Consulta la reserva guardada para esa clave, con el servicio y el número que
 quedaron registrados. Nunca autoriza ni reserva un número nuevo. Si ARCA
 confirma que el número está vacío, devuelve `indeterminate` con
 `lookup.kind === "not_found"`: para emitir, llamá otra vez al método original
-con la misma clave. Si no hay reserva para esa clave, lanza `ArcaInputError`
-con `code === "ARCA_INPUT_RESERVATION_NOT_FOUND"`. `RecoveryOptions` acepta
-`representedTaxId`, `forceRefresh`, `include` y `abortSignal`.
+con la misma clave. Con un store que provee `withLock`, espera a que termine
+una emisión en curso en esa secuencia, para no consultar una reserva que otra
+llamada con la misma clave está cambiando. Sin `withLock`, un conflicto en el
+número de una clave rechazada se informa pero no queda guardado: otra llamada
+con la misma clave puede haberlo escrito, así que la próxima consulta lo vuelve
+a revisar. Si no hay reserva para esa clave, lanza `ArcaInputError` con
+`code === "ARCA_INPUT_RESERVATION_NOT_FOUND"`.
+`RecoveryOptions` acepta `representedTaxId`, `forceRefresh`, `include` y
+`abortSignal`.
 
 ## `lookup()`
 
