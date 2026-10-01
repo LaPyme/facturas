@@ -1,5 +1,16 @@
 # facturas
 
+## 0.20.5
+
+### Patch Changes
+
+- 0615816: Una idempotencyKey rechazada ya no recupera el CAE de otra venta que tomó su número. Si ARCA rechazó todos los envíos de la clave, el rechazo queda guardado en la reserva, y el reintento y `recover()` informan un conflicto si aparece un comprobante en ese número. Si un envío anterior quedó sin respuesta, el rechazo no se guarda, porque ese envío puede haber llegado. El conflicto que encuentra el primer envío de una clave queda guardado siempre. Sin `withLock`, un doble envío de la misma clave puede dejar su propio CAE como conflicto: conciliá ese comprobante a mano. Hay otras diferencias sin `withLock`, que se detallan en la guía "Evitar comprobantes duplicados". Actualizá todos los procesos que comparten un store: las versiones anteriores ignoran el rechazo guardado.
+- fb53428: Valida los identificadores enteros de las respuestas SOAP sin truncar ni convertir valores mal formados. WSMTXCA conserva el CAE y la evidencia de una emisión con número inválido como `indeterminate` con `reason: "invalid_response"`, para poder conciliarla con `recover()` sin reenviar. Esto también se aplica a una respuesta `R` con número mal formado, que antes podía clasificarse como `rejected`.
+  
+  Las consultas `consultarComprobante` de WSMTXCA y `FECompConsultar` de WSFE rechazan números, puntos de venta y tipos inválidos con `ArcaInvalidSoapResponseError`. Los campos opcionales ausentes siguen omitidos. En WSFE, `CbteDesde` o `CbteHasta` debe aportar el número obligatorio del comprobante. Si faltan ambos se rechaza la respuesta, en lugar de inventar el cero, y un extremo válido no oculta otro presente mal formado.
+  
+  Los puntos de venta de WSMTXCA y WSFE rechazan toda la respuesta si una entrada no tiene un número válido, en lugar de descartarla o inventar el cero. Los catálogos numéricos de WSFE también rechazan identificadores ausentes o mal formados y siguen aceptando un cero explícito. Se aceptan enteros decimales dentro del dominio del campo, incluidos ceros iniciales y espacios exteriores. Un valor presente `null` o vacío es inválido.
+
 ## 0.20.4
 
 ### Patch Changes
