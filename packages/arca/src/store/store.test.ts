@@ -242,6 +242,27 @@ it("gives up on a lease that stays held, without running the work", async () => 
     vi.useRealTimers();
   }
 });
+it("stops at once when the signal aborts during a losing acquire", async () => {
+  const controller = new AbortController();
+  const started = Date.now();
+  await expect(
+    withLease(
+      "sequence",
+      {
+        acquire: () => {
+          controller.abort();
+          return Promise.resolve(false);
+        },
+        renew: () => Promise.resolve(),
+        release: () => Promise.resolve(),
+      },
+      () => Promise.resolve(),
+      { signal: controller.signal }
+    )
+  ).rejects.toMatchObject({ reason: "aborted" });
+  // Without the check, the poll sleep would run its full 50 to 100 ms.
+  expect(Date.now() - started).toBeLessThan(40);
+});
 it("gives the lease back when the signal aborts during the winning acquire", async () => {
   const controller = new AbortController();
   const release = vi.fn(() => Promise.resolve());

@@ -75,6 +75,10 @@ export function throwIfAborted(key: string, signal?: AbortSignal): void {
 
 /** Sleeps between polls, and wakes early when the signal aborts. */
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    // An abort already past never fires again: skip the sleep.
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     const wake = () => {
       clearTimeout(timer);
