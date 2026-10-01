@@ -1420,6 +1420,85 @@ describe("deadline", () => {
       voucher: { number: 77, cae: "74123456789077" },
     });
   });
+  /** Holds the next write, and the sequence lock with it, until opened. */
+  function holdWrite(wsfe: ReturnType<typeof provider>["wsfe"]) {
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    const write = wsfe.issue.getMockImplementation() as NonNullable<
+      ReturnType<typeof wsfe.issue.getMockImplementation>
+    >;
+    wsfe.issue.mockImplementationOnce(async (call) => {
+      await gate;
+      return write(call);
+    });
+    return open;
+  }
+  it("stops waiting for the sequence lock when the deadline fires", async () => {
+    const { wsfe } = provider();
+    const store = createMemoryStore();
+    const arca = service(store, wsfe);
+    const open = holdWrite(wsfe);
+    const holding = arca.issue(input, { idempotencyKey: "key1" });
+    await vi.waitFor(() => expect(wsfe.issue).toHaveBeenCalledTimes(1));
+    const controller = new AbortController();
+    const waiting = arca.issue(input, {
+      idempotencyKey: "key2",
+      abortSignal: controller.signal,
+    });
+    controller.abort();
+    await expect(waiting).rejects.toMatchObject({
+      name: "ArcaLockTimeoutError",
+      code: "ARCA_LOCK_TIMEOUT",
+      reason: "aborted",
+    });
+    expect(
+      await store.get(attemptKey("test", "20123456789", "key2"))
+    ).toBeNull();
+    open();
+    expect(await holding).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    // Nothing was reserved, so the same call simply runs again.
+    expect(await arca.issue(input, { idempotencyKey: "key2" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 78 },
+    });
+  });
+  it("stops recover() waiting for the sequence lock when the deadline fires", async () => {
+    const { wsfe } = provider();
+    const arca = service(createMemoryStore(), wsfe);
+    wsfe.issue.mockImplementationOnce(() => Promise.resolve(rejectedRule));
+    expect((await arca.issue(input, { idempotencyKey: "key1" })).kind).toBe(
+      "rejected"
+    );
+    const open = holdWrite(wsfe);
+    const holding = arca.issue(input, { idempotencyKey: "key2" });
+    await vi.waitFor(() => expect(wsfe.issue).toHaveBeenCalledTimes(2));
+    const lookups = wsfe.lookupVoucher.mock.calls.length;
+    const controller = new AbortController();
+    const recovering = arca.recover("key1", {
+      abortSignal: controller.signal,
+    });
+    controller.abort();
+    await expect(recovering).rejects.toMatchObject({
+      code: "ARCA_LOCK_TIMEOUT",
+      reason: "aborted",
+    });
+    expect(wsfe.lookupVoucher).toHaveBeenCalledTimes(lookups);
+    open();
+    expect(await holding).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    // Without a deadline it waits for the write and reads the number.
+    expect(await arca.recover("key1")).toMatchObject({
+      kind: "conflict",
+      found: { number: 77 },
+    });
+  });
   it("rejects an options.abortSignal that is not an AbortSignal", async () => {
     const { wsfe } = provider();
     const arca = service(createMemoryStore(), wsfe);

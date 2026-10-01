@@ -26,6 +26,29 @@ export class ArcaConfigurationError extends ArcaError {
   }
 }
 
+/** Why a store lock was never taken: it stayed held, or the caller gave up. */
+export type ArcaLockTimeoutReason = "held" | "aborted";
+
+/**
+ * Thrown when a call gave up waiting for a store lock. Nothing was sent to
+ * ARCA, and a call that waited for the sequence lock reserved nothing either,
+ * so the same call can be repeated. `held` means another holder kept the lock
+ * past the wait, `aborted` that the caller's `abortSignal` fired first.
+ */
+export class ArcaLockTimeoutError extends ArcaError {
+  declare readonly code: "ARCA_LOCK_TIMEOUT";
+  override readonly name: string = "ArcaLockTimeoutError";
+  readonly reason: ArcaLockTimeoutReason;
+
+  constructor(
+    message: string,
+    options: ErrorOptions & { reason: ArcaLockTimeoutReason }
+  ) {
+    super(message, "ARCA_LOCK_TIMEOUT", options);
+    this.reason = options.reason;
+  }
+}
+
 /** Stable routing codes for caller-provided input failures. */
 export type ArcaInputErrorCode =
   | "ARCA_INPUT_IDEMPOTENCY_MISMATCH"
@@ -260,8 +283,8 @@ export type ArcaSafeErrorMetadata = {
   contentType?: string;
   service?: ArcaServiceName;
   operation?: string;
-  /** ArcaAuthenticationError's stable reason. */
-  reason?: ArcaAuthenticationReason;
+  /** ArcaAuthenticationError's or ArcaLockTimeoutError's stable reason. */
+  reason?: ArcaAuthenticationReason | ArcaLockTimeoutReason;
   providerCode?: string | number;
   faultCode?: string;
   field?: string;
@@ -298,6 +321,8 @@ export function toArcaSafeErrorMetadata(error: unknown): ArcaSafeErrorMetadata {
       reason: error.reason,
       providerCode: error.providerCode,
     });
+  } else if (error instanceof ArcaLockTimeoutError) {
+    Object.assign(fields, { reason: error.reason });
   } else if (error instanceof ArcaTransportError) {
     Object.assign(fields, {
       statusCode: error.statusCode,

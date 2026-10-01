@@ -1,6 +1,6 @@
 import { ArcaConfigurationError } from "../errors";
 import { ARCA_LEASE_MS, withLease } from "./lock";
-import { type ArcaStore, storeCall } from "./types";
+import { type ArcaLockOptions, type ArcaStore, storeCall } from "./types";
 
 type RedisClient = {
   get(key: string): Promise<unknown>;
@@ -73,7 +73,11 @@ export function createRedisStore(
             storeCall(async () => {
               await client.del?.(key);
             }),
-          withLock: <T>(key: string, fn: () => Promise<T>) =>
+          withLock: <T>(
+            key: string,
+            fn: () => Promise<T>,
+            options?: ArcaLockOptions
+          ) =>
             withLease(
               key,
               {
@@ -92,7 +96,8 @@ export function createRedisStore(
                   });
                 },
               },
-              fn
+              fn,
+              options
             ),
         }
       : {}),

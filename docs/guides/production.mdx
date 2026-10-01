@@ -78,7 +78,9 @@ bajo una clave nueva. El resto de los casos está en
 
 Pasá un `abortSignal`, por ejemplo `AbortSignal.timeout(20_000)`, para que una
 llamada no quede colgada si ARCA no responde. Si corta después del envío, el
-resultado es `indeterminate` y la reserva queda para `recover()`.
+resultado es `indeterminate` y la reserva queda para `recover()`. Si corta
+mientras espera el lock de la secuencia, lanza `ArcaLockTimeoutError` sin haber
+reservado nada.
 
 Los errores de input y de configuración sí se lanzan, antes de escribir en
 ARCA. Están en [Errores](/reference/errors).

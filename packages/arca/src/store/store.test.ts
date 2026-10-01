@@ -7,6 +7,7 @@ import { createArcaClient } from "../client";
 import { ArcaConfigurationError } from "../errors";
 import { createWsaaStoreAdapter } from "../wsaa/store-adapter";
 import { createFileStore } from "./file";
+import { ARCA_LEASE_MS, withLease } from "./lock";
 import { createMemoryStore } from "./memory";
 import { createPostgresStore } from "./postgres";
 import { createRedisStore } from "./redis";
@@ -146,8 +147,147 @@ for (const [name, factory] of lockable) {
         3
       );
     });
+    it("stops waiting when the caller aborts and leaves the lock usable", async () => {
+      const store = await factory();
+      let open: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      let entered = false;
+      const holding = store.withLock?.("sequence", async () => {
+        entered = true;
+        await gate;
+        return "held";
+      });
+      await vi.waitFor(() => expect(entered).toBe(true));
+      const controller = new AbortController();
+      const skipped = vi.fn(() => Promise.resolve("skipped"));
+      const waiting = store.withLock?.("sequence", skipped, {
+        signal: controller.signal,
+      });
+      const behind = store.withLock?.("sequence", () =>
+        Promise.resolve("next")
+      );
+      controller.abort();
+      await expect(waiting).rejects.toMatchObject({
+        name: "ArcaLockTimeoutError",
+        code: "ARCA_LOCK_TIMEOUT",
+        reason: "aborted",
+      });
+      expect(skipped).not.toHaveBeenCalled();
+      open();
+      expect(await holding).toBe("held");
+      expect(await behind).toBe("next");
+      await expect(
+        store.withLock?.("sequence", skipped, { signal: controller.signal })
+      ).rejects.toMatchObject({ reason: "aborted" });
+      expect(skipped).not.toHaveBeenCalled();
+    });
+    it("keeps the lock held when the last waiter aborts", async () => {
+      const store = await factory();
+      let open: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      let entered = false;
+      const holding = store.withLock?.("sequence", async () => {
+        entered = true;
+        await gate;
+      });
+      await vi.waitFor(() => expect(entered).toBe(true));
+      const controller = new AbortController();
+      const waiting = store.withLock?.("sequence", () => Promise.resolve(), {
+        signal: controller.signal,
+      });
+      controller.abort();
+      await expect(waiting).rejects.toMatchObject({ reason: "aborted" });
+      let released = false;
+      let ranWhileHeld: boolean | undefined;
+      const next = store.withLock?.("sequence", () => {
+        ranWhileHeld = !released;
+        return Promise.resolve();
+      });
+      // One macrotask is enough for a freed memory lock to run `next`.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      released = true;
+      open();
+      await holding;
+      await next;
+      expect(ranWhileHeld).toBe(false);
+    });
   });
 }
+it("gives up on a lease that stays held, without running the work", async () => {
+  vi.useFakeTimers();
+  try {
+    const work = vi.fn(() => Promise.resolve());
+    const waiting = withLease(
+      "sequence",
+      {
+        acquire: () => Promise.resolve(false),
+        renew: () => Promise.resolve(),
+        release: () => Promise.resolve(),
+      },
+      work
+    );
+    const failure = expect(waiting).rejects.toMatchObject({
+      name: "ArcaLockTimeoutError",
+      code: "ARCA_LOCK_TIMEOUT",
+      reason: "held",
+    });
+    await vi.advanceTimersByTimeAsync(2 * ARCA_LEASE_MS + 1000);
+    await failure;
+    expect(work).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("stops at once when the signal aborts during a losing acquire", async () => {
+  const controller = new AbortController();
+  const started = Date.now();
+  await expect(
+    withLease(
+      "sequence",
+      {
+        acquire: () => {
+          controller.abort();
+          return Promise.resolve(false);
+        },
+        renew: () => Promise.resolve(),
+        release: () => Promise.resolve(),
+      },
+      () => Promise.resolve(),
+      { signal: controller.signal }
+    )
+  ).rejects.toMatchObject({ reason: "aborted" });
+  // Without the check, the poll sleep would run its full 50 to 100 ms.
+  expect(Date.now() - started).toBeLessThan(40);
+});
+it("gives the lease back when the signal aborts during the winning acquire", async () => {
+  const controller = new AbortController();
+  const release = vi.fn(() => Promise.resolve());
+  const work = vi.fn(() => Promise.resolve());
+  await expect(
+    withLease(
+      "sequence",
+      {
+        acquire: () => {
+          controller.abort();
+          return Promise.resolve(true);
+        },
+        renew: () => Promise.resolve(),
+        release,
+      },
+      work,
+      { signal: controller.signal }
+    )
+  ).rejects.toMatchObject({
+    name: "ArcaLockTimeoutError",
+    reason: "aborted",
+  });
+  expect(work).not.toHaveBeenCalled();
+  expect(release).toHaveBeenCalledTimes(1);
+});
 it("shares the file lock between independent store instances", async () => {
   const path = await mkdtemp(join(tmpdir(), "arca-store-"));
   directories.push(path);

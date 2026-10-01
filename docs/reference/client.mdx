@@ -130,7 +130,9 @@ confirma que el número está vacío, devuelve `indeterminate` con
 `lookup.kind === "not_found"`: para emitir, llamá otra vez al método original
 con la misma clave. Con un store que provee `withLock`, espera a que termine
 una emisión en curso en esa secuencia, para no consultar una reserva que otra
-llamada con la misma clave está cambiando. Sin `withLock`, un conflicto en el
+llamada con la misma clave está cambiando. Si tu `abortSignal` vence mientras
+espera, o el lock sigue tomado, lanza `ArcaLockTimeoutError` sin consultar a
+ARCA. Sin `withLock`, un conflicto en el
 número de una clave rechazada se informa pero no queda guardado: otra llamada
 con la misma clave puede haberlo escrito, así que la próxima consulta lo vuelve
 a revisar. Si no hay reserva para esa clave, lanza `ArcaInputError` con
@@ -193,7 +195,7 @@ segundo argumento. Todas son opcionales.
 | Opción | Tipo | Qué hace |
 | --- | --- | --- |
 | `idempotencyKey` | `string` | Liga la llamada a una reserva en el `store`. De 1 a 255 caracteres, estable por operación de negocio. Sin `store`, lanza antes de cualquier I/O |
-| `abortSignal` | `AbortSignal` | Límite de tiempo para el login WSAA, la escritura y las consultas de la llamada. Un corte después del envío devuelve `indeterminate` con `lookup.kind === "aborted"` |
+| `abortSignal` | `AbortSignal` | Límite de tiempo para el login WSAA, la escritura y las consultas de la llamada. Un corte después del envío devuelve `indeterminate` con `lookup.kind === "aborted"`. Un corte mientras espera el lock de la secuencia lanza `ArcaLockTimeoutError` sin reservar ni enviar nada |
 | `include` | `{ request?: boolean, rawResponse?: boolean }` | Agrega el request fiscal y la respuesta cruda de ARCA a cualquiera de los cuatro resultados |
 | `service` | `"wsfe" \| "wsmtxca"` | El servicio de ARCA. Por defecto, WSFE. Pasá `"wsmtxca"` solo cuando el contribuyente o el punto de venta lo requiere |
 | `number` | `number` | Un número reservado por fuera. La llamada no lee el próximo número |

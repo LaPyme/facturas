@@ -3,6 +3,7 @@ import forge from "node-forge";
 import { ARCA_WSAA_CONFIG } from "../config";
 import {
   ArcaConfigurationError,
+  ArcaLockTimeoutError,
   ArcaSoapFaultError,
   ArcaTransportError,
 } from "../errors";
@@ -458,7 +459,10 @@ async function withWsaaSessionStoreLock<T>(
       throw error;
     }
 
-    if (error instanceof ArcaConfigurationError) {
+    if (
+      error instanceof ArcaConfigurationError ||
+      error instanceof ArcaLockTimeoutError
+    ) {
       throw error;
     }
 

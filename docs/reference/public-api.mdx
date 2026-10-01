@@ -59,8 +59,8 @@ Los métodos normales de emisión cubiertos por semver son `issue`, `preview`,
 forman parte de la API pública.
 
 Las opciones de emisión también entran en semver. Junto a `idempotencyKey`,
-`abortSignal` toma un `AbortSignal` y corta el login WSAA, la escritura y las
-consultas de esa llamada. Un corte posterior al envío devuelve `indeterminate`
+`abortSignal` toma un `AbortSignal` y corta el login WSAA, la escritura, las
+consultas y la espera del lock de la secuencia de esa llamada. Un corte posterior al envío devuelve `indeterminate`
 con `lookup.kind === "aborted"` y `recover()` concilia la reserva. Los `lookup`
 de un `indeterminate` incluyen además `blocked`, mientras otra clave sin
 resolver frena la secuencia, y `superseded`, cuando la secuencia siguió sin
