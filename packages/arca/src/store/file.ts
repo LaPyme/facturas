@@ -69,10 +69,10 @@ export function createFileStore(directory: string): ArcaStore {
           }
         }
       }),
-    withLock: (key, fn) =>
+    withLock: (key, fn, options) =>
       // A lock directory: mkdir is the atomic claim on every POSIX filesystem
       // and on Windows, and the holder file inside carries the lease.
-      withLease(key, fileLease(`${path(key)}.lock`, ensure), fn),
+      withLease(key, fileLease(`${path(key)}.lock`, ensure), fn, options),
   };
 }
 

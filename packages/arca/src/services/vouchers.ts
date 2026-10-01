@@ -512,32 +512,36 @@ async function runOperation(
   }
   // Serialize the claim across every process that shares this store: read the
   // next number, reserve it, submit and resolve while holding the lease.
-  return await store.withLock(sequence.lock, async () => {
-    // A call with this same key may have claimed while this one waited for
-    // the lease. Its reservation is the one to consult, never to supersede.
-    const prior = await storeCall(() => store.get(key));
-    if (prior !== null) {
-      return await replay(prior, true);
-    }
-    const barrier = await runSequenceBarrier({
-      store,
-      environment,
-      taxId,
-      sequence: sequence.marker,
-      sequenceTaxId: sequence.taxId,
-      select: select ?? (() => wsfe),
-      options,
-      supersededBy: idempotencyKey,
-      readNext: () =>
-        nextNumber(wsfe, prepared.data, { ...options, number: undefined }),
-    });
-    return "blocked" in barrier
-      ? {
-          ...barrier.blocked,
-          ...requestEvidence(prepared.data, undefined, options),
-        }
-      : await claim(barrier.reserved);
-  });
+  return await store.withLock(
+    sequence.lock,
+    async () => {
+      // A call with this same key may have claimed while this one waited for
+      // the lease. Its reservation is the one to consult, never to supersede.
+      const prior = await storeCall(() => store.get(key));
+      if (prior !== null) {
+        return await replay(prior, true);
+      }
+      const barrier = await runSequenceBarrier({
+        store,
+        environment,
+        taxId,
+        sequence: sequence.marker,
+        sequenceTaxId: sequence.taxId,
+        select: select ?? (() => wsfe),
+        options,
+        supersededBy: idempotencyKey,
+        readNext: () =>
+          nextNumber(wsfe, prepared.data, { ...options, number: undefined }),
+      });
+      return "blocked" in barrier
+        ? {
+            ...barrier.blocked,
+            ...requestEvidence(prepared.data, undefined, options),
+          }
+        : await claim(barrier.reserved);
+    },
+    lockOptions(options)
+  );
 
   /**
    * A WSMTXCA or detailed reservation is a v2 record: 0.10 accepts any v1
@@ -872,8 +876,21 @@ async function consultKey(
         store.get(attemptKey(environment, taxId, idempotencyKey))
       );
       return await consult(json === null ? stored : readRecord(json));
-    }
+    },
+    lockOptions(options)
   );
+}
+
+/**
+ * The caller's deadline also bounds the wait for the sequence lock: a call that
+ * gives up there has reserved and sent nothing, so it can simply be repeated.
+ */
+function lockOptions(options: { abortSignal?: AbortSignal }): {
+  signal?: AbortSignal;
+} {
+  return options.abortSignal === undefined
+    ? {}
+    : { signal: options.abortSignal };
 }
 
 /**

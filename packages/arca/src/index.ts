@@ -26,6 +26,7 @@ export type {
   ArcaAuthenticationReason,
   ArcaInputErrorCode,
   ArcaInputErrorOptions,
+  ArcaLockTimeoutReason,
   ArcaSafeErrorMetadata,
   VoucherDateWindow,
 } from "./errors";
@@ -35,6 +36,7 @@ export {
   ArcaError,
   ArcaInputError,
   ArcaInvalidSoapResponseError,
+  ArcaLockTimeoutError,
   ArcaServiceError,
   ArcaSoapFaultError,
   ArcaTransportError,

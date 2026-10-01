@@ -5,6 +5,7 @@ import {
   ArcaError,
   ArcaInputError,
   ArcaInvalidSoapResponseError,
+  ArcaLockTimeoutError,
   ArcaServiceError,
   ArcaSoapFaultError,
   ArcaTransportError,
@@ -326,6 +327,16 @@ describe("toArcaSafeErrorMetadata", () => {
       message: "Unavailable",
       code: "ARCA_TRANSPORT_ERROR",
       statusCode: 503,
+    });
+    expect(
+      toArcaSafeErrorMetadata(
+        new ArcaLockTimeoutError("Lock stayed held", { reason: "held" })
+      )
+    ).toEqual({
+      name: "ArcaLockTimeoutError",
+      message: "Lock stayed held",
+      code: "ARCA_LOCK_TIMEOUT",
+      reason: "held",
     });
     expect(toArcaSafeErrorMetadata(new Error("Oops"))).toEqual({
       name: "Error",

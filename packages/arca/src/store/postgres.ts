@@ -47,7 +47,7 @@ export function createPostgresStore({
     async delete(key) {
       await run(`DELETE FROM ${name} WHERE key = $1`, [key]);
     },
-    withLock(key, fn) {
+    withLock(key, fn, options) {
       // A lease row, not an advisory lock: it survives a transaction-mode
       // pooler, where a session-scoped lock would be taken on another backend.
       return withLease(
@@ -80,7 +80,8 @@ export function createPostgresStore({
             ]);
           },
         },
-        fn
+        fn,
+        options
       );
     },
   };

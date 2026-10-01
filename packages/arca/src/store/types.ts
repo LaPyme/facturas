@@ -3,13 +3,22 @@ import { ArcaConfigurationError } from "../errors";
 import type { ArcaEnvironment } from "../internal/types";
 import type { WsfeVoucherInput } from "../services/wsfe";
 
-/** Durable values. add must atomically create only when the key is absent. */
+/**
+ * Durable values. add must atomically create only when the key is absent.
+ * withLock runs `fn` exclusively across processes. `options.signal` only stops
+ * the wait: an abort before the lock is taken throws `ArcaLockTimeoutError`
+ * with `reason: "aborted"` and never runs `fn`.
+ */
 export type ArcaStore = {
   get(key: string): Promise<string | null>;
   set(key: string, value: string): Promise<void>;
   add(key: string, value: string): Promise<boolean>;
   delete?(key: string): Promise<void>;
-  withLock?<T>(key: string, fn: () => Promise<T>): Promise<T>;
+  withLock?<T>(
+    key: string,
+    fn: () => Promise<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<T>;
 };
 
 /**
