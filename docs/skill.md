@@ -240,9 +240,9 @@ Detalles en [Notas de crédito y débito](https://facturas-sdk.dev/guides/credit
   par de producción se genera con
   `npx facturas init --cuit 20123456786 --env production`.
 - `ARCA_ENVIRONMENT=production` emite documentos reales. Una prueba de ARS 1
-  también lo es y se corrige con una nota de crédito. Armala según la clase del
-  comprobante, como explica la
-  [prueba de humo](https://facturas-sdk.dev/guides/production.md#5-una-prueba-de-humo).
+  también lo es y se corrige con una nota de crédito. Usá
+  `items: [{ amount: 100 }]` en clase C y
+  `items: [{ gross: 100, vat: 21 }]` en A y B para una operación con IVA del 21%.
 - Store persistente compartido por todos los procesos que emiten, e
   `idempotencyKey` en cada emisión.
 - `abortSignal: AbortSignal.timeout(20_000)` evita llamadas colgadas. Un corte
