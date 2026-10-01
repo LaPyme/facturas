@@ -2,6 +2,7 @@ import type { ReceiverCondition } from "../constants";
 import { ArcaSoapFaultError } from "../errors";
 import { classifyArcaAuthenticationError } from "../internal/authentication";
 import type {
+  ArcaAuthCredentials,
   ArcaClientConfig,
   ArcaPadronServiceName,
 } from "../internal/types";
@@ -363,11 +364,18 @@ async function executePadronOperation(
   operation: string,
   body: Record<string, unknown>
 ) {
-  const auth = await options.auth.login(
-    service === "padron-a5"
-      ? "ws_sr_constancia_inscripcion"
-      : "ws_sr_padron_a13"
-  );
+  let credentials: ArcaAuthCredentials;
+  try {
+    credentials = await options.auth.login(
+      service === "padron-a5"
+        ? "ws_sr_constancia_inscripcion"
+        : "ws_sr_padron_a13"
+    );
+  } catch (error) {
+    throw (
+      classifyArcaAuthenticationError(error, { service, operation }) ?? error
+    );
+  }
 
   try {
     const response = await options.soap.execute<
@@ -378,8 +386,8 @@ async function executePadronOperation(
       operation,
       bodyElementNamespaceMode: "prefix",
       body: {
-        token: auth.token,
-        sign: auth.sign,
+        token: credentials.token,
+        sign: credentials.sign,
         cuitRepresentada: Number.parseInt(options.config.taxId, 10),
         ...body,
       },

@@ -5,7 +5,7 @@ import { createPadronService } from "./padron";
 function createBaseOptions() {
   return {
     config: {
-      taxId: "20123456789",
+      taxId: "20123456786",
       certificatePem: "cert",
       privateKeyPem: "key",
       environment: "test" as const,
@@ -29,7 +29,7 @@ describe("createPadronService", () => {
     options.soap.execute.mockResolvedValueOnce({
       result: {
         personaReturn: {
-          idPersona: "20123456789",
+          idPersona: "20123456786",
           tipoPersona: "JURIDICA",
           datosGenerales: {
             razonSocial: "Mi Empresa SRL",
@@ -39,8 +39,8 @@ describe("createPadronService", () => {
     });
 
     const service = createPadronService(options);
-    await expect(service.getTaxpayerDetails(20_123_456_789)).resolves.toEqual({
-      taxId: "20123456789",
+    await expect(service.getTaxpayerDetails(20_123_456_786)).resolves.toEqual({
+      taxId: "20123456786",
       personType: "JURIDICA",
       name: "Mi Empresa SRL",
       condition: "consumidor_final",
@@ -48,7 +48,7 @@ describe("createPadronService", () => {
       activities: [],
       errors: [],
       raw: {
-        idPersona: "20123456789",
+        idPersona: "20123456786",
         tipoPersona: "JURIDICA",
         datosGenerales: {
           razonSocial: "Mi Empresa SRL",
@@ -66,8 +66,8 @@ describe("createPadronService", () => {
       body: {
         token: "token",
         sign: "sign",
-        cuitRepresentada: 20_123_456_789,
-        idPersona: 20_123_456_789,
+        cuitRepresentada: 20_123_456_786,
+        idPersona: 20_123_456_786,
       },
     });
   });
@@ -77,16 +77,16 @@ describe("createPadronService", () => {
     options.soap.execute.mockResolvedValueOnce({
       result: {
         idPersonaListReturn: {
-          idPersona: ["20123456789", "20999888777"],
+          idPersona: ["20123456786", "20999888777"],
         },
       },
     });
 
     const service = createPadronService(options);
     await expect(service.getTaxIdByDocument(12_345_678)).resolves.toEqual({
-      taxIds: ["20123456789", "20999888777"],
+      taxIds: ["20123456786", "20999888777"],
       raw: {
-        idPersona: ["20123456789", "20999888777"],
+        idPersona: ["20123456786", "20999888777"],
       },
     });
 
@@ -154,7 +154,7 @@ describe("createPadronService", () => {
         result: {
           personaReturn: {
             datosGenerales: {
-              idPersona: 20_123_456_789,
+              idPersona: 20_123_456_786,
               tipoPersona: "FISICA",
               nombre: "Ana",
               apellido: "Perez",
@@ -164,9 +164,9 @@ describe("createPadronService", () => {
         },
       });
       const result =
-        await createPadronService(options).getTaxpayerDetails("20123456789");
+        await createPadronService(options).getTaxpayerDetails("20123456786");
       expect(result).toMatchObject({
-        taxId: "20123456789",
+        taxId: "20123456786",
         personType: "FISICA",
         name: "Perez Ana",
       });
@@ -292,7 +292,7 @@ describe("createPadronService", () => {
       method: "getTaxpayerDetails" as const,
       service: "padron-a5",
       operation: "getPersona_v2",
-      input: 20_123_456_789,
+      input: 20_123_456_786,
     },
     {
       method: "getTaxIdByDocument" as const,
@@ -301,6 +301,40 @@ describe("createPadronService", () => {
       input: 12_345_678,
     },
   ])("$method SOAP faults", ({ method, service, operation, input }) => {
+    it("classifies WSAA login faults without querying Padron", async () => {
+      const options = createBaseOptions();
+      const fault = new ArcaSoapFaultError(
+        "Computador no autorizado a acceder a los servicios de AFIP",
+        { faultCode: "ns1:coe.notAuthorized" }
+      );
+      options.auth.login.mockRejectedValueOnce(fault);
+
+      const result = createPadronService(options)[method](input);
+
+      await expect(result).rejects.toBeInstanceOf(ArcaAuthenticationError);
+      await expect(result).rejects.toMatchObject({
+        reason: "unauthorized_computer",
+        service,
+        operation,
+        providerCode: fault.faultCode,
+        cause: fault,
+      });
+      expect(options.auth.login).toHaveBeenCalledTimes(1);
+      expect(options.soap.execute).not.toHaveBeenCalled();
+    });
+
+    it("preserves login faults whose message includes no existe", async () => {
+      const options = createBaseOptions();
+      const fault = new ArcaSoapFaultError("El servicio no existe");
+      options.auth.login.mockRejectedValueOnce(fault);
+
+      await expect(createPadronService(options)[method](input)).rejects.toBe(
+        fault
+      );
+      expect(options.auth.login).toHaveBeenCalledTimes(1);
+      expect(options.soap.execute).not.toHaveBeenCalled();
+    });
+
     it("classifies authentication faults without retrying", async () => {
       const options = createBaseOptions();
       const fault = new ArcaSoapFaultError(
