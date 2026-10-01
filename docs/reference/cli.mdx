@@ -341,8 +341,11 @@ La búsqueda es en el directorio actual o en `--dir`. Reglas:
   del archivo: `arca-test.crt` es homologación.
 - Si están **los dos pares**, el CLI no adivina: sale con código 1 y te pide
   `--env test` o `--env production`.
-- Si está **medio par**, te dice cuál falta. Entre `init` y la respuesta de
-  ARCA vas a ver `Está arca-test.key pero falta arca-test.crt.`
+- Si está **medio par**, un flag o una variable de entorno puede completar
+  la parte que falta. Por ejemplo, `--key` o `ARCA_PRIVATE_KEY_PEM` completa
+  un certificado encontrado en disco. Si no aportaste la otra parte, te dice
+  cuál falta. Entre `init` y la respuesta de ARCA vas a ver
+  `Está arca-test.key pero falta arca-test.crt.`
 - El **CUIT** sale del `serialNumber` del certificado, donde ARCA lo escribe
   como `CUIT <11 dígitos>`. Si el certificado no lo trae y tampoco lo pasaste,
   el CLI te pide `--cuit`. Si pasaste uno y el certificado dice otro, el CLI

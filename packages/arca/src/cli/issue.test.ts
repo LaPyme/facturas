@@ -101,6 +101,61 @@ describe("runIssue", () => {
     expect(context.issue).not.toHaveBeenCalled();
   });
 
+  describe.each([
+    {
+      flag: "key",
+      environmentVariable: "ARCA_PRIVATE_KEY_PEM",
+      suppliedPem: PAIR.privateKeyPem,
+      discoveredFile: "arca-production.crt",
+      discoveredPem: PAIR.certificatePem,
+    },
+    {
+      flag: "cert",
+      environmentVariable: "ARCA_CERTIFICATE_PEM",
+      suppliedPem: PAIR.certificatePem,
+      discoveredFile: "arca-production.key",
+      discoveredPem: PAIR.privateKeyPem,
+    },
+  ])(
+    "with a supplied $flag",
+    ({
+      flag,
+      environmentVariable,
+      suppliedPem,
+      discoveredFile,
+      discoveredPem,
+    }) => {
+      it.each(["flag", "environment"])(
+        "refuses production before authentication with a credential from the %s",
+        async (source) => {
+          const directory = createTemporaryDirectory();
+          writeFileSync(join(directory, discoveredFile), discoveredPem);
+          const context = createContext({ bare: true, cwd: directory });
+          const createAuth = vi.spyOn(context.io, "createAuth");
+          const suppliedFile = join(directory, "provided.pem");
+          if (source === "flag") {
+            writeFileSync(suppliedFile, suppliedPem);
+          } else {
+            context.io.env[environmentVariable] = suppliedPem;
+          }
+
+          const code = await run(context, {
+            salesPoint: 3,
+            issuer: "monotributo",
+            ...(source === "flag" ? { [flag]: suppliedFile } : {}),
+          });
+
+          expect(createAuth).toHaveBeenCalledTimes(0);
+          expect(code).toBe(1);
+          expect(context.stderr()).toContain(
+            "issue solo emite en homologación."
+          );
+          expect(context.issue).not.toHaveBeenCalled();
+        }
+      );
+    }
+  );
+
   it("refuses outside homologación", async () => {
     const context = createContext({ environment: "production" });
 
