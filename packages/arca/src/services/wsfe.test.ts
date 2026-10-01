@@ -1902,3 +1902,91 @@ describe("foreign-currency cancellation lookup parsing", () => {
     }
   );
 });
+
+describe("identificadores enteros de FECompConsultar", () => {
+  const coordinates = { number: 77, salesPoint: 1, voucherType: 6 };
+  const valid = { CbteDesde: 77, CbteHasta: 77, PtoVta: 1, CbteTipo: 6 };
+
+  function lookup(raw: Record<string, unknown>) {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce(
+      createWsfeOperationResult("FECompConsultar", { ResultGet: raw })
+    );
+    return {
+      options,
+      result: createWsfeService(options).lookupVoucher(coordinates),
+    };
+  }
+
+  describe.each([
+    ["CbteDesde", 99_999_999],
+    ["CbteHasta", 99_999_999],
+    ["PtoVta", 99_999],
+    ["CbteTipo", 999],
+  ] as const)("campo %s", (field, max) => {
+    it.each(["12abc", 0, max + 1])(
+      "rechaza %s con un error tipado sin reintentar",
+      async (value) => {
+        const { options, result } = lookup({ ...valid, [field]: value });
+        await expect(result).rejects.toMatchObject({
+          name: "ArcaInvalidSoapResponseError",
+          message: `Invalid WSFE ${field}`,
+          service: "wsfe",
+          operation: "FECompConsultar",
+        });
+        expect(options.soap.execute).toHaveBeenCalledOnce();
+        expect(options.auth.login).toHaveBeenCalledOnce();
+      }
+    );
+  });
+
+  it.each([
+    [{ CbteDesde: " 00077 " }, 77],
+    [{ CbteHasta: " 00077 " }, 77],
+    [{ CbteDesde: 1, CbteHasta: 1 }, 1],
+    [{ CbteDesde: 99_999_999, CbteHasta: "99999999" }, 99_999_999],
+  ] as const)("acepta el número explícito de %j", async (raw, number) => {
+    await expect(lookup(raw).result).resolves.toMatchObject({
+      kind: "found",
+      voucher: { voucherNumber: number },
+    });
+  });
+
+  it("rechaza la ausencia de ambos números en vez de inventar cero", async () => {
+    await expect(
+      lookup({ PtoVta: 1, CbteTipo: 6 }).result
+    ).rejects.toMatchObject({
+      name: "ArcaInvalidSoapResponseError",
+      message: "Invalid WSFE voucher number",
+      service: "wsfe",
+      operation: "FECompConsultar",
+    });
+  });
+
+  it.each(["CbteDesde", "CbteHasta"])(
+    "no oculta %s nulo usando el otro número válido",
+    async (field) => {
+      await expect(
+        lookup({ ...valid, [field]: null }).result
+      ).rejects.toBeInstanceOf(ArcaInvalidSoapResponseError);
+    }
+  );
+
+  it("conserva punto y tipo ausentes como opcionales", async () => {
+    const found = await lookup({ CbteDesde: 77 }).result;
+    expect(found.kind).toBe("found");
+    if (found.kind !== "found") {
+      throw new Error("Se esperaba el comprobante consultado");
+    }
+    expect(found.voucher).not.toHaveProperty("salesPoint");
+    expect(found.voucher).not.toHaveProperty("voucherType");
+  });
+
+  it("acepta punto y tipo en sus límites sin perder la respuesta original", async () => {
+    const raw = { CbteDesde: 77, PtoVta: " 99999 ", CbteTipo: "999" };
+    await expect(lookup(raw).result).resolves.toMatchObject({
+      kind: "found",
+      voucher: { salesPoint: 99_999, voucherType: 999, raw },
+    });
+  });
+});

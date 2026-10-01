@@ -19,7 +19,10 @@ import {
   serializeArcaExchangeRate,
   serializeArcaPercentage,
 } from "../internal/decimal";
-import { parseResponseInteger } from "../internal/response-integer";
+import {
+  parseOptionalResponseInteger,
+  parseResponseInteger,
+} from "../internal/response-integer";
 import type { ArcaClientConfig, ArcaRepresentedTaxId } from "../internal/types";
 import { parseLastAuthorizedNumber } from "../internal/voucher-number";
 import type { SoapTransport } from "../soap";
@@ -1378,15 +1381,60 @@ function mapWsfeQuotation(raw: Record<string, unknown>): WsfeQuotation {
   };
 }
 
+function parseWsfeLookupVoucherNumber(raw: Record<string, unknown>): number {
+  const options = {
+    service: "wsfe" as const,
+    operation: "FECompConsultar",
+    min: 1,
+    max: 99_999_999,
+  };
+  const from = parseOptionalResponseInteger(raw.CbteDesde, {
+    ...options,
+    field: "CbteDesde",
+  });
+  const to = parseOptionalResponseInteger(raw.CbteHasta, {
+    ...options,
+    field: "CbteHasta",
+  });
+  const number = from ?? to;
+  if (number === undefined) {
+    throw new ArcaInvalidSoapResponseError("Invalid WSFE voucher number", {
+      service: options.service,
+      operation: options.operation,
+    });
+  }
+  return number;
+}
+
 function mapWsfeVoucherInfo(raw: Record<string, unknown>): WsfeVoucherInfo {
   const voucher: WsfeVoucherInfo = {
-    voucherNumber: Number(raw.CbteDesde ?? raw.CbteHasta ?? 0),
+    voucherNumber: parseWsfeLookupVoucherNumber(raw),
     raw,
   };
 
   assignWsfeValue(voucher, "voucherDate", normalizeWsfeString(raw.CbteFch));
-  assignWsfeValue(voucher, "salesPoint", normalizeWsfeNumber(raw.PtoVta));
-  assignWsfeValue(voucher, "voucherType", normalizeWsfeNumber(raw.CbteTipo));
+  assignWsfeValue(
+    voucher,
+    "salesPoint",
+    parseOptionalResponseInteger(raw.PtoVta, {
+      service: "wsfe",
+      operation: "FECompConsultar",
+      field: "PtoVta",
+      min: 1,
+      max: 99_999,
+    })
+  );
+  assignWsfeValue(
+    voucher,
+    "voucherType",
+    parseOptionalResponseInteger(raw.CbteTipo, {
+      service: "wsfe",
+      operation: "FECompConsultar",
+      field: "CbteTipo",
+      min: 1,
+      max: 999,
+    })
+  );
   assignWsfeValue(voucher, "concept", normalizeWsfeNumber(raw.Concepto));
   assignWsfeValue(voucher, "documentType", normalizeWsfeNumber(raw.DocTipo));
   assignWsfeValue(voucher, "documentNumber", normalizeWsfeString(raw.DocNro));

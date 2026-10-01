@@ -585,7 +585,7 @@ describe("high-level API with the real SOAP adapter", () => {
     ["matching fallback", { CbteHasta: 77 }, "authorized"],
     ["different", { CbteDesde: 78, CbteHasta: 78 }, "conflict"],
   ] as const)(
-    "classifies lookup number (%s) after timeout",
+    "clasifica el número consultado (%s) después de un timeout",
     async (_name, numbers, kind) => {
       const execute = vi.fn(async ({ operation }: { operation: string }) => {
         await Promise.resolve();
@@ -632,7 +632,15 @@ describe("high-level API with the real SOAP adapter", () => {
       expect(result.kind).toBe(kind);
       if (kind === "indeterminate") {
         expect(result).toMatchObject({
-          lookup: { kind: "incomplete", reason: "Cannot verify number" },
+          lookup: {
+            kind: "failed",
+            error: {
+              name: "ArcaInvalidSoapResponseError",
+              code: "ARCA_INVALID_SOAP_RESPONSE",
+              service: "wsfe",
+              operation: "FECompConsultar",
+            },
+          },
         });
       } else if (kind === "authorized") {
         expect(result).toMatchObject({
