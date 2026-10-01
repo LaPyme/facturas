@@ -1,5 +1,17 @@
 # facturas
 
+## 0.20.4
+
+### Patch Changes
+
+- c453398: Permite completar el certificado o la clave encontrados por el CLI con el otro valor pasado por flag o variable de entorno.
+  
+  `issue` usa la misma resolución de credenciales para detectar el entorno y
+  rechaza producción antes de iniciar la autenticación.
+- 6881926: Las consultas de Padrón ahora devuelven `ArcaAuthenticationError` ante los
+  rechazos de autenticación del login de WSAA o de la consulta al servicio.
+  Conservan el motivo, el servicio y la operación, sin agregar reintentos.
+
 ## 0.20.3
 
 ### Patch Changes
