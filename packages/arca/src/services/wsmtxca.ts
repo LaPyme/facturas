@@ -11,6 +11,10 @@ import {
   createArcaAuthenticationEvidence,
   executeWithAuthenticationRecovery,
 } from "../internal/authentication";
+import {
+  parseOptionalResponseInteger,
+  parseResponseInteger,
+} from "../internal/response-integer";
 import type { ArcaClientConfig, ArcaRepresentedTaxId } from "../internal/types";
 import { parseLastAuthorizedNumber } from "../internal/voucher-number";
 import type { SoapTransport } from "../soap";
@@ -310,23 +314,24 @@ export function createWsmtxcaService(
     const rawSalesPoints = toRecord(raw.arrayPuntosVenta)?.puntoVenta;
     const entries = Array.isArray(rawSalesPoints)
       ? rawSalesPoints
-      : rawSalesPoints
-        ? [rawSalesPoints]
-        : [];
-    const salesPoints = entries.flatMap((entry) => {
+      : rawSalesPoints === undefined
+        ? []
+        : [rawSalesPoints];
+    const salesPoints = entries.map((entry) => {
       const record = toRecord(entry);
-      const number = parseOptionalPositiveInteger(record?.numeroPuntoVenta);
-      if (number === undefined) {
-        return [];
-      }
+      const number = parseResponseInteger(record?.numeroPuntoVenta, {
+        service: "wsmtxca",
+        operation,
+        field: "numeroPuntoVenta",
+        min: 1,
+        max: 99_999,
+      });
       const deletedAt = normalizeWsmtxcaResponseDate(record?.fechaBaja);
-      return [
-        {
-          number,
-          blocked: String(record?.bloqueado ?? "N").toUpperCase() === "S",
-          ...(deletedAt === undefined ? {} : { deletedAt }),
-        },
-      ];
+      return {
+        number,
+        blocked: String(record?.bloqueado ?? "N").toUpperCase() === "S",
+        ...(deletedAt === undefined ? {} : { deletedAt }),
+      };
     });
 
     return { salesPoints, raw };
@@ -534,9 +539,6 @@ function classifyWsmtxcaAuthorization(
       payload.fechaVencimiento ??
       raw.fechaVencimiento
   );
-  const voucherNumber = parseOptionalPositiveInteger(
-    payload.numeroComprobante ?? raw.numeroComprobante
-  );
   const errors = extractWsmtxcaIssues(raw, operation, "error");
   const observations = extractWsmtxcaIssues(raw, operation, "observation");
   const base = {
@@ -547,6 +549,26 @@ function classifyWsmtxcaAuthorization(
     observations,
     raw,
   };
+
+  const parsedNumber = parseWsmtxcaAuthorizationNumber(payload, raw);
+  if (parsedNumber.invalid) {
+    // El envío ya ocurrió. Conservá el CAE y la evidencia para conciliar.
+    const outcome: WsmtxcaAuthorizationOutcome = {
+      ...base,
+      kind: "indeterminate",
+      reason: "invalid_response",
+    };
+    assignWsmtxcaValue(outcome, "result", result);
+    assignWsmtxcaValue(
+      outcome,
+      "resultLevel",
+      result === undefined ? undefined : "operation"
+    );
+    assignWsmtxcaValue(outcome, "cae", cae);
+    assignWsmtxcaValue(outcome, "caeExpiry", caeExpiry);
+    return outcome;
+  }
+  const voucherNumber = parsedNumber.voucherNumber;
 
   const authenticationOutcome = createWsmtxcaAuthenticationOutcome({
     base,
@@ -592,13 +614,40 @@ function classifyWsmtxcaAuthorization(
       ((result === "A" || result === "O") && Boolean(errors.length))
         ? "contradictory_response"
         : "incomplete_response",
-    ...(result === undefined ? {} : { result }),
-    ...(result === undefined ? {} : { resultLevel: "operation" }),
+    ...(result === undefined ? {} : { result, resultLevel: "operation" }),
   };
   assignWsmtxcaValue(outcome, "cae", cae);
   assignWsmtxcaValue(outcome, "caeExpiry", caeExpiry);
   assignWsmtxcaValue(outcome, "voucherNumber", voucherNumber);
   return outcome;
+}
+
+function parseWsmtxcaAuthorizationNumber(
+  payload: Record<string, unknown>,
+  raw: Record<string, unknown>
+): { invalid: true } | { invalid: false; voucherNumber?: number } {
+  try {
+    return {
+      invalid: false,
+      voucherNumber: parseOptionalResponseInteger(
+        payload.numeroComprobante === undefined
+          ? raw.numeroComprobante
+          : payload.numeroComprobante,
+        {
+          service: "wsmtxca",
+          operation: "autorizarComprobante",
+          field: "numeroComprobante",
+          min: 1,
+          max: 99_999_999,
+        }
+      ),
+    };
+  } catch (error) {
+    if (!(error instanceof ArcaInvalidSoapResponseError)) {
+      throw error;
+    }
+    return { invalid: true };
+  }
 }
 
 function createWsmtxcaAuthenticationOutcome({
@@ -793,18 +842,36 @@ function mapWsmtxcaVoucherInfo(
   assignWsmtxcaValue(
     voucher,
     "voucherNumber",
-    parseOptionalPositiveInteger(raw.numeroComprobante)
+    parseOptionalResponseInteger(raw.numeroComprobante, {
+      service: "wsmtxca",
+      operation: "consultarComprobante",
+      field: "numeroComprobante",
+      min: 1,
+      max: 99_999_999,
+    })
   );
   assignWsmtxcaValue(voucher, "invoiceDate", invoiceDate);
   assignWsmtxcaValue(
     voucher,
     "salesPoint",
-    parseOptionalPositiveInteger(raw.numeroPuntoVenta)
+    parseOptionalResponseInteger(raw.numeroPuntoVenta, {
+      service: "wsmtxca",
+      operation: "consultarComprobante",
+      field: "numeroPuntoVenta",
+      min: 1,
+      max: 99_999,
+    })
   );
   assignWsmtxcaValue(
     voucher,
     "voucherType",
-    parseOptionalPositiveInteger(raw.codigoTipoComprobante)
+    parseOptionalResponseInteger(raw.codigoTipoComprobante, {
+      service: "wsmtxca",
+      operation: "consultarComprobante",
+      field: "codigoTipoComprobante",
+      min: 1,
+      max: 999,
+    })
   );
   assignWsmtxcaValue(
     voucher,
@@ -889,11 +956,6 @@ function sumWsmtxcaVatAmounts(value: unknown): number | undefined {
   return amounts.length > 0
     ? amounts.reduce((total, amount) => total + amount, 0)
     : undefined;
-}
-
-function parseOptionalPositiveInteger(value: unknown): number | undefined {
-  const parsed = Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function parseOptionalNumber(value: unknown): number | undefined {
