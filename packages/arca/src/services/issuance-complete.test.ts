@@ -786,6 +786,161 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     expect(calls).toEqual(["consultarComprobante"]);
     expect(await store.get(key)).toBe(json);
   });
+  it("no renueva autenticación ni reemite ante un número inválido y un error de token", async () => {
+    const { client, soap, calls, auth } = transportFixture();
+    soap.execute.mockImplementationOnce(async ({ operation }) => {
+      await Promise.resolve();
+      calls.push(operation);
+      return {
+        result: {
+          numeroComprobante: "12abc",
+          arrayErrores: {
+            codigoDescripcion: { codigo: 600, descripcion: "Token vencido" },
+          },
+        },
+      };
+    });
+    await expect(
+      client.issue(detailed, {
+        service: "wsmtxca",
+        number: 9,
+        idempotencyKey: "numero-invalido-token",
+      })
+    ).resolves.toMatchObject({
+      kind: "indeterminate",
+      attempt: {
+        reason: "invalid_response",
+        errors: [{ code: "600", message: "Token vencido" }],
+      },
+      lookup: { kind: "not_found" },
+    });
+    expect(calls).toEqual(["autorizarComprobante", "consultarComprobante"]);
+    expect(auth.login).toHaveBeenCalledTimes(2);
+    expect(auth.login).not.toHaveBeenCalledWith(
+      "wsmtxca",
+      expect.objectContaining({ forceRefresh: true })
+    );
+  });
+  it.each([
+    ["numeroComprobante", "12abc", 9, "12abc"],
+    ["numeroComprobante", "1.5", 9, "1.5"],
+    ["numeroComprobante", 100_000_000, 9, 100_000_000],
+    ["numeroPuntoVenta", "1abc", 1, "12abc"],
+    ["numeroPuntoVenta", "1.5", 1, "1.5"],
+    ["numeroPuntoVenta", 100_000, 1, 100_000_000],
+    ["codigoTipoComprobante", "1abc", 1, "12abc"],
+    ["codigoTipoComprobante", "1.5", 1, "1.5"],
+    ["codigoTipoComprobante", 1000, 1, 100_000_000],
+  ] as const)(
+    "conserva la reserva con %s=%s inválido y recupera sin volver a emitir",
+    async (field, invalidValue, validValue, invalidAuthorizationNumber) => {
+      const { client, soap, calls, vouchers, store } = transportFixture();
+      const options = {
+        service: "wsmtxca" as const,
+        idempotencyKey: "coordenadas-invalidas",
+        number: 9,
+        include: { request: true, rawResponse: true },
+      };
+      const raw = {
+        resultado: "O",
+        comprobanteResponse: {
+          CAE: "12345678901234",
+          fechaVencimientoCAE: "20260916",
+          numeroComprobante: invalidAuthorizationNumber,
+        },
+        arrayErrores: {
+          codigoDescripcion: { codigo: 999, descripcion: "Error informado" },
+        },
+        arrayObservaciones: {
+          codigoDescripcion: {
+            codigo: 100,
+            descripcion: "Observación informada",
+          },
+        },
+      };
+      soap.execute.mockImplementationOnce(async ({ operation, body }) => {
+        await Promise.resolve();
+        calls.push(operation);
+        // ARCA pudo autorizar la reserva aunque ambas respuestas estén dañadas.
+        vouchers.set(1, {
+          ...structuredClone(body.comprobanteCAERequest),
+          [field]: invalidValue,
+        });
+        return { result: raw };
+      });
+      const lookup = {
+        kind: "failed",
+        error: {
+          name: "ArcaInvalidSoapResponseError",
+          code: "ARCA_INVALID_SOAP_RESPONSE",
+          service: "wsmtxca",
+          operation: "consultarComprobante",
+        },
+      };
+      const uncertain = {
+        kind: "indeterminate",
+        attempted: { salesPoint: 1, voucherType: 1, number: 9 },
+        lookup,
+      };
+      expect(await client.issue(detailed, options)).toMatchObject({
+        ...uncertain,
+        attempt: {
+          kind: "indeterminate",
+          reason: "invalid_response",
+          results: { operation: "O" },
+          result: "O",
+          cae: "12345678901234",
+          caeExpiry: "2026-09-16",
+          errors: [{ code: "999", message: "Error informado" }],
+          observations: [{ code: "100", message: "Observación informada" }],
+          rawResponse: raw,
+        },
+        request: { comprobanteCAERequest: { numeroComprobante: 9 } },
+      });
+      const key = attemptKey("test", "20123456789", options.idempotencyKey);
+      const reservation = await store.get(key);
+      expect(JSON.parse(reservation ?? "{}")).toMatchObject({
+        service: "wsmtxca",
+        salesPoint: 1,
+        voucherType: 1,
+        number: 9,
+      });
+      expect(await client.recover(options.idempotencyKey)).toMatchObject(
+        uncertain
+      );
+      expect(await client.issue(detailed, options)).toMatchObject(uncertain);
+      expect(await store.get(key)).toBe(reservation);
+
+      const storedVoucher = vouchers.get(1);
+      if (!storedVoucher) {
+        throw new Error("Falta el comprobante WSMTXCA de la reserva");
+      }
+      storedVoucher[field] = validValue;
+      expect(await client.recover(options.idempotencyKey)).toMatchObject({
+        kind: "authorized",
+        recoveredByMatch: true,
+        voucher: {
+          salesPoint: 1,
+          voucherType: 1,
+          number: 9,
+          cae: "12345678901234",
+          caeExpiry: "2026-09-16",
+        },
+      });
+      expect(await store.get(key)).toBe(reservation);
+      expect(calls).toEqual([
+        "autorizarComprobante",
+        "consultarComprobante",
+        "consultarComprobante",
+        "consultarComprobante",
+        "consultarComprobante",
+      ]);
+      expect(soap.execute.mock.calls[0]?.[0]).toMatchObject({
+        operation: "autorizarComprobante",
+        retries: 0,
+      });
+    }
+  );
   it("lets the sequence barrier consult and supersede a pre-upgrade v2 record", async () => {
     const { client, store, calls } = transportFixture();
     await store.set(

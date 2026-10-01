@@ -19,6 +19,10 @@ import {
   serializeArcaExchangeRate,
   serializeArcaPercentage,
 } from "../internal/decimal";
+import {
+  parseOptionalResponseInteger,
+  parseResponseInteger,
+} from "../internal/response-integer";
 import type { ArcaClientConfig, ArcaRepresentedTaxId } from "../internal/types";
 import { parseLastAuthorizedNumber } from "../internal/voucher-number";
 import type { SoapTransport } from "../soap";
@@ -495,7 +499,9 @@ export function createWsfeService(
       representedTaxId: input.representedTaxId,
       forceRefresh: input.forceRefresh,
     });
-    return getWsfeResultEntries(result, resultKey).map(mapWsfeCatalogEntry);
+    return getWsfeNumericResultEntries(result, resultKey).map((entry) =>
+      mapWsfeCatalogEntry(entry, operation)
+    );
   }
 
   function issue({
@@ -688,7 +694,7 @@ export function createWsfeService(
       const rawPoints = (
         result.ResultGet as Record<string, unknown> | undefined
       )?.PtoVenta;
-      if (!rawPoints) {
+      if (rawPoints === undefined) {
         return [];
       }
       const entries = Array.isArray(rawPoints) ? rawPoints : [rawPoints];
@@ -730,7 +736,7 @@ export function createWsfeService(
           forceRefresh,
         }
       );
-      return getWsfeResultEntries(result, "ActividadesTipo").map(
+      return getWsfeNumericResultEntries(result, "ActividadesTipo").map(
         mapWsfeActivityType
       );
     },
@@ -749,7 +755,7 @@ export function createWsfeService(
           ...(voucherClass === undefined ? {} : { ClaseCmp: voucherClass }),
         }
       );
-      return getWsfeResultEntries(result, "CondicionIvaReceptor").map(
+      return getWsfeNumericResultEntries(result, "CondicionIvaReceptor").map(
         mapWsfeReceiverVatCondition
       );
     },
@@ -1295,10 +1301,16 @@ function assertValidCalendarDate(
 
 /** ARCA answers `Bloqueado` as `S`/`N` and an active point's `FchBaja` as `NULL`. */
 function mapWsfeSalesPoint(raw: unknown): WsfeSalesPoint {
-  const record = raw as Record<string, unknown>;
+  const record = toWsfeRecord(raw) ?? {};
   const deletedAt = toIsoDate(record.FchBaja);
   return {
-    number: Number(record.Nro ?? 0),
+    number: parseResponseInteger(record.Nro, {
+      service: "wsfe",
+      operation: "FEParamGetPtosVenta",
+      field: "Nro",
+      min: 1,
+      max: 99_999,
+    }),
     ...(record.EmisionTipo === undefined
       ? {}
       : { emissionType: String(record.EmisionTipo) }),
@@ -1310,28 +1322,35 @@ function mapWsfeSalesPoint(raw: unknown): WsfeSalesPoint {
   };
 }
 
-function mapWsfeCatalogEntry(raw: unknown): WsfeCatalogEntry {
-  const record = raw as Record<string, unknown>;
+function mapWsfeCatalogEntry(
+  raw: unknown,
+  operation: string
+): WsfeCatalogEntry {
+  const record = toWsfeRecord(raw) ?? {};
   return {
-    id: Number(record.Id ?? 0),
+    id: parseResponseInteger(record.Id, {
+      service: "wsfe",
+      operation,
+      field: "Id",
+      min: 0,
+      max: Number.MAX_SAFE_INTEGER,
+    }),
     description: String(record.Desc ?? ""),
   };
 }
 
 function mapWsfeActivityType(raw: unknown): WsfeActivityType {
-  const record = raw as Record<string, unknown>;
+  const record = toWsfeRecord(raw) ?? {};
   return {
-    id: Number(record.Id ?? 0),
-    description: String(record.Desc ?? ""),
+    ...mapWsfeCatalogEntry(record, "FEParamGetActividades"),
     order: Number(record.Orden ?? 0),
   };
 }
 
 function mapWsfeReceiverVatCondition(raw: unknown): WsfeReceiverVatCondition {
-  const record = raw as Record<string, unknown>;
+  const record = toWsfeRecord(raw) ?? {};
   return {
-    id: Number(record.Id ?? 0),
-    description: String(record.Desc ?? ""),
+    ...mapWsfeCatalogEntry(record, "FEParamGetCondicionIvaReceptor"),
     voucherClass: String(record.Cmp_Clase ?? ""),
   };
 }
@@ -1362,15 +1381,60 @@ function mapWsfeQuotation(raw: Record<string, unknown>): WsfeQuotation {
   };
 }
 
+function parseWsfeLookupVoucherNumber(raw: Record<string, unknown>): number {
+  const options = {
+    service: "wsfe" as const,
+    operation: "FECompConsultar",
+    min: 1,
+    max: 99_999_999,
+  };
+  const from = parseOptionalResponseInteger(raw.CbteDesde, {
+    ...options,
+    field: "CbteDesde",
+  });
+  const to = parseOptionalResponseInteger(raw.CbteHasta, {
+    ...options,
+    field: "CbteHasta",
+  });
+  const number = from ?? to;
+  if (number === undefined) {
+    throw new ArcaInvalidSoapResponseError("Invalid WSFE voucher number", {
+      service: options.service,
+      operation: options.operation,
+    });
+  }
+  return number;
+}
+
 function mapWsfeVoucherInfo(raw: Record<string, unknown>): WsfeVoucherInfo {
   const voucher: WsfeVoucherInfo = {
-    voucherNumber: Number(raw.CbteDesde ?? raw.CbteHasta ?? 0),
+    voucherNumber: parseWsfeLookupVoucherNumber(raw),
     raw,
   };
 
   assignWsfeValue(voucher, "voucherDate", normalizeWsfeString(raw.CbteFch));
-  assignWsfeValue(voucher, "salesPoint", normalizeWsfeNumber(raw.PtoVta));
-  assignWsfeValue(voucher, "voucherType", normalizeWsfeNumber(raw.CbteTipo));
+  assignWsfeValue(
+    voucher,
+    "salesPoint",
+    parseOptionalResponseInteger(raw.PtoVta, {
+      service: "wsfe",
+      operation: "FECompConsultar",
+      field: "PtoVta",
+      min: 1,
+      max: 99_999,
+    })
+  );
+  assignWsfeValue(
+    voucher,
+    "voucherType",
+    parseOptionalResponseInteger(raw.CbteTipo, {
+      service: "wsfe",
+      operation: "FECompConsultar",
+      field: "CbteTipo",
+      min: 1,
+      max: 999,
+    })
+  );
   assignWsfeValue(voucher, "concept", normalizeWsfeNumber(raw.Concepto));
   assignWsfeValue(voucher, "documentType", normalizeWsfeNumber(raw.DocTipo));
   assignWsfeValue(voucher, "documentNumber", normalizeWsfeString(raw.DocNro));
@@ -1984,4 +2048,16 @@ function getWsfeResultEntries(
   return (Array.isArray(rawEntries) ? rawEntries : [rawEntries]).map(
     (entry) => entry as Record<string, unknown>
   );
+}
+
+function getWsfeNumericResultEntries(
+  result: Record<string, unknown>,
+  key: string
+): unknown[] {
+  const rawEntries = toWsfeRecord(result.ResultGet)?.[key];
+  if (rawEntries === undefined) {
+    return [];
+  }
+
+  return Array.isArray(rawEntries) ? rawEntries : [rawEntries];
 }

@@ -217,6 +217,8 @@ describe("createWsmtxcaService", () => {
         { code: "502", category: "business" },
       ],
     });
+    expect(options.auth.login).toHaveBeenCalledOnce();
+    expect(options.soap.execute).toHaveBeenCalledOnce();
   });
 
   it("retains contradictory WSMTXCA result and CAE evidence", async () => {
@@ -522,20 +524,11 @@ describe("createWsmtxcaService", () => {
   });
 
   it.each([
-    ["undefined", undefined],
-    ["null", null],
-    ["empty", ""],
-    ["whitespace", "   "],
-    ["boolean", true],
-    ["negative", -1],
-    ["fraction", 1.5],
-    ["fraction string", "1.5"],
-    ["trailing text", "12abc"],
-    ["exponent string", "1e2"],
-    ["too many digits", "100000000"],
-    ["non-numeric", "not-a-number"],
+    ["ausente", undefined],
+    ["malformado", "12abc"],
+    ["fuera de rango", 100_000_000],
   ] as const)(
-    "rejects invalid last authorized number: %s",
+    "rechaza el último número autorizado %s",
     async (_label, rawNumber) => {
       const options = createBaseOptions();
       options.soap.execute.mockResolvedValueOnce({
@@ -550,7 +543,7 @@ describe("createWsmtxcaService", () => {
         .catch((error: unknown) => error);
 
       if (!(failure instanceof ArcaInvalidSoapResponseError)) {
-        throw new Error("Expected invalid WSMTXCA response error");
+        throw new Error("Se esperaba un error de respuesta WSMTXCA inválida");
       }
       expect(failure).toMatchObject({
         service: "wsmtxca",
@@ -558,17 +551,16 @@ describe("createWsmtxcaService", () => {
       });
       expect(failure.cause).toBeUndefined();
       expect(failure.message).toBe("Invalid WSMTXCA last authorized number");
+      expect(options.soap.execute).toHaveBeenCalledOnce();
+      expect(options.auth.login).toHaveBeenCalledOnce();
     }
   );
 
   it.each([
-    [0, 0],
     ["0", 0],
-    [41, 41],
-    ["41", 41],
-    [99_999_999, 99_999_999],
+    ["99999999", 99_999_999],
   ] as const)(
-    "accepts explicit last authorized number %s",
+    "acepta el último número autorizado explícito %s",
     async (rawNumber, expected) => {
       const options = createBaseOptions();
       options.soap.execute.mockResolvedValueOnce({
@@ -816,5 +808,266 @@ describe("createWsmtxcaService", () => {
       name: "ArcaServiceError",
       message: "WSMTXCA did not return the voucher issue date",
     });
+  });
+});
+
+const voucherIdentityFields = [
+  ["numeroComprobante", "voucherNumber", 99_999_999],
+  ["numeroPuntoVenta", "salesPoint", 99_999],
+  ["codigoTipoComprobante", "voucherType", 999],
+] as const;
+
+describe("identificadores enteros de WSMTXCA", () => {
+  // La sintaxis exhaustiva queda en response-integer.test.ts. Estos casos
+  // verifican el resultado fiscal y la conservación de evidencia.
+  it.each([
+    ["malformado", "12abc"],
+    ["cero", 0],
+    ["fuera de rango", 100_000_000],
+  ] as const)(
+    "conserva el CAE y devuelve invalid_response ante número %s",
+    async (_label, numeroComprobante) => {
+      const options = createBaseOptions();
+      const raw = {
+        resultado: "A",
+        comprobanteResponse: {
+          numeroComprobante,
+          CAE: "12345678901234",
+          fechaVencimientoCAE: "20260311",
+        },
+        arrayObservaciones: {
+          codigoDescripcion: { codigo: 504, descripcion: "Observación" },
+        },
+      };
+      options.soap.execute.mockResolvedValueOnce({
+        result: { autorizarComprobanteResponse: raw },
+      });
+      const outcome = await createWsmtxcaService(options).issue({
+        data: { comprobanteCAERequest: { numeroComprobante: 12 } },
+      });
+
+      expect(outcome).toMatchObject({
+        kind: "indeterminate",
+        reason: "invalid_response",
+        service: "wsmtxca",
+        operation: "autorizarComprobante",
+        result: "A",
+        resultLevel: "operation",
+        results: { operation: "A" },
+        cae: "12345678901234",
+        caeExpiry: "2026-03-11",
+        observations: [{ code: "504", message: "Observación" }],
+        raw,
+      });
+      expect(outcome).not.toHaveProperty("voucherNumber");
+      expect(options.auth.login).toHaveBeenCalledOnce();
+      expect(options.soap.execute).toHaveBeenCalledOnce();
+    }
+  );
+
+  it("no reemplaza un número nulo del comprobante por el número externo", async () => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        autorizarComprobanteResponse: {
+          resultado: "R",
+          numeroComprobante: 12,
+          comprobanteResponse: { numeroComprobante: null },
+          arrayErrores: {
+            codigoDescripcion: { codigo: 500, descripcion: "Unidad inválida" },
+          },
+        },
+      },
+    });
+    const outcome = await createWsmtxcaService(options).issue({ data: {} });
+    expect(outcome).toMatchObject({
+      kind: "indeterminate",
+      reason: "invalid_response",
+      results: { operation: "R" },
+      errors: [{ code: "500" }],
+    });
+    expect(outcome).not.toHaveProperty("voucherNumber");
+    expect(options.auth.login).toHaveBeenCalledOnce();
+    expect(options.soap.execute).toHaveBeenCalledOnce();
+  });
+
+  it("autoriza con el número máximo desde el campo externo", async () => {
+    const numeroComprobante = "99999999";
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        autorizarComprobanteResponse: {
+          resultado: "O",
+          numeroComprobante,
+          codigoAutorizacion: "12345678901234",
+        },
+      },
+    });
+    await expect(
+      createWsmtxcaService(options).issue({ data: {} })
+    ).resolves.toMatchObject({
+      kind: "authorized",
+      voucherNumber: 99_999_999,
+    });
+  });
+
+  it("mantiene incomplete_response cuando falta el número autorizado", async () => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        autorizarComprobanteResponse: {
+          resultado: "A",
+          comprobanteResponse: { CAE: "12345678901234" },
+        },
+      },
+    });
+    await expect(
+      createWsmtxcaService(options).issue({ data: {} })
+    ).resolves.toMatchObject({
+      kind: "indeterminate",
+      reason: "incomplete_response",
+      cae: "12345678901234",
+    });
+    expect(options.auth.login).toHaveBeenCalledOnce();
+    expect(options.soap.execute).toHaveBeenCalledOnce();
+  });
+
+  describe.each(voucherIdentityFields)("consulta: %s", (field, target, max) => {
+    it.each([
+      ["malformado", null],
+      ["cero", 0],
+      ["límite excedido", max + 1],
+    ] as const)(
+      "rechaza %s sin inventar datos de identidad",
+      async (_label, value) => {
+        const options = createBaseOptions();
+        options.soap.execute.mockResolvedValueOnce({
+          result: {
+            consultarComprobanteResponse: {
+              comprobante: { [field]: value, fechaEmision: "20260301" },
+            },
+          },
+        });
+        await expect(
+          createWsmtxcaService(options).lookupVoucher({
+            voucherType: 6,
+            salesPoint: 8,
+            voucherNumber: 25,
+          })
+        ).rejects.toMatchObject({
+          name: "ArcaInvalidSoapResponseError",
+          message: `Invalid WSMTXCA ${field}`,
+          service: "wsmtxca",
+          operation: "consultarComprobante",
+        });
+        expect(options.soap.execute).toHaveBeenCalledOnce();
+      }
+    );
+
+    it.each([undefined, String(max)])(
+      "conserva la ausencia y acepta el entero %s",
+      async (value) => {
+        const options = createBaseOptions();
+        options.soap.execute.mockResolvedValueOnce({
+          result: {
+            consultarComprobanteResponse: {
+              comprobante: { [field]: value, fechaEmision: "20260301" },
+            },
+          },
+        });
+        const outcome = await createWsmtxcaService(options).lookupVoucher({
+          voucherType: 6,
+          salesPoint: 8,
+          voucherNumber: 25,
+        });
+        expect(outcome.kind).toBe("found");
+        if (outcome.kind !== "found") {
+          throw new Error("Se esperaba el comprobante consultado");
+        }
+        if (value === undefined) {
+          expect(outcome.voucher).not.toHaveProperty(target);
+        } else {
+          expect(outcome.voucher).toHaveProperty(target, Number(value));
+        }
+      }
+    );
+  });
+
+  it.each([
+    ["ausente", undefined],
+    ["malformado", "12abc"],
+    ["cero", 0],
+    ["límite excedido", 100_000],
+  ] as const)(
+    "rechaza toda la lista ante punto de venta %s",
+    async (_label, value) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce({
+        result: {
+          consultarPuntosVentaResponse: {
+            arrayPuntosVenta: {
+              puntoVenta: [
+                { numeroPuntoVenta: 1 },
+                { numeroPuntoVenta: value },
+              ],
+            },
+          },
+        },
+      });
+      await expect(
+        createWsmtxcaService(options).getSalesPoints()
+      ).rejects.toMatchObject({
+        name: "ArcaInvalidSoapResponseError",
+        service: "wsmtxca",
+        operation: "consultarPuntosVenta",
+      });
+      expect(options.soap.execute).toHaveBeenCalledOnce();
+    }
+  );
+
+  it.each([null, 0, {}, [null]])(
+    "rechaza una entrada de punto de venta mal formada: %j",
+    async (puntoVenta) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce({
+        result: {
+          consultarPuntosVentaResponse: { arrayPuntosVenta: { puntoVenta } },
+        },
+      });
+      await expect(
+        createWsmtxcaService(options).getSalesPoints()
+      ).rejects.toBeInstanceOf(ArcaInvalidSoapResponseError);
+    }
+  );
+
+  it("acepta un punto de venta único hasta el límite del dominio", async () => {
+    const numeroPuntoVenta = "99999";
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        consultarPuntosVentaResponse: {
+          arrayPuntosVenta: { puntoVenta: { numeroPuntoVenta } },
+        },
+      },
+    });
+    await expect(
+      createWsmtxcaService(options).getSalesPoints()
+    ).resolves.toMatchObject({
+      salesPoints: [{ number: 99_999 }],
+    });
+  });
+
+  it.each([
+    {},
+    { arrayPuntosVenta: {} },
+    { arrayPuntosVenta: { puntoVenta: [] } },
+  ])("conserva una lista de puntos de venta vacía", async (raw) => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: { consultarPuntosVentaResponse: raw },
+    });
+    await expect(
+      createWsmtxcaService(options).getSalesPoints()
+    ).resolves.toMatchObject({ salesPoints: [] });
   });
 });

@@ -1,4 +1,4 @@
-import { ArcaInvalidSoapResponseError } from "../errors";
+import { parseResponseInteger } from "./response-integer";
 
 /**
  * The last authorized number both services answer: an explicit decimal integer
@@ -9,16 +9,11 @@ export function parseLastAuthorizedNumber(
   value: unknown,
   { service, operation }: { service: "wsfe" | "wsmtxca"; operation: string }
 ): number {
-  // Digits only, so the parsed number is already a non-negative integer.
-  if (
-    (typeof value === "string" || typeof value === "number") &&
-    /^\d+$/.test(String(value).trim()) &&
-    Number(value) <= 99_999_999
-  ) {
-    return Number(value);
-  }
-  throw new ArcaInvalidSoapResponseError(
-    `Invalid ${service.toUpperCase()} last authorized number`,
-    { service, operation }
-  );
+  return parseResponseInteger(value, {
+    service,
+    operation,
+    field: "last authorized number",
+    min: 0,
+    max: 99_999_999,
+  });
 }
