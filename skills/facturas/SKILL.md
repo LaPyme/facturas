@@ -250,6 +250,8 @@ Detalles en [Notas de crédito y débito](https://facturas-sdk.dev/guides/credit
   `idempotencyKey` en cada emisión.
 - `abortSignal: AbortSignal.timeout(20_000)` evita llamadas colgadas. Un corte
   después del envío devuelve `indeterminate` con `lookup.kind === "aborted"`.
+  Un corte mientras espera el lock de la secuencia lanza `ArcaLockTimeoutError`
+  sin reservar nada: repetí la llamada.
 - Los logs quedan en `warn`. En `debug` se loguean los pedidos SOAP con datos
   de clientes. Nunca loguees los PEM.
 

@@ -128,14 +128,20 @@ type ArcaStore = {
   set(key: string, value: string): Promise<void>;
   add(key: string, value: string): Promise<boolean>;
   delete?(key: string): Promise<void>;
-  withLock?<T>(key: string, fn: () => Promise<T>): Promise<T>;
+  withLock?<T>(
+    key: string,
+    fn: () => Promise<T>,
+    options?: { signal?: AbortSignal }
+  ): Promise<T>;
 };
 ```
 
 `add` tiene que devolver false de forma atómica sin cambiar un valor existente.
 El `withLock` opcional coordina los refrescos de ticket WSAA y la secuencia del
 punto de venta. Tiene que ser exclusivo entre procesos y soltarse siempre, aun
-si el proceso muere. Un store sin `withLock` conserva las reservas y la
+si el proceso muere. Si recibe `options.signal` y se aborta antes de tomar el
+lock, tiene que dejar de esperar sin correr `fn` y lanzar `ArcaLockTimeoutError`
+con `reason: "aborted"`. Un store sin `withLock` conserva las reservas y la
 recuperación, pero no coordina la secuencia entre procesos. Cuando pasás las dos
 opciones, un `wsaaSessionStore`
 explícito gana para los tickets.

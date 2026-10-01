@@ -70,7 +70,9 @@ adaptador, está en
 
 `abortSignal` marca el límite de tiempo con un `AbortSignal`, por ejemplo
 `AbortSignal.timeout(20_000)`. Aborta el login WSAA, la escritura y las
-consultas de esa llamada. Si se corta después de haber enviado la escritura, el
+consultas de esa llamada, y también la espera del lock de la secuencia: si vence
+antes de tomarlo, la llamada lanza `ArcaLockTimeoutError` sin reservar ni enviar
+nada, y la podés repetir. Si se corta después de haber enviado la escritura, el
 resultado es `indeterminate` con `lookup.kind === "aborted"`: la reserva queda y
 `recover()` la concilia. No hay un `timeoutMs` aparte: un solo `abortSignal` compone
 con el que ya tenga tu aplicación.
