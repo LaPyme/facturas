@@ -214,8 +214,8 @@ const HELP_PAGES: Record<CliHelpTopic, HelpPage> = {
       "por último, arca-<entorno>.crt y arca-<entorno>.key en el directorio; de",
       "ahí sale también el CUIT y el entorno. Nunca escribe en ARCA: solo lee.",
       "Guarda el ticket WSAA en el directorio temporal del sistema para poder",
-      "repetirse, porque ARCA rechaza un segundo login mientras hay uno",
-      "vigente; --no-cache no lo lee ni lo escribe.",
+      "repetirse, porque ARCA rechaza un login nuevo hasta unos minutos después",
+      "del anterior. --no-cache no lo lee ni lo escribe.",
     ],
   },
   issue: {

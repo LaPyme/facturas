@@ -88,7 +88,7 @@ const ROWS: [CliDiagnosisKey, string, string | undefined][] = [
   [
     "wsaa.alreadyAuthenticated",
     "Ya hay un ticket vigente para este certificado.",
-    "Otro proceso o máquina tiene el ticket vigente. Esperá hasta 12 horas, o corré check desde donde lo pediste.",
+    "Otro proceso o máquina tiene el ticket vigente. Esperá unos minutos (2 en producción, 10 en homologación) y volvé a probar, o corré check desde donde lo pediste.",
   ],
   [
     "wsaa.clockSkew",

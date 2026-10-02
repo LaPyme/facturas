@@ -409,7 +409,7 @@ completa:
 | WSAA | `cms.cert.untrusted`, `cms.cert.invalid` | ARCA no reconoce este certificado en este entorno. | Homologación y producción tienen certificados propios. Revisá `ARCA_ENVIRONMENT`. |
 | WSAA | `cms.bad`, `cms.sign.invalid` | La firma del pedido no es válida. | La clave no corresponde al certificado, o el PEM está truncado. |
 | WSAA | `coe.notAuthorized` | El certificado no está autorizado para `wsfe`. | `WSASS - Autogestión Certificados Homologación` → `Crear autorización a servicio` (homologación) / `Administrador de Relaciones` (producción). |
-| WSAA | `coe.alreadyAuthenticated` | Ya hay un ticket vigente para este certificado. | Otro proceso o máquina tiene el ticket vigente. Esperá hasta 12 horas, o corré `check` desde donde lo pediste. |
+| WSAA | `coe.alreadyAuthenticated` | Ya hay un ticket vigente para este certificado. | Otro proceso o máquina tiene el ticket vigente. Esperá unos minutos (2 en producción, 10 en homologación) y volvé a probar, o corré `check` desde donde lo pediste. |
 | WSAA | `xml.generationTime.invalid`, `xml.expirationTime.*` | La hora de tu máquina difiere de la de ARCA. | Sincronizá el reloj (NTP) y volvé a probar. |
 | WSAA | falla de transporte | No se pudo conectar con `<host>`. | Revisá la red, el proxy o el firewall. ARCA homologación suele caerse los fines de semana. |
 | WSFE | `reason: missing_relationship` | El certificado no tiene la relación con Facturación Electrónica. | `Administrador de Relaciones` → `Nueva Relación` → `Webservices` → `Facturación Electrónica`. |
