@@ -445,7 +445,7 @@ export function createVouchersService(
     recover: (async (key: string, options?: RecoveryOptions) => {
       const read = await readReservation(key, options);
       if (typeof read?.json === "string" && isExportRecord(read.json)) {
-        return await exporting().recover(read.json, read.options);
+        return await exporting().recover(key, read.json, read.options);
       }
       return await recoverOperation(
         select,

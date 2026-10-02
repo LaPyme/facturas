@@ -250,6 +250,8 @@ export type ExportIssueOutcome<O extends IssueOptions = { include?: never }> = (
       attempt: Evidence;
       lookup:
         | { kind: "not_found" }
+        /** ARCA has this voucher but reports no approval, CAE or expiry. */
+        | { kind: "incomplete"; reason: string }
         | { kind: "failed"; error: ArcaSafeErrorMetadata }
         | { kind: "aborted" };
     }
@@ -632,7 +634,11 @@ export type ExportIssuance = {
    * Settles an export reservation from ARCA's record of its number. Reads
    * only: it never sends the voucher, so it never authorizes one.
    */
-  recover(record: string, options: IssueOptions): Promise<ExportIssueOutcome>;
+  recover(
+    key: string,
+    record: string,
+    options: IssueOptions
+  ): Promise<ExportIssueOutcome>;
 };
 
 /**
@@ -664,18 +670,20 @@ export function createExportIssuance(
     },
     lastAuthorized: (sequence, options) =>
       wsfex.getLastVoucherNumber({ ...auth(options), ...sequence }),
-    recover: (json, options) => recoverExport(wsfex, context, json, options),
+    recover: (key, json, options) =>
+      recoverExport(wsfex, context, key, json, options),
   };
 }
 
 async function recoverExport(
   wsfex: WsfexService,
   context: Context,
+  key: string,
   json: string,
   options: IssueOptions
 ): Promise<ExportIssueOutcome> {
-  const record = readExportRecord(json);
-  const issuer = record.representedTaxId ?? context.taxId;
+  const first = readExportRecord(json);
+  const issuer = first.representedTaxId ?? context.taxId;
   if (
     options.representedTaxId !== undefined &&
     String(options.representedTaxId) !== issuer
@@ -687,10 +695,45 @@ async function recoverExport(
   }
   const consulted: IssueOptions = {
     ...options,
-    ...(record.representedTaxId === undefined
+    ...(first.representedTaxId === undefined
       ? {}
-      : { representedTaxId: record.representedTaxId }),
+      : { representedTaxId: first.representedTaxId }),
   };
+  // A retry of this key resends under the CUIT lock and may move its request
+  // id there. Waiting for the lock and reading the reservation again keeps
+  // this consultation on the id and number the retry left.
+  return await exportLock(
+    context,
+    issuer,
+    options
+  )(async () => {
+    const store = context.store;
+    const latest = store
+      ? await storeCall(() =>
+          store.get(attemptKey(context.environment, context.taxId, key))
+        )
+      : null;
+    const record = latest === null ? first : readExportRecord(latest);
+    const outcome = await consultReservation(wsfex, record, consulted, issuer);
+    return options.include?.request
+      ? {
+          ...outcome,
+          request: {
+            ...structuredClone(record.sent),
+            id: record.requestId,
+            number: record.number,
+          },
+        }
+      : outcome;
+  });
+}
+
+async function consultReservation(
+  wsfex: WsfexService,
+  record: ExportAttemptRecord,
+  options: IssueOptions,
+  issuer: string
+): Promise<ExportIssueOutcome> {
   const attempted = {
     salesPoint: record.salesPoint,
     voucherType: record.voucherType,
@@ -708,58 +751,40 @@ async function recoverExport(
   };
   const total = Math.round(record.sent.totalAmount * 100);
   const amounts = { computedTotal: total, sentTotal: total, vatAdjustment: 0 };
-  // A retry of this key resends under the CUIT lock; waiting for it keeps
-  // this consultation from reading a number the retry is still writing.
-  const outcome = await exportLock(
-    context,
-    issuer,
-    options
-  )(async () => {
-    let found: WsfexVoucherInfo | null;
-    try {
-      const result = await wsfex.lookupVoucher({
-        ...auth(consulted),
-        ...attempted,
-      });
-      found = result.kind === "found" ? result.voucher : null;
-    } catch (error) {
-      return {
-        kind: "indeterminate" as const,
-        attempted,
-        attempt,
-        lookup: options.abortSignal?.aborted
-          ? { kind: "aborted" as const }
-          : { kind: "failed" as const, error: toArcaSafeErrorMetadata(error) },
-      };
-    }
-    return settled(
-      attempt as WsfexAuthorizationOutcome,
-      attempt,
-      found,
-      record.requestId,
+  let found: WsfexVoucherInfo | null;
+  try {
+    const result = await wsfex.lookupVoucher({
+      ...auth(options),
+      ...attempted,
+    });
+    found = result.kind === "found" ? result.voucher : null;
+  } catch (error) {
+    return {
+      kind: "indeterminate",
       attempted,
-      record.sent,
-      (authorization) =>
-        issuedVoucher(
-          record.sent,
-          attempted,
-          record.requestId,
-          authorization,
-          amounts,
-          issuer
-        )
-    );
-  });
-  return options.include?.request
-    ? {
-        ...outcome,
-        request: {
-          ...structuredClone(record.sent),
-          id: record.requestId,
-          number: record.number,
-        },
-      }
-    : outcome;
+      attempt,
+      lookup: options.abortSignal?.aborted
+        ? { kind: "aborted" }
+        : { kind: "failed", error: toArcaSafeErrorMetadata(error) },
+    };
+  }
+  return settled(
+    attempt as WsfexAuthorizationOutcome,
+    attempt,
+    found,
+    record.requestId,
+    attempted,
+    record.sent,
+    (authorization) =>
+      issuedVoucher(
+        record.sent,
+        attempted,
+        record.requestId,
+        authorization,
+        amounts,
+        issuer
+      )
+  );
 }
 
 /** One lock per CUIT: its request ids and every export sequence share it. */
@@ -1161,10 +1186,21 @@ function settled(
 ): ExportIssueOutcome {
   if (found !== null && found.id === id && sameVoucher(found, sent)) {
     const authorized = outcome.kind === "authorized" ? outcome : undefined;
-    const voucher = issue({
-      cae: found.cae ?? authorized?.cae ?? "",
-      caeExpiry: found.caeExpiry ?? authorized?.caeExpiry,
-    });
+    const cae = found.cae ?? authorized?.cae;
+    const caeExpiry = found.caeExpiry ?? authorized?.caeExpiry;
+    // Matching fields prove whose voucher it is, never that ARCA approved it.
+    if (found.result !== "A" || !cae || !caeExpiry) {
+      return {
+        kind: "indeterminate",
+        attempted,
+        attempt,
+        lookup: {
+          kind: "incomplete",
+          reason: "ARCA reports no approved result, CAE and CAE expiry",
+        },
+      };
+    }
+    const voucher = issue({ cae, caeExpiry });
     return authorized
       ? {
           kind: "authorized",
@@ -1236,10 +1272,15 @@ function hasError(outcome: WsfexAuthorizationOutcome, code: string): boolean {
 function sameVoucher(found: WsfexVoucherInfo, sent: WsfexVoucherInput) {
   const lines = (items: readonly WsfexItem[] | undefined) =>
     (items ?? []).map((item) => [item.description.trim(), item.amount]);
+  const text = (value: string | undefined) => value?.trim() || undefined;
   return (
+    found.voucherType === sent.voucherType &&
     found.voucherDate === sent.voucherDate &&
+    found.exportType === sent.exportType &&
     found.destination === sent.destination &&
-    found.receiverName?.trim() === sent.receiverName.trim() &&
+    text(found.receiverName) === text(sent.receiverName) &&
+    text(found.receiverTaxId) === text(sent.receiverTaxId) &&
+    text(found.receiverCountryTaxId) === text(sent.receiverCountryTaxId) &&
     found.totalAmount === sent.totalAmount &&
     found.currencyId === sent.currencyId &&
     JSON.stringify(lines(found.items)) === JSON.stringify(lines(sent.items))
@@ -1291,22 +1332,23 @@ async function withLocalLock<T>(
   });
   const chained = previous.then(() => current);
   localLocks.set(key, chained);
-  const settle = () => {
-    release();
+  // The entry leaves only once every holder before it and this call are done:
+  // a waiter that gives up still keeps later callers behind the holder.
+  chained.then(() => {
     if (localLocks.get(key) === chained) {
       localLocks.delete(key);
     }
-  };
+  });
   try {
     await waitForTurn(previous, signal);
   } catch (error) {
-    settle();
+    release();
     throw error;
   }
   try {
     return await fn();
   } finally {
-    settle();
+    release();
   }
 }
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey } from "../store/types";
 import {
+  createExportIssuance,
   deriveExportInvoice,
   type ExportCreditNoteInput,
   type ExportIssueInput,
@@ -187,6 +188,7 @@ function arca() {
     calls: wsfex,
     behaviors,
     approve,
+    vouchers,
     useId: (id: number) => {
       lastId = id;
     },
@@ -852,15 +854,16 @@ describe("export input checks and locks", () => {
     });
   });
 
-  it("reads a reservation once on recover()", async () => {
+  it("reads a WSFE reservation once on recover()", async () => {
     const store = createMemoryStore();
     const { service } = client(store);
-    await service.issue(services, { idempotencyKey: "sale-1" });
     const get = vi.spyOn(store, "get");
-    await service.recover("sale-1");
+    await expect(service.recover("missing")).rejects.toMatchObject({
+      code: "ARCA_INPUT_RESERVATION_NOT_FOUND",
+    });
     expect(
       get.mock.calls.filter(
-        ([key]) => key === attemptKey("test", TAX_ID, "sale-1")
+        ([key]) => key === attemptKey("test", TAX_ID, "missing")
       )
     ).toHaveLength(1);
   });
@@ -939,5 +942,132 @@ describe("request id ownership", () => {
         ],
       } as never)
     ).rejects.toMatchObject({ name: "ArcaInputError", field: "all" });
+  });
+});
+
+describe("recovery evidence", () => {
+  const unanswered = () =>
+    ({
+      service: "wsfex",
+      operation: "FEXAuthorize",
+      kind: "indeterminate",
+      reason: "transport_error",
+      results: {},
+      errors: [],
+      observations: [],
+    }) satisfies WsfexAuthorizationOutcome;
+
+  it("refuses a reused request id for another receiver tax ID", async () => {
+    const { service, behaviors, approve } = client();
+    behaviors.push((input) => {
+      approve({ ...input, receiverTaxId: "OTRO-123" });
+      return unanswered();
+    });
+    await expect(
+      service.issue(services, { idempotencyKey: "sale-a" })
+    ).resolves.toMatchObject({
+      kind: "conflict",
+      found: { requestId: 41, receiverTaxId: "OTRO-123" },
+    });
+  });
+
+  it("stays indeterminate when ARCA's record carries no CAE", async () => {
+    const { service, behaviors, approve, vouchers } = client();
+    behaviors.push((input) => {
+      approve(input);
+      const stored = vouchers.get("5:19:1");
+      if (stored) {
+        vouchers.set("5:19:1", {
+          ...stored,
+          cae: undefined,
+          caeExpiry: undefined,
+        });
+      }
+      return unanswered();
+    });
+    await expect(service.issue(services)).resolves.toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "incomplete" },
+    });
+  });
+
+  it("keeps later callers behind the holder when the last waiter aborts", async () => {
+    const fake = arca();
+    const service = createVouchersService(
+      wsfe,
+      { environment: "test", taxId: TAX_ID },
+      undefined,
+      fake.wsfex
+    );
+    let finish: () => void = () => undefined;
+    fake.calls.getLastRequestId.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(40);
+        })
+    );
+    const holder = service.issue(services);
+    await Promise.resolve();
+    const controller = new AbortController();
+    const waiter = service.issue(services, { abortSignal: controller.signal });
+    controller.abort();
+    await expect(waiter).rejects.toMatchObject({ reason: "aborted" });
+    const later = service.issue(services);
+    for (let tick = 0; tick < 10; tick++) {
+      await Promise.resolve();
+    }
+    // The holder read its number; the later call must not read one yet.
+    expect(fake.calls.getLastVoucherNumber).toHaveBeenCalledTimes(1);
+    finish();
+    await expect(holder).resolves.toMatchObject({ voucher: { number: 1 } });
+    await expect(later).resolves.toMatchObject({ voucher: { number: 2 } });
+  });
+
+  it("recovers with the request id a retry moved under the lock", async () => {
+    const store = createMemoryStore();
+    const fake = arca();
+    const service = createVouchersService(
+      wsfe,
+      { store, environment: "test", taxId: TAX_ID },
+      undefined,
+      fake.wsfex
+    );
+    fake.behaviors.push((input) => {
+      fake.useId(41);
+      return {
+        service: "wsfex",
+        operation: "FEXAuthorize",
+        kind: "authorized",
+        result: "A",
+        resultLevel: "header",
+        results: {},
+        errors: [],
+        observations: [],
+        cae: "75000000000000",
+        voucherNumber: 7,
+        reprocessed: true,
+        echo: { id: input.id, salesPoint: 2, voucherType: 19, number: 7 },
+      };
+    });
+    const before = JSON.stringify({
+      ...JSON.parse(
+        (await (async () => {
+          await service.issue(services, { idempotencyKey: "sale-a" });
+          return store.get(attemptKey("test", TAX_ID, "sale-a"));
+        })()) as string
+      ),
+      requestId: 41,
+    });
+    const issuance = createExportIssuance(fake.wsfex, {
+      store,
+      environment: "test",
+      taxId: TAX_ID,
+    });
+    await expect(issuance.recover("sale-a", before, {})).resolves.toMatchObject(
+      {
+        kind: "authorized",
+        voucher: { requestId: 42 },
+      }
+    );
   });
 });
