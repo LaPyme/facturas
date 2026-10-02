@@ -123,8 +123,8 @@ y emite bajo un mismo lock por CUIT. Un `Id` reservado no se vuelve a usar,
 aunque su pedido nunca haya llegado a ARCA.
 
 `recover()` también resuelve una reserva de exportación: consulta el número
-reservado y reconoce el comprobante por su `Id`, su fecha, su receptor, sus
-importes y sus líneas, sin reenviarlo. Si otro
+reservado y reconoce el comprobante por su `Id` y por todos los campos
+fiscales que ARCA devuelve, sin reenviarlo. Si otro
 pedido tomó ese número, el resultado es `conflict` y hace falta una clave
 nueva.
 
@@ -148,5 +148,7 @@ configure:
 ## Consultas
 
 `lookup()` y `lastAuthorized()` usan WSFEX cuando el tipo es 19, 20 o 21.
+Si `voucherType` es un `number` cualquiera, `lookup()` puede devolver un
+resumen de exportación: se distingue por `voucherClass: "E"`.
 `arca.wsfex` expone las tablas de referencia: países, CUIT de países, monedas,
 Incoterms, unidades, idiomas, actividades, puntos de venta y cotizaciones.

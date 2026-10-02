@@ -181,6 +181,8 @@ export type ExportIssuedVoucher = VoucherCoordinates & {
 
 /** Raw-free consultation of one export voucher, money in minor units. */
 export type ExportVoucherSummary = {
+  /** Tells an export summary apart from a WSFE or WSMTXCA one. */
+  voucherClass: "E";
   number: number;
   salesPoint?: number;
   voucherType?: number;
@@ -1266,25 +1268,86 @@ function hasError(outcome: WsfexAuthorizationOutcome, code: string): boolean {
 
 /**
  * The stored id names the request, but another system on the same CUIT may
- * reuse an id. ARCA answers the fields as they were sent, so the voucher is
- * this one only if its date, receiver, money and every line match too.
+ * reuse an id, and ARCA answers a repeated id with whatever it stored. So the
+ * voucher is this one only if every fiscal field it reports equals what this
+ * key sent: header, receiver, money, rate, associations, permits, activities
+ * and every line. Both sides go through one canonical form, so a decimal
+ * written as "750.00" or 750 compares equal.
  */
 function sameVoucher(found: WsfexVoucherInfo, sent: WsfexVoucherInput) {
-  const lines = (items: readonly WsfexItem[] | undefined) =>
-    (items ?? []).map((item) => [item.description.trim(), item.amount]);
-  const text = (value: string | undefined) => value?.trim() || undefined;
   return (
-    found.voucherType === sent.voucherType &&
-    found.voucherDate === sent.voucherDate &&
-    found.exportType === sent.exportType &&
-    found.destination === sent.destination &&
-    text(found.receiverName) === text(sent.receiverName) &&
-    text(found.receiverTaxId) === text(sent.receiverTaxId) &&
-    text(found.receiverCountryTaxId) === text(sent.receiverCountryTaxId) &&
-    found.totalAmount === sent.totalAmount &&
-    found.currencyId === sent.currencyId &&
-    JSON.stringify(lines(found.items)) === JSON.stringify(lines(sent.items))
+    canonicalHash(fiscalIdentity(found)) === canonicalHash(fiscalIdentity(sent))
   );
+}
+
+function fiscalIdentity(voucher: WsfexVoucherInput | WsfexVoucherInfo) {
+  return {
+    voucherType: voucher.voucherType,
+    salesPoint: voucher.salesPoint,
+    voucherDate: trimmed(voucher.voucherDate),
+    exportType: voucher.exportType,
+    permitExists: trimmed(voucher.permitExists),
+    permits: (voucher.permits ?? []).map((permit) => [
+      trimmed(permit.id),
+      permit.destination,
+    ]),
+    destination: voucher.destination,
+    receiverName: trimmed(voucher.receiverName),
+    receiverCountryTaxId: trimmed(voucher.receiverCountryTaxId),
+    receiverAddress: trimmed(voucher.receiverAddress),
+    receiverTaxId: trimmed(voucher.receiverTaxId),
+    currencyId: trimmed(voucher.currencyId),
+    exchangeRate: decimal(voucher.exchangeRate),
+    sameCurrencyForeignCancellation: trimmed(
+      voucher.sameCurrencyForeignCancellation
+    ),
+    commercialObservations: trimmed(voucher.commercialObservations),
+    totalAmount: decimal(voucher.totalAmount),
+    observations: trimmed(voucher.observations),
+    // ARCA may fill the issuer's CUIT; the original is named by coordinates.
+    associatedVouchers: (voucher.associatedVouchers ?? []).map((original) => [
+      original.voucherType,
+      original.salesPoint,
+      original.number,
+    ]),
+    paymentTerms: trimmed(voucher.paymentTerms),
+    incoterms: trimmed(voucher.incoterms),
+    incotermsDetail: trimmed(voucher.incotermsDetail),
+    language: voucher.language,
+    items: voucher.items.map((item) => [
+      trimmed(item.code),
+      trimmed(item.description),
+      decimal(item.quantity ?? 0),
+      item.unit,
+      decimal(item.unitPrice ?? "0"),
+      decimal(item.discount ?? 0),
+      decimal(item.amount),
+    ]),
+    paymentDate: trimmed(voucher.paymentDate),
+    activities: (voucher.activities ?? []).map((activity) =>
+      trimmed(activity.id)?.padStart(6, "0")
+    ),
+  };
+}
+
+function trimmed(value: string | undefined): string | undefined {
+  return value?.trim() || undefined;
+}
+
+/** One spelling per decimal: no exponent, no trailing zeros, no leading ones. */
+function decimal(value: string | number | undefined): string | undefined {
+  if (value === undefined) {
+    return;
+  }
+  const written = typeof value === "number" ? value.toFixed(6) : value.trim();
+  const match = /^(-?)(\d+)(?:\.(\d+))?$/.exec(written);
+  if (!match) {
+    return written;
+  }
+  const whole = (match[2] ?? "0").replace(/^0+(?=\d)/, "");
+  const fraction = (match[3] ?? "").replace(/0+$/, "");
+  const sign = whole === "0" && fraction === "" ? "" : (match[1] ?? "");
+  return `${sign}${whole}${fraction ? `.${fraction}` : ""}`;
 }
 
 /** `Cmp.Id` is N15. */
@@ -1453,7 +1516,10 @@ function exportHeader(data: WsfexVoucherInput): ExportHeader {
 }
 
 export function exportSummary(voucher: WsfexVoucherInfo): ExportVoucherSummary {
-  const summary: ExportVoucherSummary = { number: voucher.number };
+  const summary: ExportVoucherSummary = {
+    voucherClass: "E",
+    number: voucher.number,
+  };
   assign(summary, "salesPoint", voucher.salesPoint);
   assign(summary, "voucherType", voucher.voucherType);
   assign(summary, "requestId", voucher.id);

@@ -134,10 +134,14 @@ export type VouchersService = {
       voucher: VoucherCoordinates & { voucherType: ExportVoucherType },
       options?: PreviewOptions
     ): Promise<ExportVoucherSummary | null>;
+    /**
+     * A `voucherType` typed as `number` may hold 19 to 21 at run time, so the
+     * answer may be an export summary: narrow on `voucherClass === "E"`.
+     */
     (
       voucher: VoucherCoordinates,
       options?: PreviewOptions
-    ): Promise<VoucherSummary | null>;
+    ): Promise<VoucherSummary | ExportVoucherSummary | null>;
   };
   /**
    * The number of the last voucher ARCA authorized for a sales point and

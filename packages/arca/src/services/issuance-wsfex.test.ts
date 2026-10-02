@@ -1,4 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  expectTypeOf,
+  it,
+  vi,
+} from "vitest";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey } from "../store/types";
 import {
@@ -1069,5 +1077,105 @@ describe("recovery evidence", () => {
         voucher: { requestId: 42 },
       }
     );
+  });
+});
+
+describe("complete fiscal identity on recovery", () => {
+  const unanswered = () =>
+    ({
+      service: "wsfex",
+      operation: "FEXAuthorize",
+      kind: "indeterminate",
+      reason: "transport_error",
+      results: {},
+      errors: [],
+      observations: [],
+    }) satisfies WsfexAuthorizationOutcome;
+  const storedAs =
+    (change: (input: WsfexIssueInput) => WsfexIssueInput) =>
+    (fake: ReturnType<typeof client>) =>
+    (input: WsfexIssueInput) => {
+      fake.approve(change(input));
+      return unanswered();
+    };
+
+  it.each([
+    [
+      "exchange rate",
+      storedAs((input) => ({ ...input, exchangeRate: "1500" })),
+    ],
+    [
+      "line quantity and price",
+      storedAs((input) => ({
+        ...input,
+        items: [{ ...input.items[0], quantity: 1, unitPrice: "1500" }],
+      })),
+    ],
+    [
+      "observations",
+      storedAs((input) => ({ ...input, observations: "Otra operación" })),
+    ],
+    ["language", storedAs((input) => ({ ...input, language: 2 }))],
+  ])("refuses a stored voucher with another %s", async (_field, behavior) => {
+    const fake = client();
+    fake.behaviors.push(behavior(fake));
+    await expect(fake.service.issue(services)).resolves.toMatchObject({
+      kind: "conflict",
+      found: { requestId: 41 },
+    });
+  });
+
+  it("refuses a stored note linked to another original", async () => {
+    const fake = client();
+    const invoice = await fake.service.issue(services);
+    const other = await fake.service.issue(services);
+    if (invoice.kind !== "authorized" || other.kind !== "authorized") {
+      throw new Error("expected two authorizations");
+    }
+    fake.behaviors.push(
+      storedAs((input) => ({
+        ...input,
+        associatedVouchers: [{ voucherType: 19, salesPoint: 5, number: 2 }],
+      }))(fake)
+    );
+    await expect(
+      fake.service.issueCreditNote({
+        for: { salesPoint: 5, voucherType: 19, number: 1 },
+        all: true,
+      })
+    ).resolves.toMatchObject({ kind: "conflict" });
+  });
+
+  it("accepts the same decimals however ARCA spells them", async () => {
+    const fake = client();
+    fake.behaviors.push(
+      storedAs((input) => ({
+        ...input,
+        exchangeRate: "1450.500000",
+        items: [{ ...input.items[0], unitPrice: "750.00", quantity: 2.0 }],
+      }))(fake)
+    );
+    await expect(fake.service.issue(services)).resolves.toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+    });
+  });
+
+  it("answers an export summary when voucherType is only a number", async () => {
+    const { service } = client();
+    await service.issue(services);
+    const voucherType: number = 19;
+    const summary = await service.lookup({
+      salesPoint: 5,
+      voucherType,
+      number: 1,
+    });
+    expect(summary).toMatchObject({
+      voucherClass: "E",
+      exchangeRate: "1450.5",
+    });
+    if (summary && "voucherClass" in summary) {
+      expectTypeOf(summary.exchangeRate).toEqualTypeOf<string | undefined>();
+    }
   });
 });
