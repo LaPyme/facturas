@@ -5,6 +5,7 @@ const mockNormalizeArcaClientConfig = vi.hoisted(() => vi.fn());
 const mockCreateWsaaAuthModule = vi.hoisted(() => vi.fn());
 const mockCreateSoapTransport = vi.hoisted(() => vi.fn());
 const mockCreateWsfeService = vi.hoisted(() => vi.fn());
+const mockCreateWsfexService = vi.hoisted(() => vi.fn());
 const mockCreateWsmtxcaService = vi.hoisted(() => vi.fn());
 const mockCreatePadronService = vi.hoisted(() => vi.fn());
 const mockPostXml = vi.hoisted(() => vi.fn());
@@ -26,6 +27,9 @@ vi.mock("./soap", () => ({
 vi.mock("./services/wsfe", () => ({
   createWsfeService: mockCreateWsfeService,
 }));
+vi.mock("./services/wsfex", () => ({
+  createWsfexService: mockCreateWsfexService,
+}));
 vi.mock("./services/wsmtxca", () => ({
   createWsmtxcaService: mockCreateWsmtxcaService,
 }));
@@ -44,6 +48,7 @@ afterEach(() => {
   mockCreateWsaaAuthModule.mockReset();
   mockCreateSoapTransport.mockReset();
   mockCreateWsfeService.mockReset();
+  mockCreateWsfexService.mockReset();
   mockCreateWsmtxcaService.mockReset();
   mockCreatePadronService.mockReset();
   mockPostXml.mockReset();
@@ -64,12 +69,14 @@ describe("createArcaClient", () => {
     const auth = { login: vi.fn() };
     const soap = { execute: vi.fn() };
     const wsfe = { issue: vi.fn() };
+    const wsfex = { issue: vi.fn() };
     const wsmtxca = { issue: vi.fn() };
     const padron = { getTaxpayerDetails: vi.fn() };
 
     mockCreateWsaaAuthModule.mockReturnValue(auth);
     mockCreateSoapTransport.mockReturnValue(soap);
     mockCreateWsfeService.mockReturnValue(wsfe);
+    mockCreateWsfexService.mockReturnValue(wsfex);
     mockCreateWsmtxcaService.mockReturnValue(wsmtxca);
     mockCreatePadronService.mockReturnValue(padron);
     mockNormalizeArcaClientConfig.mockReturnValue(config);
@@ -101,6 +108,7 @@ describe("createArcaClient", () => {
       })
     );
     expect(mockCreateWsfeService).toHaveBeenCalledWith({ config, auth, soap });
+    expect(mockCreateWsfexService).toHaveBeenCalledWith({ config, auth, soap });
     expect(mockCreateWsmtxcaService).toHaveBeenCalledWith({
       config,
       auth,
@@ -129,6 +137,7 @@ describe("createArcaClient", () => {
       lookup: expect.any(Function),
       lastAuthorized: expect.any(Function),
       wsfe,
+      wsfex,
       wsmtxca,
       padron,
     });

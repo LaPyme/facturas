@@ -579,6 +579,34 @@ export function assertVoucherDateWindow(
   }
 }
 
+/**
+ * WSFEX rule 1500: 5 days either side of the day it is sent, and an export
+ * of services never dated after the current month.
+ */
+export function assertExportDateWindow(
+  voucherDate: WsfeDateInput,
+  services: boolean,
+  today: WsfeDateInput
+): void {
+  const from = addDays(today, -5);
+  let to = addDays(today, 5);
+  if (services) {
+    to = minDate(to, endOfMonth(today));
+  }
+  if (voucherDate < from || voucherDate > to) {
+    const window = { from: isoDay(from), to: isoDay(to) };
+    throw new ArcaInputError(
+      `date must be from ${window.from} through ${window.to}, the window ARCA accepts on ${isoDay(today)}.`,
+      {
+        code: "ARCA_INPUT_DATE_OUTSIDE_WINDOW",
+        field: "date",
+        expected: `a date from ${window.from} through ${window.to}`,
+        window,
+      }
+    );
+  }
+}
+
 function isoDay(date: WsfeDateInput): string {
   return toIsoDate(date) ?? date;
 }

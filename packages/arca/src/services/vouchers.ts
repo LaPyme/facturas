@@ -34,6 +34,25 @@ import {
   voucherFamily,
 } from "./issuance-fields";
 import {
+  assertExportWindow,
+  createExportIssuance,
+  deriveExportInvoice,
+  deriveExportNote,
+  type ExportCreditNoteInput,
+  type ExportDebitNoteInput,
+  type ExportIssuance,
+  type ExportIssueInput,
+  type ExportIssueOutcome,
+  type ExportPreview,
+  type ExportVoucherSummary,
+  type ExportVoucherType,
+  exportPreview,
+  exportSummary,
+  isExportInput,
+  isExportNoteInput,
+  isExportVoucherType,
+} from "./issuance-wsfex";
+import {
   assertWsmtxcaVoucherType,
   createWsmtxcaIssuanceService,
   type FiscalHeader as IssuanceHeader,
@@ -82,6 +101,7 @@ import {
   type VoucherCoordinates,
   type VoucherSummary,
 } from "./wsfe-identity";
+import type { WsfexService } from "./wsfex";
 import type { WsmtxcaService } from "./wsmtxca";
 
 export type PeriodNoteInput = IssueInput & {
@@ -109,10 +129,16 @@ export type VouchersService = {
    * credit note's `for` takes. Returns `null` when ARCA has no such voucher and
    * throws on any other provider error. Reads only: no store and no reserve.
    */
-  lookup(
-    voucher: VoucherCoordinates,
-    options?: PreviewOptions
-  ): Promise<VoucherSummary | null>;
+  lookup: {
+    (
+      voucher: VoucherCoordinates & { voucherType: ExportVoucherType },
+      options?: PreviewOptions
+    ): Promise<ExportVoucherSummary | null>;
+    (
+      voucher: VoucherCoordinates,
+      options?: PreviewOptions
+    ): Promise<VoucherSummary | null>;
+  };
   /**
    * The number of the last voucher ARCA authorized for a sales point and
    * voucher type, on WSFE or WSMTXCA; `0` when none was ever authorized.
@@ -125,31 +151,49 @@ export type VouchersService = {
   recover<O extends RecoveryOptions = { include?: never }>(
     idempotencyKey: string,
     options?: O
-  ): Promise<IssueOutcome<O & { service?: IssuanceService }>>;
+  ): Promise<IssueOutcome<O & { service?: "wsfe" | "wsmtxca" }>>;
   /**
    * Issues a debit note against the same originals `issueCreditNote()` accepts,
    * or against a period with `associatedPeriod`. It has no `all: true` mode:
    * a debit note adds to the account, so its lines are always explicit.
    */
-  issueDebitNote<O extends IssueOptions = { include?: never }>(
-    input: DebitNoteInput,
-    options?: O
-  ): Promise<IssueOutcome<O>>;
+  issueDebitNote: {
+    (
+      input: ExportDebitNoteInput,
+      options?: IssueOptions
+    ): Promise<ExportIssueOutcome>;
+    <O extends IssueOptions = { include?: never }>(
+      input: DebitNoteInput,
+      options?: O
+    ): Promise<IssueOutcome<O>>;
+  };
   /**
    * Derives what issueCreditNote() would send. Unlike the zero-I/O preview(),
    * it consults each original once: reads only, no write and no number
    * reserved. A linked note returns those raw-free originals in `originals`. A
    * period note carries its own business input and needs no lookup at all.
    */
-  previewCreditNote<O extends PreviewOptions = { service?: never }>(
-    input: CreditNoteInput | PeriodNoteInput,
-    options?: O
-  ): Promise<NotePreview<ServiceFor<O>>>;
+  previewCreditNote: {
+    (
+      input: ExportCreditNoteInput,
+      options?: PreviewOptions
+    ): Promise<ExportPreview>;
+    <O extends PreviewOptions = { service?: never }>(
+      input: CreditNoteInput | PeriodNoteInput,
+      options?: O
+    ): Promise<NotePreview<ServiceFor<O>>>;
+  };
   /** Same contract as previewCreditNote(), for issueDebitNote() input. */
-  previewDebitNote<O extends PreviewOptions = { service?: never }>(
-    input: DebitNoteInput,
-    options?: O
-  ): Promise<NotePreview<ServiceFor<O>>>;
+  previewDebitNote: {
+    (
+      input: ExportDebitNoteInput,
+      options?: PreviewOptions
+    ): Promise<ExportPreview>;
+    <O extends PreviewOptions = { service?: never }>(
+      input: DebitNoteInput,
+      options?: O
+    ): Promise<NotePreview<ServiceFor<O>>>;
+  };
   /**
    * Issues a credit note against an authorized invoice or debit note of the
    * ordinary, retention-legend or FCE families, or against a period with
@@ -162,10 +206,16 @@ export type VouchersService = {
    * and every one is associated to the note. ARCA has no cancellation; every
    * mode writes a real fiscal document.
    */
-  issueCreditNote<O extends IssueOptions = { include?: never }>(
-    input: CreditNoteInput | PeriodNoteInput,
-    options?: O
-  ): Promise<IssueOutcome<O>>;
+  issueCreditNote: {
+    (
+      input: ExportCreditNoteInput,
+      options?: IssueOptions
+    ): Promise<ExportIssueOutcome>;
+    <O extends IssueOptions = { include?: never }>(
+      input: CreditNoteInput | PeriodNoteInput,
+      options?: O
+    ): Promise<IssueOutcome<O>>;
+  };
   /**
    * Configure a store and pass idempotencyKey to recover retries after a crash.
    *
@@ -173,10 +223,16 @@ export type VouchersService = {
    * Keyed replay consults the reserved number; only not_found permits a write.
    * Local validation and next-number read failures throw before authorization.
    */
-  issue<O extends IssueOptions = { include?: never }>(
-    input: IssueInput,
-    options?: O
-  ): Promise<IssueOutcome<O>>;
+  issue: {
+    (
+      input: ExportIssueInput,
+      options?: IssueOptions
+    ): Promise<ExportIssueOutcome>;
+    <O extends IssueOptions = { include?: never }>(
+      input: IssueInput,
+      options?: O
+    ): Promise<IssueOutcome<O>>;
+  };
   /**
    * Derives what issue() would send for the same input, with no I/O at all:
    * no store, no WSAA, no SOAP and no next-number read.
@@ -184,11 +240,20 @@ export type VouchersService = {
    * It throws every input error issue() throws before its first call, so a
    * caller that previews and then issues sees no new local error.
    */
-  preview<
-    O extends Pick<PreviewOptions, "representedTaxId" | "service"> = {
-      service?: never;
-    },
-  >(input: IssueInput, options?: O): IssuePreview<ServiceFor<O>>;
+  preview: {
+    (
+      input: ExportIssueInput,
+      options?: Pick<PreviewOptions, "representedTaxId">
+    ): ExportPreview;
+    <
+      O extends Pick<PreviewOptions, "representedTaxId" | "service"> = {
+        service?: never;
+      },
+    >(
+      input: IssueInput,
+      options?: O
+    ): IssuePreview<ServiceFor<O>>;
+  };
 };
 
 export type PreviewOptions = {
@@ -240,7 +305,8 @@ type Prepared = Omit<ReturnType<typeof deriveWsfeInvoice>, "data"> & {
 export function createVouchersService(
   wsfe: IssueWsfeService,
   context?: StoreContext,
-  wsmtxca?: WsmtxcaService
+  wsmtxca?: WsmtxcaService,
+  wsfex?: WsfexService
 ): VouchersService {
   const select = (options: IssueOptions = {}): IssueWsfeService => {
     validateOptions(options);
@@ -252,93 +318,191 @@ export function createVouchersService(
     }
     return createWsmtxcaIssuanceService(wsmtxca);
   };
-  return {
-    lookup: async (voucher, options) =>
-      lookupVoucher(select(options), voucher, options ?? {}),
-    lastAuthorized: async (sequence, options) =>
-      lastAuthorizedNumber(select(options), sequence, options ?? {}),
-    recover: async (key, options) =>
+  const exportIssuance =
+    wsfex && context ? createExportIssuance(wsfex, context) : undefined;
+  const exporting = (): ExportIssuance => {
+    if (!exportIssuance) {
+      throw new ArcaConfigurationError("WSFEX service is not configured");
+    }
+    return exportIssuance;
+  };
+  const exportOptions = (options: IssueOptions | undefined) => {
+    const cloned = cloneOptions(options ?? {});
+    validateOptions(cloned);
+    validateKeyStore(cloned, context);
+    return cloned;
+  };
+  async function prepareExportNote(
+    input: ExportCreditNoteInput | ExportDebitNoteInput,
+    options: IssueOptions,
+    kind: "creditNote" | "debitNote"
+  ) {
+    assertIssueObject(input, "input");
+    assertIssueObject(input.for, "for");
+    assertIssueKeys(input.for, ["salesPoint", "voucherType", "number"], "for");
+    for (const [field, max] of [
+      ["salesPoint", 99_998],
+      ["number", 99_999_999],
+    ] as const) {
+      const value = input.for[field];
+      if (!(Number.isSafeInteger(value) && value >= 1 && value <= max)) {
+        throw new ArcaInputError(
+          `for.${field} must be an integer from 1 through ${max}.`,
+          {
+            code: "ARCA_INPUT_INVALID_VALUE",
+            field: `for.${field}`,
+          }
+        );
+      }
+    }
+    const original = await exporting().original(input.for, options);
+    if (original === null) {
+      throw new ArcaInputError("ARCA has no voucher at for.", {
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "for",
+        expected: "an authorized export voucher",
+      });
+    }
+    return { original, prepared: deriveExportNote(original, input, kind) };
+  }
+  async function issueExportNote(
+    input: ExportCreditNoteInput | ExportDebitNoteInput,
+    inputOptions: IssueOptions | undefined,
+    kind: "creditNote" | "debitNote"
+  ) {
+    const options = exportOptions(inputOptions);
+    const { prepared } = await prepareExportNote(input, options, kind);
+    return exporting().issue(prepared, kind, input, options);
+  }
+  async function previewExportNote(
+    input: ExportCreditNoteInput | ExportDebitNoteInput,
+    inputOptions: PreviewOptions | undefined,
+    kind: "creditNote" | "debitNote"
+  ) {
+    const options = cloneOptions(inputOptions ?? {});
+    validateOptions(options);
+    const { original, prepared } = await prepareExportNote(
+      input,
+      options,
+      kind
+    );
+    assertExportWindow(prepared.data);
+    return exportPreview(prepared, [exportSummary(original)]);
+  }
+  const service = {
+    lookup: async (voucher: VoucherCoordinates, options?: PreviewOptions) =>
+      isExportVoucherType(voucher?.voucherType)
+        ? exporting().lookup(voucher, cloneOptions(options ?? {}))
+        : lookupVoucher(select(options), voucher, options ?? {}),
+    lastAuthorized: async (
+      sequence: Omit<VoucherCoordinates, "number">,
+      options?: PreviewOptions
+    ) =>
+      isExportVoucherType(sequence?.voucherType)
+        ? exporting().lastAuthorized(sequence, cloneOptions(options ?? {}))
+        : lastAuthorizedNumber(select(options), sequence, options ?? {}),
+    recover: async (key: string, options?: RecoveryOptions) =>
       recoverOperation(
         select,
         key,
         options === undefined ? {} : options,
         context
-      ) as Promise<IssueOutcome<typeof options & IssueOptions>>,
-    issueDebitNote: async (input, options) =>
-      issueCreditNote(
-        select(options),
-        input,
-        options ?? {},
-        context,
-        "debitNote",
-        select
-      ) as Promise<IssueOutcome<typeof options & IssueOptions>>,
-    previewCreditNote: async <O extends PreviewOptions = { service?: never }>(
-      input: CreditNoteInput | PeriodNoteInput,
-      options?: O
+      ),
+    issueDebitNote: async (
+      input: DebitNoteInput | ExportDebitNoteInput,
+      options?: IssueOptions
     ) =>
-      previewNote(
-        select(options),
-        input,
-        options ?? {},
-        context,
-        "creditNote"
-      ) as Promise<NotePreview<ServiceFor<O>>>,
-    previewDebitNote: async <O extends PreviewOptions = { service?: never }>(
-      input: DebitNoteInput,
-      options?: O
+      isExportNoteInput(input)
+        ? issueExportNote(input, options, "debitNote")
+        : issueCreditNote(
+            select(options),
+            input as DebitNoteInput,
+            options ?? {},
+            context,
+            "debitNote",
+            select
+          ),
+    previewCreditNote: async (
+      input: CreditNoteInput | PeriodNoteInput | ExportCreditNoteInput,
+      options?: PreviewOptions
     ) =>
-      previewNote(
-        select(options),
-        input,
-        options ?? {},
-        context,
-        "debitNote"
-      ) as Promise<NotePreview<ServiceFor<O>>>,
-    issueCreditNote: async <O extends IssueOptions = { include?: never }>(
-      input: CreditNoteInput | PeriodNoteInput,
-      options?: O
-    ): Promise<IssueOutcome<O>> => {
-      const result = await issueCreditNote(
+      isExportNoteInput(input)
+        ? previewExportNote(input, options, "creditNote")
+        : previewNote(
+            select(options),
+            input as CreditNoteInput | PeriodNoteInput,
+            options ?? {},
+            context,
+            "creditNote"
+          ),
+    previewDebitNote: async (
+      input: DebitNoteInput | ExportDebitNoteInput,
+      options?: PreviewOptions
+    ) =>
+      isExportNoteInput(input)
+        ? previewExportNote(input, options, "debitNote")
+        : previewNote(
+            select(options),
+            input as DebitNoteInput,
+            options ?? {},
+            context,
+            "debitNote"
+          ),
+    issueCreditNote: async (
+      input: CreditNoteInput | PeriodNoteInput | ExportCreditNoteInput,
+      options?: IssueOptions
+    ) =>
+      isExportNoteInput(input)
+        ? issueExportNote(input, options, "creditNote")
+        : issueCreditNote(
+            select(options),
+            input as CreditNoteInput | PeriodNoteInput,
+            options === undefined ? {} : options,
+            context,
+            "creditNote",
+            select
+          ),
+    issue: async (
+      input: IssueInput | ExportIssueInput,
+      options?: IssueOptions
+    ) => {
+      if (isExportInput(input)) {
+        const checked = exportOptions(options);
+        return await exporting().issue(
+          deriveExportInvoice(input),
+          "issue",
+          input,
+          checked
+        );
+      }
+      return await issueInvoice(
         select(options),
         input,
         options === undefined ? {} : options,
         context,
-        "creditNote",
         select
       );
-      return result as IssueOutcome<O>;
     },
-    issue: async <O extends IssueOptions = { include?: never }>(
-      input: IssueInput,
-      options?: O
-    ): Promise<IssueOutcome<O>> => {
-      const result = await issueInvoice(
-        select(options),
-        input,
-        options === undefined ? {} : options,
-        context,
-        select
-      );
-      // issueInvoice conditionally adds the fields specified by O at runtime.
-      return result as IssueOutcome<O>;
+    preview: (
+      input: IssueInput | ExportIssueInput,
+      options?: Pick<PreviewOptions, "representedTaxId" | "service">
+    ) => {
+      if (isExportInput(input)) {
+        const checked = options ?? {};
+        assertIssueObject(checked, "options");
+        assertIssueKeys(checked, ["representedTaxId"], "options");
+        validateOptions(checked);
+        const prepared = deriveExportInvoice(input);
+        assertExportWindow(prepared.data);
+        return exportPreview(prepared);
+      }
+      return previewInvoice(input, options === undefined ? {} : options);
     },
-    preview: <
-      O extends Pick<PreviewOptions, "representedTaxId" | "service"> = {
-        service?: never;
-      },
-    >(
-      input: IssueInput,
-      options?: O
-    ) =>
-      previewInvoice(
-        input,
-        options === undefined ? {} : options
-      ) as IssuePreview<ServiceFor<O>>,
   };
+  // Each method's runtime branch returns what its matching overload declares.
+  return service as unknown as VouchersService;
 }
 
-/** Pure: the caller inspects the request and amounts before committing. */
 function previewInvoice(
   input: IssueInput,
   options: PreviewOptions
@@ -1085,6 +1249,15 @@ function validateKeyStore(options: IssueOptions, context?: StoreContext) {
 }
 
 function readRecord(json: string): ArcaAttemptRecord {
+  if (isExportRecord(json)) {
+    throw new ArcaInputError(
+      "The idempotency key was already used for an export voucher.",
+      {
+        code: "ARCA_INPUT_IDEMPOTENCY_MISMATCH",
+        field: "options.idempotencyKey",
+      }
+    );
+  }
   try {
     const record = JSON.parse(json) as ArcaAttemptRecord;
     if (
@@ -1121,6 +1294,15 @@ function readRecord(json: string): ArcaAttemptRecord {
       "Invalid ARCA reservation record; preserve it for reconciliation.",
       { cause }
     );
+  }
+}
+
+/** Export reservations live under the same key space; only WSFEX reads them. */
+function isExportRecord(json: string): boolean {
+  try {
+    return (JSON.parse(json) as { service?: unknown })?.service === "wsfex";
+  } catch {
+    return false;
   }
 }
 

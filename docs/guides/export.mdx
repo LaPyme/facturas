@@ -1,0 +1,145 @@
+---
+title: "Factura E de exportación"
+description: "Emití facturas y notas E de bienes y servicios por WSFEX con el mismo issue()."
+keywords: ["factura E", "exportación", "WSFEX", "ARCA", "Incoterms"]
+---
+
+ARCA autoriza la Factura E (19) y las notas E (20 y 21) por WSFEX, nunca por
+WSFE. No hay un método aparte: `issue()` recibe una factura de exportación
+cuando el input trae `export`, y `issueCreditNote()` o `issueDebitNote()`
+emiten notas E cuando `for` apunta a un comprobante 19, 20 o 21.
+
+La clase no depende de la condición del emisor, así que el input no lleva
+`issuer`. El receptor está en el exterior: en lugar de una condición de IVA
+lleva un país de destino, un nombre, un domicilio y su identificación.
+
+## Servicios
+
+```ts
+const factura = await arca.issue(
+  {
+    salesPoint: 5,
+    to: {
+      country: 203, // Brasil, de arca.wsfex.getCountries()
+      name: "Exemplo Ltda.",
+      address: "Av. Paulista 1000, São Paulo",
+      taxId: "12.345.678/0001-95", // identificación del receptor en su país
+    },
+    export: { kind: "services", paymentDate: "2026-10-15" },
+    currency: "USD",
+    exchangeRate: cotizacion.rate,
+    paymentTerms: "Transferencia bancaria",
+    language: "en",
+    items: [
+      {
+        description: "Desarrollo de software, septiembre",
+        unit: 7, // unidad de medida de ARCA, de arca.wsfex.getUnits()
+        quantity: 1,
+        unitPrice: "1500",
+        amount: 150_000, // USD 1.500,00 en centavos
+      },
+    ],
+  },
+  { idempotencyKey: `factura-e:${venta.id}` }
+);
+```
+
+`to` necesita `taxId`, `countryTaxId` o los dos. `countryTaxId` es la CUIT que
+ARCA asigna al país del receptor, de `arca.wsfex.getCountryTaxIds()`.
+
+En servicios, `paymentDate` es obligatoria y no puede ser anterior a la fecha
+del comprobante. La fecha de una exportación de servicios no puede pasar del
+mes en curso.
+
+## Bienes
+
+```ts
+export: {
+  kind: "goods",
+  incoterms: "FOB", // de arca.wsfex.getIncoterms()
+  permits: [{ id: "09052EC01006154G", destination: 203 }],
+}
+```
+
+`incoterms` es obligatorio. Omití `permits` mientras la mercadería no tenga
+permiso de embarque: ARCA registra que todavía no existe. Cuando lo tiene,
+cada permiso va con su país de destino.
+
+Para emitir bienes el contribuyente tiene que estar inscripto como exportador.
+Si no lo está, ARCA rechaza con el código 1668.
+
+## Ítems
+
+Cada ítem lleva `description`, `unit` y `amount`, el total de la línea en
+centavos. Salvo con las unidades 0, 97 y 99, también lleva `quantity` y
+`unitPrice`, y `amount` tiene que ser `quantity` por `unitPrice` menos
+`discount`. La unidad 99 es una bonificación, con `amount` negativo, y la 97
+una seña. No hay IVA: el total de la factura es la suma de los ítems.
+
+## Moneda y cotización
+
+Para cualquier moneda que no sea ARS, `exchangeRate` es obligatorio y ARCA lo
+compara con su propia cotización. Tomalo de WSFEX en el momento de emitir:
+
+```ts
+const cotizacion = await arca.wsfex.getExchangeRate({ currencyId: "DOL" });
+```
+
+En servicios la cotización tiene que ser la del día hábil anterior. Si la usás
+de otra fuente, por ejemplo la del BCRA, ARCA rechaza con el código 2053. En
+homologación esa consulta devuelve una cotización de prueba, así que esa regla
+solo se puede verificar en producción.
+
+`paidInForeignCurrency: true` informa que el receptor paga en la misma moneda
+extranjera de la factura. Solo vale para facturas, nunca para notas.
+
+## Notas E
+
+```ts
+const nota = await arca.issueCreditNote(
+  {
+    for: { salesPoint: 5, voucherType: 19, number: 12 },
+    items: [
+      { description: "Ajuste", unit: 7, quantity: 1, unitPrice: "100", amount: 10_000 },
+    ],
+  },
+  { idempotencyKey: `nc-e:${devolucion.id}` }
+);
+```
+
+El SDK consulta el original y toma de ahí el tipo de exportación, el receptor,
+el destino, la moneda, la cotización y el idioma. `all: true` acredita todas
+las líneas del original. Una nota de crédito puede apuntar a una factura o a
+una nota de débito E, y una nota de débito a una factura E. En servicios la
+nota mantiene la cotización del original.
+
+## Comprobantes duplicados
+
+Con `idempotencyKey` y un store, la emisión usa el `Id` de requerimiento de
+WSFEX: el SDK lo reserva junto con el número y, si la respuesta se pierde,
+reenvía el mismo `Id`. ARCA contesta el comprobante que ya autorizó en lugar de
+emitir otro. El `Id` es único por CUIT, así que el SDK lee el `Id` y el número
+y emite bajo un mismo lock por CUIT.
+
+El resultado tiene los mismos `kind` que en una factura nacional:
+`authorized`, `rejected`, `indeterminate` y `conflict`. `voucher.requestId` es
+el `Id` con el que ARCA guardó el comprobante.
+
+## Errores de configuración
+
+Estos códigos llegan como errores o rechazos, no como algo que el SDK
+configure:
+
+| Código | Qué significa |
+| --- | --- |
+| 1001 | La CUIT no delegó el servicio de exportación al certificado. Llega como `ArcaAuthenticationError` con `reason: "missing_relationship"`. |
+| 1510 y 1607 | El punto de venta no es del tipo "Comprobantes de Exportación - Web Services". |
+| 1668 | El contribuyente no está inscripto como exportador. |
+
+`arca.wsfex.getSalesPoints()` lista solo los puntos de venta de exportación.
+
+## Consultas
+
+`lookup()` y `lastAuthorized()` usan WSFEX cuando el tipo es 19, 20 o 21.
+`arca.wsfex` expone las tablas de referencia: países, CUIT de países, monedas,
+Incoterms, unidades, idiomas, actividades, puntos de venta y cotizaciones.

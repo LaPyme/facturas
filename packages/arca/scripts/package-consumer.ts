@@ -247,27 +247,27 @@ export async function creditNoteConsumerContract(
   });
   // @ts-expect-error all accepts only the literal true.
   await client.issueCreditNote({ for: target, all: false });
+  // @ts-expect-error The receiver comes from the original, never the caller.
   await client.issueCreditNote({
     for: target,
     all: true,
-    // @ts-expect-error The receiver comes from the original, never the caller.
     to: { condition: "exento", cuit: "20123456789" },
   });
+  // @ts-expect-error The currency comes from the original, never the caller.
   await client.issueCreditNote({
     for: target,
     all: true,
-    // @ts-expect-error The currency comes from the original, never the caller.
     currency: "USD",
   });
+  // @ts-expect-error Linked notes and period notes are mutually exclusive.
   await client.issueCreditNote({
     for: target,
     all: true,
-    // @ts-expect-error Linked notes and period notes are mutually exclusive.
     associatedPeriod: { from: "20260901", to: "20260930" },
   });
+  // @ts-expect-error One note cannot mix amount items with VAT items.
   await client.issueCreditNote({
     for: target,
-    // @ts-expect-error One note cannot mix amount items with VAT items.
     items: [{ amount: 100 }, { gross: 121, vat: 21 }],
   });
   // The class follows the original, so an item shape that contradicts it is a

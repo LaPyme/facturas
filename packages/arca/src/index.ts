@@ -63,6 +63,22 @@ export type {
 } from "./services/issuance-fields";
 export { describeVoucherType } from "./services/issuance-fields";
 export type {
+  ExportCreditNoteInput,
+  ExportDebitNoteInput,
+  ExportHeader,
+  ExportIssuedVoucher,
+  ExportIssueInput,
+  ExportIssueOutcome,
+  ExportIssueRequest,
+  ExportItem,
+  ExportOfGoods,
+  ExportOfServices,
+  ExportPreview,
+  ExportReceiver,
+  ExportVoucherSummary,
+  ExportVoucherType,
+} from "./services/issuance-wsfex";
+export type {
   WsmtxcaIssueRequest,
   WsmtxcaLine,
 } from "./services/issuance-wsmtxca";
@@ -140,6 +156,26 @@ export type {
   WsfeIdentityMatch,
 } from "./services/wsfe-identity";
 export { matchWsfeVoucherIdentity } from "./services/wsfe-identity";
+export type {
+  CreateWsfexServiceOptions,
+  WsfexAssociatedVoucher,
+  WsfexAuthorizationOutcome,
+  WsfexCatalogEntry,
+  WsfexCountryTaxId,
+  WsfexExchangeRate,
+  WsfexExportType,
+  WsfexIssueInput,
+  WsfexItem,
+  WsfexLanguage,
+  WsfexPermit,
+  WsfexSalesPoint,
+  WsfexService,
+  WsfexVoucherInfo,
+  WsfexVoucherInput,
+  WsfexVoucherLookupResult,
+  WsfexVoucherType,
+} from "./services/wsfex";
+export { createWsfexService } from "./services/wsfex";
 export type {
   CreateWsmtxcaServiceOptions,
   WsmtxcaAuthorizationOutcome,

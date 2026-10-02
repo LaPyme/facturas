@@ -1,10 +1,10 @@
 ---
 title: "Módulos de transporte"
 description: "Consultá los clientes técnicos de ARCA para mantenimiento, diagnósticos y casos avanzados."
-keywords: ["WSFE", "WSMTXCA", "Padrón", "catálogos", "consultas"]
+keywords: ["WSFE", "WSFEX", "WSMTXCA", "Padrón", "catálogos", "consultas"]
 ---
 
-`client.wsfe`, `client.wsmtxca` y `client.padron` son clientes técnicos que la
+`client.wsfe`, `client.wsfex`, `client.wsmtxca` y `client.padron` son clientes técnicos que la
 fachada usa por debajo. Ahí viven las lecturas, los catálogos, el estado de los
 servicios y el Padrón. También son la costura que los tests de integración
 pueden reemplazar por un doble.
@@ -45,6 +45,27 @@ cacheado y pedir un Token Authorization nuevo para ese servicio.
   `getCurrencyTypes()` y `getVatRates()`, para datos de referencia sin valores
   fijos en el código.
 - `getServerStatus()` para la salud del backend.
+
+## `client.wsfex`
+
+- `issue({ id, number, ...voucher })` manda un `FEXAuthorize` con el `Id` de
+  requerimiento y el número que elegís. Reenviar el mismo `Id` devuelve el
+  comprobante que ARCA ya guardó, con `reprocessed: true`.
+- `getLastRequestId()` y `getLastVoucherNumber({ salesPoint, voucherType })`
+  leen el último `Id` de la CUIT y el último número autorizado.
+- `lookupVoucher({ salesPoint, voucherType, number })` devuelve la consulta,
+  con `not_found` para el código 1020 de `FEXGetCMP`.
+- `getSalesPoints()` lista solo los puntos de venta de exportación.
+- `getExchangeRate({ currencyId, date? })` devuelve la cotización de ARCA. Es la
+  que tenés que pasar como `exchangeRate`. En homologación es una cotización de
+  prueba.
+- Los catálogos `getCountries()`, `getCountryTaxIds()`, `getCurrencies()`,
+  `getIncoterms()`, `getUnits()`, `getLanguages()`, `getVoucherTypes()`,
+  `getExportTypes()` y `getActivities()`, y `checkPermit({ id, destination })`
+  para validar un permiso de embarque.
+
+Para emitir, usá `issue()` con `export`. Revisá la
+[guía de Factura E](/guides/export).
 
 ## `client.wsmtxca`
 
