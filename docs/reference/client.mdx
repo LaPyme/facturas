@@ -298,4 +298,7 @@ const url = arcaQrUrl({
 ```
 
 `arcaQrPayload()` devuelve el JSON que va codificado en esa URL, y
-`ARCA_QR_URL` es la base.
+`ARCA_QR_URL` es la base. El QR lleva el documento del receptor tal como se
+mandó a ARCA, también el tipo 99 con número 0 de un consumidor final sin
+identificar: sin esos campos, la página de constatación de ARCA deja el receptor
+vacío y hay que cargarlo a mano.

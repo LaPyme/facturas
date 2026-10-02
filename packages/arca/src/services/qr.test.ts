@@ -20,7 +20,7 @@ describe("arcaQrUrl", () => {
       `${ARCA_QR_URL}?p=eyJ2ZXIiOjEsImZlY2hhIjoiMjAyMC0xMC0xMyIsImN1aXQiOjMwMDAwMDAwMDA3LCJwdG9WdGEiOjEwLCJ0aXBvQ21wIjoxLCJucm9DbXAiOjk0LCJpbXBvcnRlIjoxMjEwMCwibW9uZWRhIjoiRE9MIiwiY3R6Ijo2NSwidGlwb0RvY1JlYyI6ODAsIm5yb0RvY1JlYyI6MjAwMDAwMDAwMDEsInRpcG9Db2RBdXQiOiJFIiwiY29kQXV0Ijo3MDQxNzA1NDM2NzQ3Nn0=`
     );
   });
-  it("defaults pesos, accepts compact dates and omits an unidentified receiver", () => {
+  it("defaults pesos, accepts compact dates and keeps an unidentified receiver", () => {
     expect(
       arcaQrPayload({
         ...base,
@@ -40,15 +40,15 @@ describe("arcaQrUrl", () => {
       importe: 121.5,
       moneda: "PES",
       ctz: 1,
+      // ARCA's verification page fills the receiver only with these.
+      tipoDocRec: 99,
+      nroDocRec: 0,
       tipoCodAut: "E",
       codAut: 70_417_054_367_476,
     });
     expect(arcaQrPayload({ ...base, document: undefined })).not.toHaveProperty(
       "tipoDocRec"
     );
-    expect(
-      arcaQrPayload({ ...base, document: { type: 96, number: 0 } })
-    ).not.toHaveProperty("nroDocRec");
     expect(arcaQrPayload({ ...base, authorization: "CAEA" }).tipoCodAut).toBe(
       "A"
     );

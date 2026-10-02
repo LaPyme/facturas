@@ -24,7 +24,10 @@ export type ArcaQrInput = {
   /** The CAE, or the CAEA when `authorization` is `"CAEA"`. */
   cae: string;
   authorization?: "CAE" | "CAEA";
-  /** The receiver's document. Omitted, or type 99, means an unidentified consumidor final. */
+  /**
+   * The receiver's document as sent to ARCA, type 99 and number 0 included
+   * for an unidentified consumidor final. Omitted, the QR names no receiver.
+   */
   document?: { type: number; number: number | string };
 };
 
@@ -120,7 +123,11 @@ function exchangeRate(value: ArcaQrInput["exchangeRate"]): number {
   return rate;
 }
 
-/** Type 99 with number 0 is "unidentified"; the specification then omits both. */
+/**
+ * The specification marks both fields "de corresponder". ARCA's verification
+ * page leaves an unidentified receiver blank without them, so the QR carries
+ * the document as sent, 99 and 0 included.
+ */
 function receiverDocument(
   document: ArcaQrInput["document"]
 ): Pick<ArcaQrPayload, "tipoDocRec" | "nroDocRec"> {
@@ -137,9 +144,6 @@ function receiverDocument(
     invalid("document.type", "an ARCA document type");
   }
   const number = digits(document.number, "document.number", 0, 20);
-  if (document.type === 99 || number === 0) {
-    return {};
-  }
   return { tipoDocRec: document.type, nroDocRec: number };
 }
 
