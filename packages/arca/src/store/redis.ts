@@ -79,7 +79,6 @@ export function createRedisStore(
             options?: ArcaLockOptions
           ) =>
             withLease(
-              key,
               {
                 acquire: (owner) => lease(key, owner, "nx"),
                 renew: async (owner) => {

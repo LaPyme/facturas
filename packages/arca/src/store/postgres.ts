@@ -51,7 +51,6 @@ export function createPostgresStore({
       // A lease row, not an advisory lock: it survives a transaction-mode
       // pooler, where a session-scoped lock would be taken on another backend.
       return withLease(
-        key,
         {
           async acquire(owner) {
             const taken = await run(
