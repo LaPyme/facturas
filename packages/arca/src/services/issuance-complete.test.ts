@@ -1334,8 +1334,12 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
     async (_kind, method, rest) => {
       const { client, calls } = transportFixture();
       const note = { for: { salesPoint: 1, voucherType: 11, number: 9 } };
+      const issueNote = client[method] as (
+        input: unknown,
+        options: { service: "wsmtxca" }
+      ) => Promise<unknown>;
       await expect(
-        client[method]({ ...note, ...rest } as never, { service: "wsmtxca" })
+        issueNote({ ...note, ...rest }, { service: "wsmtxca" })
       ).rejects.toMatchObject({ name: "ArcaInputError", field: "voucherType" });
       expect(calls).toEqual([]);
     }

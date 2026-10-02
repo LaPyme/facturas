@@ -151,17 +151,19 @@ export type VouchersService = {
   recover<O extends RecoveryOptions = { include?: never }>(
     idempotencyKey: string,
     options?: O
-  ): Promise<IssueOutcome<O & { service?: "wsfe" | "wsmtxca" }>>;
+  ): Promise<
+    IssueOutcome<O & { service?: "wsfe" | "wsmtxca" }> | ExportIssueOutcome<O>
+  >;
   /**
    * Issues a debit note against the same originals `issueCreditNote()` accepts,
    * or against a period with `associatedPeriod`. It has no `all: true` mode:
    * a debit note adds to the account, so its lines are always explicit.
    */
   issueDebitNote: {
-    (
+    <O extends IssueOptions = { include?: never }>(
       input: ExportDebitNoteInput,
-      options?: IssueOptions
-    ): Promise<ExportIssueOutcome>;
+      options?: O
+    ): Promise<ExportIssueOutcome<O>>;
     <O extends IssueOptions = { include?: never }>(
       input: DebitNoteInput,
       options?: O
@@ -207,10 +209,10 @@ export type VouchersService = {
    * mode writes a real fiscal document.
    */
   issueCreditNote: {
-    (
+    <O extends IssueOptions = { include?: never }>(
       input: ExportCreditNoteInput,
-      options?: IssueOptions
-    ): Promise<ExportIssueOutcome>;
+      options?: O
+    ): Promise<ExportIssueOutcome<O>>;
     <O extends IssueOptions = { include?: never }>(
       input: CreditNoteInput | PeriodNoteInput,
       options?: O
@@ -224,10 +226,10 @@ export type VouchersService = {
    * Local validation and next-number read failures throw before authorization.
    */
   issue: {
-    (
+    <O extends IssueOptions = { include?: never }>(
       input: ExportIssueInput,
-      options?: IssueOptions
-    ): Promise<ExportIssueOutcome>;
+      options?: O
+    ): Promise<ExportIssueOutcome<O>>;
     <O extends IssueOptions = { include?: never }>(
       input: IssueInput,
       options?: O
@@ -389,6 +391,31 @@ export function createVouchersService(
     assertExportWindow(prepared.data);
     return exportPreview(prepared, [exportSummary(original)]);
   }
+  /** An export reservation under this key, read before WSFE would refuse it. */
+  async function exportReservation(
+    key: string,
+    inputOptions: RecoveryOptions | undefined
+  ) {
+    const store = context?.store;
+    if (exportIssuance === undefined || store === undefined || !context) {
+      return;
+    }
+    const options = cloneOptions(inputOptions ?? {});
+    assertIssueObject(options, "options");
+    assertIssueKeys(
+      options,
+      ["representedTaxId", "forceRefresh", "include", "abortSignal"],
+      "options"
+    );
+    validateOptions(options);
+    validateKeyStore({ ...options, idempotencyKey: key }, context);
+    const json = await storeCall(() =>
+      store.get(attemptKey(context.environment, context.taxId, key))
+    );
+    return json !== null && isExportRecord(json)
+      ? { json, options: options as IssueOptions }
+      : undefined;
+  }
   const service = {
     lookup: async (voucher: VoucherCoordinates, options?: PreviewOptions) =>
       isExportVoucherType(voucher?.voucherType)
@@ -401,13 +428,18 @@ export function createVouchersService(
       isExportVoucherType(sequence?.voucherType)
         ? exporting().lastAuthorized(sequence, cloneOptions(options ?? {}))
         : lastAuthorizedNumber(select(options), sequence, options ?? {}),
-    recover: async (key: string, options?: RecoveryOptions) =>
-      recoverOperation(
+    recover: async (key: string, options?: RecoveryOptions) => {
+      const exported = await exportReservation(key, options);
+      if (exported !== undefined) {
+        return await exporting().recover(exported.json, exported.options);
+      }
+      return await recoverOperation(
         select,
         key,
         options === undefined ? {} : options,
         context
-      ),
+      );
+    },
     issueDebitNote: async (
       input: DebitNoteInput | ExportDebitNoteInput,
       options?: IssueOptions

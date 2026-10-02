@@ -586,9 +586,58 @@ describe("keyed export issuance", () => {
   it("keeps WSFE from replaying an export reservation", async () => {
     const { service } = client();
     await service.issue(services, { idempotencyKey: "sale-1" });
-    await expect(service.recover("sale-1")).rejects.toMatchObject({
-      code: "ARCA_INPUT_IDEMPOTENCY_MISMATCH",
+    await expect(
+      service.issue(
+        {
+          issuer: "monotributo",
+          salesPoint: 1,
+          to: { condition: "consumidor_final" },
+          items: [{ amount: 100 }],
+        },
+        { idempotencyKey: "sale-1" }
+      )
+    ).rejects.toMatchObject({ code: "ARCA_INPUT_IDEMPOTENCY_MISMATCH" });
+  });
+
+  it("recovers an export reservation from ARCA's record, without sending", async () => {
+    const { service, calls } = client();
+    await service.issue(services, { idempotencyKey: "sale-1" });
+    const outcome = await service.recover("sale-1", {
+      include: { request: true },
     });
+    expect(outcome).toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: {
+        voucherClass: "E",
+        requestId: 41,
+        number: 1,
+        cae: "75123456789012",
+      },
+      lookup: { requestId: 41 },
+      request: { id: 41, number: 1 },
+    });
+    expect(calls.issue).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers indeterminate when an export reservation never reached ARCA", async () => {
+    const { service, behaviors, calls } = client();
+    behaviors.push(() => ({
+      service: "wsfex",
+      operation: "FEXAuthorize",
+      kind: "indeterminate",
+      reason: "transport_error",
+      results: {},
+      errors: [],
+      observations: [],
+    }));
+    await service.issue(services, { idempotencyKey: "sale-1" });
+    await expect(service.recover("sale-1")).resolves.toMatchObject({
+      kind: "indeterminate",
+      attempted: { salesPoint: 5, voucherType: 19, number: 1 },
+      lookup: { kind: "not_found" },
+    });
+    expect(calls.issue).toHaveBeenCalledTimes(1);
   });
 
   it("requires a store for a key", async () => {

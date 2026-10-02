@@ -210,15 +210,19 @@ export type ExportPreview = {
   originals?: readonly ExportVoucherSummary[];
 };
 
-type Evidence = Omit<WsfexAuthorizationOutcome, "raw"> & {
-  rawResponse?: Record<string, unknown>;
-};
+/** The outcome without `raw`, kept per kind so `reason` and `cae` survive. */
+type Evidence = (WsfexAuthorizationOutcome extends infer T
+  ? T extends unknown
+    ? Omit<T, "raw">
+    : never
+  : never) & { rawResponse?: Record<string, unknown> };
 /** What `issue()` sent: the voucher with the request id and number it took. */
 export type ExportIssueRequest = WsfexVoucherInput & {
   id: number;
   number: number;
 };
-export type ExportIssueOutcome = (
+/** `request` is always present when `include.request` is `true`. */
+export type ExportIssueOutcome<O extends IssueOptions = { include?: never }> = (
   | {
       kind: "authorized";
       recoveredByMatch: false;
@@ -254,7 +258,10 @@ export type ExportIssueOutcome = (
       found: ExportVoucherSummary;
       reason: string;
     }
-) & { request?: ExportIssueRequest };
+) &
+  (O extends { include: { request: true } }
+    ? { request: ExportIssueRequest }
+    : { request?: ExportIssueRequest });
 
 type ExportOperation = "issue" | "creditNote" | "debitNote";
 type Prepared = { data: WsfexVoucherInput; amounts: IssueAmounts };
@@ -608,6 +615,11 @@ export type ExportIssuance = {
     sequence: Omit<VoucherCoordinates, "number">,
     options: IssueOptions
   ): Promise<number>;
+  /**
+   * Settles an export reservation from ARCA's record of its number. Reads
+   * only: it never sends the voucher, so it never authorizes one.
+   */
+  recover(record: string, options: IssueOptions): Promise<ExportIssueOutcome>;
 };
 
 /**
@@ -639,7 +651,111 @@ export function createExportIssuance(
     },
     lastAuthorized: (sequence, options) =>
       wsfex.getLastVoucherNumber({ ...auth(options), ...sequence }),
+    recover: (json, options) => recoverExport(wsfex, context, json, options),
   };
+}
+
+async function recoverExport(
+  wsfex: WsfexService,
+  context: Context,
+  json: string,
+  options: IssueOptions
+): Promise<ExportIssueOutcome> {
+  const record = readExportRecord(json);
+  const issuer = record.representedTaxId ?? context.taxId;
+  if (
+    options.representedTaxId !== undefined &&
+    String(options.representedTaxId) !== issuer
+  ) {
+    throw new ArcaInputError(
+      "Reservation belongs to another represented taxpayer",
+      { code: "ARCA_INPUT_IDEMPOTENCY_MISMATCH" }
+    );
+  }
+  const consulted: IssueOptions = {
+    ...options,
+    ...(record.representedTaxId === undefined
+      ? {}
+      : { representedTaxId: record.representedTaxId }),
+  };
+  const attempted = {
+    salesPoint: record.salesPoint,
+    voucherType: record.voucherType,
+    number: record.number,
+  };
+  // No write was observed here: the attempt is the reservation itself.
+  const attempt: Evidence = {
+    service: "wsfex",
+    operation: "FEXAuthorize",
+    kind: "indeterminate",
+    reason: "incomplete_response",
+    results: {},
+    errors: [],
+    observations: [],
+  };
+  const total = Math.round(record.sent.totalAmount * 100);
+  const amounts = { computedTotal: total, sentTotal: total, vatAdjustment: 0 };
+  // A retry of this key resends under the CUIT lock; waiting for it keeps
+  // this consultation from reading a number the retry is still writing.
+  const outcome = await exportLock(
+    context,
+    issuer,
+    options
+  )(async () => {
+    let found: WsfexVoucherInfo | null;
+    try {
+      const result = await wsfex.lookupVoucher({
+        ...auth(consulted),
+        ...attempted,
+      });
+      found = result.kind === "found" ? result.voucher : null;
+    } catch (error) {
+      return {
+        kind: "indeterminate" as const,
+        attempted,
+        attempt,
+        lookup: options.abortSignal?.aborted
+          ? { kind: "aborted" as const }
+          : { kind: "failed" as const, error: toArcaSafeErrorMetadata(error) },
+      };
+    }
+    return settled(
+      attempt as WsfexAuthorizationOutcome,
+      attempt,
+      found,
+      record.requestId,
+      attempted,
+      record.sent,
+      (authorization) =>
+        issuedVoucher(
+          record.sent,
+          attempted,
+          record.requestId,
+          authorization,
+          amounts,
+          issuer
+        )
+    );
+  });
+  return options.include?.request
+    ? {
+        ...outcome,
+        request: {
+          ...structuredClone(record.sent),
+          id: record.requestId,
+          number: record.number,
+        },
+      }
+    : outcome;
+}
+
+/** One lock per CUIT: its request ids and every export sequence share it. */
+function exportLock(context: Context, issuer: string, options: IssueOptions) {
+  const key = `arca:v1:lock:wsfex:${context.environment}:${issuer}`;
+  return <T>(fn: () => Promise<T>) =>
+    context.store?.withLock
+      ? context.store.withLock(key, fn, { signal: options.abortSignal })
+      : withLocalLock(key, fn);
 }
 
 function auth(options: IssueOptions) {
@@ -675,11 +791,7 @@ async function issueExport(
       ? undefined
       : String(options.representedTaxId);
   const issuer = representedTaxId ?? context.taxId;
-  const lockKey = `arca:v1:lock:wsfex:${context.environment}:${issuer}`;
-  const lock = <T>(fn: () => Promise<T>) =>
-    context.store?.withLock
-      ? context.store.withLock(lockKey, fn, { signal: options.abortSignal })
-      : withLocalLock(lockKey, fn);
+  const lock = exportLock(context, issuer, options);
   const idempotencyKey = options.idempotencyKey;
   if (idempotencyKey === undefined || !context.store) {
     assertExportWindow(prepared.data);
@@ -913,20 +1025,16 @@ async function issueExport(
     data: WsfexVoucherInput,
     attempted: VoucherCoordinates,
     id: number,
-    authorization: { cae: string; caeExpiry?: string }
+    authorization: Authorized
   ): ExportIssuedVoucher {
-    const date = isoDate(data.voucherDate) as string;
-    return {
-      ...attempted,
-      voucherClass: "E",
-      requestId: id,
-      date,
-      header: exportHeader(data),
-      cae: authorization.cae,
-      caeExpiry: isoDate(authorization.caeExpiry) ?? "",
-      amounts: { ...prepared.amounts },
-      ...exportQr(issuer, attempted, data, date, authorization.cae),
-    };
+    return issuedVoucher(
+      data,
+      attempted,
+      id,
+      authorization,
+      prepared.amounts,
+      issuer
+    );
   }
 
   function evidence(outcome: WsfexAuthorizationOutcome): Evidence {
@@ -938,6 +1046,28 @@ async function issueExport(
 }
 
 type Authorized = { cae: string; caeExpiry?: string };
+
+function issuedVoucher(
+  data: WsfexVoucherInput,
+  attempted: VoucherCoordinates,
+  id: number,
+  authorization: Authorized,
+  amounts: IssueAmounts,
+  issuer: string
+): ExportIssuedVoucher {
+  const date = isoDate(data.voucherDate) as string;
+  return {
+    ...attempted,
+    voucherClass: "E",
+    requestId: id,
+    date,
+    header: exportHeader(data),
+    cae: authorization.cae,
+    caeExpiry: isoDate(authorization.caeExpiry) ?? "",
+    amounts: { ...amounts },
+    ...exportQr(issuer, attempted, data, date, authorization.cae),
+  };
+}
 
 /**
  * An answer that needs no lookup: a plain authorization that names this
