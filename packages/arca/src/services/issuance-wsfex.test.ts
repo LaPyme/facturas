@@ -779,3 +779,89 @@ describe("export consultations", () => {
     expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
   });
 });
+
+describe("export input checks and locks", () => {
+  it("validates an export lookup before calling WSFEX", async () => {
+    const { service, calls } = client();
+    await expect(
+      service.lookup({ salesPoint: 0, voucherType: 19, number: 1 })
+    ).rejects.toMatchObject({
+      name: "ArcaInputError",
+      field: "voucher.salesPoint",
+    });
+    await expect(
+      service.lastAuthorized({ salesPoint: 5, voucherType: 19 }, {
+        number: 3,
+      } as never)
+    ).rejects.toMatchObject({ name: "ArcaInputError" });
+    expect(calls.lookupVoucher).not.toHaveBeenCalled();
+    expect(calls.getLastVoucherNumber).not.toHaveBeenCalled();
+  });
+
+  it("stops waiting for the in-process lock when the caller aborts", async () => {
+    const fake = arca();
+    const service = createVouchersService(
+      wsfe,
+      { environment: "test", taxId: TAX_ID },
+      undefined,
+      fake.wsfex
+    );
+    let finish: () => void = () => undefined;
+    fake.calls.getLastRequestId.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = () => resolve(40);
+        })
+    );
+    const holder = service.issue(services);
+    await Promise.resolve();
+    const controller = new AbortController();
+    const waiter = service.issue(services, {
+      abortSignal: controller.signal,
+    });
+    controller.abort();
+    await expect(waiter).rejects.toMatchObject({
+      name: "ArcaLockTimeoutError",
+      reason: "aborted",
+    });
+    finish();
+    await expect(holder).resolves.toMatchObject({ kind: "authorized" });
+    expect(fake.calls.issue).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails clearly when a fresh request id collides twice", async () => {
+    const { service, behaviors } = client();
+    const collision = (input: WsfexIssueInput) =>
+      ({
+        service: "wsfex",
+        operation: "FEXAuthorize",
+        kind: "authorized",
+        result: "A",
+        resultLevel: "header",
+        results: {},
+        errors: [],
+        observations: [],
+        cae: "75000000000000",
+        voucherNumber: 7,
+        reprocessed: true,
+        echo: { id: input.id, salesPoint: 2, voucherType: 19, number: 7 },
+      }) satisfies WsfexAuthorizationOutcome;
+    behaviors.push(collision, collision);
+    await expect(service.issue(services)).rejects.toMatchObject({
+      name: "ArcaConfigurationError",
+    });
+  });
+
+  it("reads a reservation once on recover()", async () => {
+    const store = createMemoryStore();
+    const { service } = client(store);
+    await service.issue(services, { idempotencyKey: "sale-1" });
+    const get = vi.spyOn(store, "get");
+    await service.recover("sale-1");
+    expect(
+      get.mock.calls.filter(
+        ([key]) => key === attemptKey("test", TAX_ID, "sale-1")
+      )
+    ).toHaveLength(1);
+  });
+});

@@ -391,8 +391,11 @@ export function createVouchersService(
     assertExportWindow(prepared.data);
     return exportPreview(prepared, [exportSummary(original)]);
   }
-  /** An export reservation under this key, read before WSFE would refuse it. */
-  async function exportReservation(
+  /**
+   * Reads the reservation once: an export one settles through WSFEX, any other
+   * goes on to the WSFE recovery with the record already in hand.
+   */
+  async function readReservation(
     key: string,
     inputOptions: RecoveryOptions | undefined
   ) {
@@ -412,35 +415,47 @@ export function createVouchersService(
     const json = await storeCall(() =>
       store.get(attemptKey(context.environment, context.taxId, key))
     );
-    return json !== null && isExportRecord(json)
-      ? { json, options: options as IssueOptions }
-      : undefined;
+    return { json, options: options as IssueOptions };
   }
-  const service = {
-    lookup: async (voucher: VoucherCoordinates, options?: PreviewOptions) =>
-      isExportVoucherType(voucher?.voucherType)
-        ? exporting().lookup(voucher, cloneOptions(options ?? {}))
-        : lookupVoucher(select(options), voucher, options ?? {}),
-    lastAuthorized: async (
+  // Each cast is checked against its own overloads; a wrong branch fails.
+  const service: VouchersService = {
+    lookup: (async (voucher: VoucherCoordinates, options?: PreviewOptions) => {
+      if (!isExportVoucherType(voucher?.voucherType)) {
+        return await lookupVoucher(select(options), voucher, options ?? {});
+      }
+      const checked = cloneOptions(options ?? {});
+      assertLookup(voucher, checked);
+      return await exporting().lookup(voucher, checked);
+    }) as VouchersService["lookup"],
+    lastAuthorized: (async (
       sequence: Omit<VoucherCoordinates, "number">,
       options?: PreviewOptions
-    ) =>
-      isExportVoucherType(sequence?.voucherType)
-        ? exporting().lastAuthorized(sequence, cloneOptions(options ?? {}))
-        : lastAuthorizedNumber(select(options), sequence, options ?? {}),
-    recover: async (key: string, options?: RecoveryOptions) => {
-      const exported = await exportReservation(key, options);
-      if (exported !== undefined) {
-        return await exporting().recover(exported.json, exported.options);
+    ) => {
+      if (!isExportVoucherType(sequence?.voucherType)) {
+        return await lastAuthorizedNumber(
+          select(options),
+          sequence,
+          options ?? {}
+        );
+      }
+      const checked = cloneOptions(options ?? {});
+      assertSequence(sequence, checked);
+      return await exporting().lastAuthorized(sequence, checked);
+    }) as VouchersService["lastAuthorized"],
+    recover: (async (key: string, options?: RecoveryOptions) => {
+      const read = await readReservation(key, options);
+      if (typeof read?.json === "string" && isExportRecord(read.json)) {
+        return await exporting().recover(read.json, read.options);
       }
       return await recoverOperation(
         select,
         key,
         options === undefined ? {} : options,
-        context
+        context,
+        read?.json
       );
-    },
-    issueDebitNote: async (
+    }) as VouchersService["recover"],
+    issueDebitNote: (async (
       input: DebitNoteInput | ExportDebitNoteInput,
       options?: IssueOptions
     ) =>
@@ -453,8 +468,8 @@ export function createVouchersService(
             context,
             "debitNote",
             select
-          ),
-    previewCreditNote: async (
+          )) as VouchersService["issueDebitNote"],
+    previewCreditNote: (async (
       input: CreditNoteInput | PeriodNoteInput | ExportCreditNoteInput,
       options?: PreviewOptions
     ) =>
@@ -466,8 +481,8 @@ export function createVouchersService(
             options ?? {},
             context,
             "creditNote"
-          ),
-    previewDebitNote: async (
+          )) as VouchersService["previewCreditNote"],
+    previewDebitNote: (async (
       input: DebitNoteInput | ExportDebitNoteInput,
       options?: PreviewOptions
     ) =>
@@ -479,8 +494,8 @@ export function createVouchersService(
             options ?? {},
             context,
             "debitNote"
-          ),
-    issueCreditNote: async (
+          )) as VouchersService["previewDebitNote"],
+    issueCreditNote: (async (
       input: CreditNoteInput | PeriodNoteInput | ExportCreditNoteInput,
       options?: IssueOptions
     ) =>
@@ -493,8 +508,8 @@ export function createVouchersService(
             context,
             "creditNote",
             select
-          ),
-    issue: async (
+          )) as VouchersService["issueCreditNote"],
+    issue: (async (
       input: IssueInput | ExportIssueInput,
       options?: IssueOptions
     ) => {
@@ -514,8 +529,8 @@ export function createVouchersService(
         context,
         select
       );
-    },
-    preview: (
+    }) as VouchersService["issue"],
+    preview: ((
       input: IssueInput | ExportIssueInput,
       options?: Pick<PreviewOptions, "representedTaxId" | "service">
     ) => {
@@ -529,10 +544,9 @@ export function createVouchersService(
         return exportPreview(prepared);
       }
       return previewInvoice(input, options === undefined ? {} : options);
-    },
+    }) as VouchersService["preview"],
   };
-  // Each method's runtime branch returns what its matching overload declares.
-  return service as unknown as VouchersService;
+  return service;
 }
 
 function previewInvoice(
@@ -2093,12 +2107,7 @@ function assertBounds<K extends string>(
   }
 }
 
-async function lookupVoucher(
-  wsfe: IssueWsfeService,
-  voucher: VoucherCoordinates,
-  inputOptions: PreviewOptions
-): Promise<VoucherSummary | null> {
-  const options = cloneOptions(inputOptions);
+function assertLookup(voucher: VoucherCoordinates, options: PreviewOptions) {
   assertIssueKeys(
     options,
     ["representedTaxId", "service", "forceRefresh", "abortSignal"],
@@ -2113,6 +2122,35 @@ async function lookupVoucher(
     "lookup()"
   );
   assertBounds(voucher, LOOKUP_BOUNDS, "voucher", "lookup()");
+}
+
+function assertSequence(
+  sequence: Omit<VoucherCoordinates, "number">,
+  options: PreviewOptions
+) {
+  assertIssueKeys(
+    options,
+    ["representedTaxId", "service", "forceRefresh", "abortSignal"],
+    "options",
+    "lastAuthorized()"
+  );
+  assertIssueObject(sequence, "sequence");
+  assertIssueKeys(
+    sequence,
+    ["salesPoint", "voucherType"],
+    "sequence",
+    "lastAuthorized()"
+  );
+  assertBounds(sequence, SEQUENCE_BOUNDS, "sequence", "lastAuthorized()");
+}
+
+async function lookupVoucher(
+  wsfe: IssueWsfeService,
+  voucher: VoucherCoordinates,
+  inputOptions: PreviewOptions
+): Promise<VoucherSummary | null> {
+  const options = cloneOptions(inputOptions);
+  assertLookup(voucher, options);
   const found = await wsfe.lookupVoucher({
     representedTaxId: options.representedTaxId,
     forceRefresh: options.forceRefresh,
@@ -2145,20 +2183,7 @@ async function lastAuthorizedNumber(
   inputOptions: PreviewOptions
 ): Promise<number> {
   const options = cloneOptions(inputOptions);
-  assertIssueKeys(
-    options,
-    ["representedTaxId", "service", "forceRefresh", "abortSignal"],
-    "options",
-    "lastAuthorized()"
-  );
-  assertIssueObject(sequence, "sequence");
-  assertIssueKeys(
-    sequence,
-    ["salesPoint", "voucherType"],
-    "sequence",
-    "lastAuthorized()"
-  );
-  assertBounds(sequence, SEQUENCE_BOUNDS, "sequence", "lastAuthorized()");
+  assertSequence(sequence, options);
   // WSMTXCA's adapter answers "next" from its "last", so one subtraction serves both.
   const next = await wsfe.getNextVoucherNumber({
     representedTaxId: options.representedTaxId,
@@ -2259,7 +2284,9 @@ async function recoverOperation(
   select: (options: IssueOptions) => IssueWsfeService,
   key: string,
   inputOptions: RecoveryOptions,
-  context?: StoreContext
+  context?: StoreContext,
+  /** The reservation recover() already read; `undefined` reads it here. */
+  read?: string | null
 ): Promise<IssueOutcome<IssueOptions>> {
   const options = cloneOptions(inputOptions);
   assertIssueObject(options, "options");
@@ -2272,9 +2299,10 @@ async function recoverOperation(
   validateKeyStore({ ...options, idempotencyKey: key }, context);
   const scope = keyScope(context, key);
   const { store, environment, taxId } = scope;
-  const json = await storeCall(() =>
-    store.get(attemptKey(environment, taxId, key))
-  );
+  const json =
+    read === undefined
+      ? await storeCall(() => store.get(attemptKey(environment, taxId, key)))
+      : read;
   if (json === null) {
     throw new ArcaInputError("No reservation exists for this idempotency key", {
       code: "ARCA_INPUT_RESERVATION_NOT_FOUND",

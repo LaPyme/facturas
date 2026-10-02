@@ -2,6 +2,7 @@ import { ARCA_CURRENCY_IDS, ARCA_VOUCHER_TYPES } from "../constants";
 import {
   ArcaConfigurationError,
   ArcaInputError,
+  ArcaLockTimeoutError,
   type ArcaSafeErrorMetadata,
   toArcaSafeErrorMetadata,
 } from "../errors";
@@ -12,6 +13,7 @@ import {
   serializeArcaExchangeRate,
 } from "../internal/decimal";
 import type { ArcaEnvironment } from "../internal/types";
+import { MAX_WAIT_MS, throwIfAborted } from "../store/lock";
 import {
   type ArcaStore,
   attemptKey,
@@ -755,7 +757,7 @@ function exportLock(context: Context, issuer: string, options: IssueOptions) {
   return <T>(fn: () => Promise<T>) =>
     context.store?.withLock
       ? context.store.withLock(key, fn, { signal: options.abortSignal })
-      : withLocalLock(key, fn);
+      : withLocalLock(key, fn, options.abortSignal);
 }
 
 function auth(options: IssueOptions) {
@@ -898,7 +900,7 @@ async function issueExport(
     // this one: a fresh claim takes a new id, once.
     const id = (await wsfex.getLastRequestId(auth(options))) + 1;
     await moveRecord(claim.record, id);
-    const second = await attemptOnce(claim, id, false);
+    const second = await attemptOnce(claim, id, true);
     if (second === "collided") {
       throw new ArcaConfigurationError("WSFEX answered a reused id twice.");
     }
@@ -1202,8 +1204,16 @@ function sameVoucher(found: WsfexVoucherInfo, sent: WsfexVoucherInput) {
 }
 
 const localLocks = new Map<string, Promise<void>>();
-/** Without a store lock, serializes the CUIT inside this process at least. */
-async function withLocalLock<T>(key: string, fn: () => Promise<T>) {
+/**
+ * Without a store lock, serializes the CUIT inside this process at least. Like
+ * the store lock, the caller's signal and the same deadline stop only the
+ * wait: a call that gives up never runs `fn`, and the queue behind it moves on.
+ */
+async function withLocalLock<T>(
+  key: string,
+  fn: () => Promise<T>,
+  signal?: AbortSignal
+) {
   const previous = localLocks.get(key) ?? Promise.resolve();
   let release: () => void = () => undefined;
   const current = new Promise<void>((resolve) => {
@@ -1211,15 +1221,56 @@ async function withLocalLock<T>(key: string, fn: () => Promise<T>) {
   });
   const chained = previous.then(() => current);
   localLocks.set(key, chained);
-  await previous;
-  try {
-    return await fn();
-  } finally {
+  const settle = () => {
     release();
     if (localLocks.get(key) === chained) {
       localLocks.delete(key);
     }
+  };
+  try {
+    await waitForTurn(previous, signal);
+  } catch (error) {
+    settle();
+    throw error;
   }
+  try {
+    return await fn();
+  } finally {
+    settle();
+  }
+}
+
+function waitForTurn(previous: Promise<void>, signal?: AbortSignal) {
+  throwIfAborted(signal);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
+  const stopped = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new ArcaLockTimeoutError(
+            "ARCA store lock stayed held; no work was attempted.",
+            { reason: "held" }
+          )
+        ),
+      MAX_WAIT_MS
+    );
+    timer.unref?.();
+    onAbort = () => {
+      try {
+        throwIfAborted(signal);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+  return Promise.race([previous, stopped]).finally(() => {
+    clearTimeout(timer);
+    if (onAbort) {
+      signal?.removeEventListener("abort", onAbort);
+    }
+  });
 }
 
 function readExportRecord(json: string): ExportAttemptRecord {
