@@ -26,8 +26,9 @@ export type WsaaStoreAdapterSecret = { privateKeyPem: string };
 const KEY_PREFIX = "arca:v2:wsaa:";
 /**
  * Where releases before 0.15 kept the ticket in clear. A valid one is resealed
- * under the v2 key on first read, because ARCA refuses a second login while it
- * lives (`coe.alreadyAuthenticated`). It is left in place until it expires so
+ * under the v2 key on first read instead of logging in again, which ARCA
+ * refuses for a few minutes after the previous login
+ * (`coe.alreadyAuthenticated`). It is left in place until it expires so
  * the pre-0.15 processes of a mixed rollout keep finding it, and the lock stays
  * on this key so both versions serialize their logins.
  */

@@ -29,9 +29,11 @@ diagnósticos, la salida `--json` y los códigos de salida están en
   `clip`), sin shell y sin instalar nada. Si no hay ninguna, lo imprime.
 - Lo único que el CLI guarda, aparte de los archivos de `init`, es el **ticket
   WSAA**: en `<temporal del sistema>/facturas-cli`, con el directorio en `0700`
-  y los archivos en `0600`. ARCA rechaza un segundo login mientras hay un
-  ticket vigente (`coe.alreadyAuthenticated`, hasta 12 horas), así que sin ese
-  archivo no podrías correr `check` dos veces ni encadenar `check` con `issue`.
+  y los archivos en `0600`. El ticket dura 12 horas y el CLI lo reusa mientras
+  sigue vigente. ARCA rechaza un login nuevo hasta unos minutos después del
+  anterior (`coe.alreadyAuthenticated`: 2 en producción, 10 en homologación),
+  así que sin ese archivo no podrías correr `check` dos veces seguidas ni
+  encadenar `check` con `issue`.
   Con `--no-cache` el CLI no lee ni escribe nada: pide un ticket nuevo y lo usa
   solo en memoria.
 - No hay archivo de configuración, ni telemetría, ni ningún otro dato guardado.

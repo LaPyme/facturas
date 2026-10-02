@@ -732,8 +732,10 @@ function checkSalesPoints(
 
 /**
  * The WSAA ticket, kept in the system temp directory so `check` and `issue`
- * can be run again inside the 12 hours ARCA keeps it valid. The file store
- * creates the directory 0700 and writes 0600. Nothing else is ever stored.
+ * reuse it for the 12 hours it lives instead of logging in again, which ARCA
+ * refuses for a few minutes after the previous login (2 in production, 10 in
+ * homologation). The file store creates the directory 0700 and writes 0600.
+ * Nothing else is ever stored.
  */
 function createTicketCache(
   directory: string,
