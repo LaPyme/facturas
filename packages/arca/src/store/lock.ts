@@ -24,32 +24,31 @@ export type ArcaLeaseDriver = {
  * caller's signal only stops the wait: once the lease is taken, `fn` runs.
  */
 export async function withLease<T>(
-  key: string,
   driver: ArcaLeaseDriver,
   fn: () => Promise<T>,
   { signal }: ArcaLockOptions = {}
 ): Promise<T> {
   const owner = randomUUID();
   const deadline = Date.now() + MAX_WAIT_MS;
-  throwIfAborted(key, signal);
+  throwIfAborted(signal);
   let held = await driver.acquire(owner);
   while (!held) {
     if (Date.now() >= deadline) {
       throw new ArcaLockTimeoutError(
-        `ARCA store lock ${key} stayed held; no work was attempted.`,
+        "ARCA store lock stayed held; no work was attempted.",
         { reason: "held" }
       );
     }
     // An abort ends the wait early; the check below reports it.
     await delay(POLL_MS + Math.floor(Math.random() * POLL_MS), signal);
-    throwIfAborted(key, signal);
+    throwIfAborted(signal);
     held = await driver.acquire(owner);
   }
   if (signal?.aborted) {
     // The signal fired while the winning acquire was in flight: give the
     // lease back before any work, so the caller's deadline still holds.
     await driver.release(owner).catch(() => undefined);
-    throwIfAborted(key, signal);
+    throwIfAborted(signal);
   }
   const renewal = setInterval(() => {
     driver.renew(owner).catch(() => undefined);
@@ -63,11 +62,14 @@ export async function withLease<T>(
   }
 }
 
-/** Stops a wait for a lock the caller no longer wants. Nothing was taken. */
-export function throwIfAborted(key: string, signal?: AbortSignal): void {
+/**
+ * Stops a wait for a lock the caller no longer wants. Nothing was taken. The
+ * message never names the lock key, which carries the taxpayer's CUIT.
+ */
+export function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) {
     throw new ArcaLockTimeoutError(
-      `Stopped waiting for ARCA store lock ${key}: the caller's signal aborted; no work was attempted.`,
+      "Stopped waiting for an ARCA store lock: the caller's signal aborted; no work was attempted.",
       { reason: "aborted", cause: signal.reason }
     );
   }

@@ -24,7 +24,7 @@ export function createMemoryStore(): ArcaStore {
       return Promise.resolve();
     },
     async withLock(key, fn, { signal } = {}) {
-      throwIfAborted(key, signal);
+      throwIfAborted(signal);
       const previous = locks.get(key) ?? Promise.resolve();
       let release: () => void = () => undefined;
       const current = new Promise<void>((resolve) => {
@@ -46,7 +46,7 @@ export function createMemoryStore(): ArcaStore {
             locks.delete(key);
           }
         });
-        throwIfAborted(key, signal);
+        throwIfAborted(signal);
       }
       try {
         return await fn();

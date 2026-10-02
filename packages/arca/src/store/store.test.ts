@@ -183,6 +183,19 @@ for (const [name, factory] of lockable) {
       ).rejects.toMatchObject({ reason: "aborted" });
       expect(skipped).not.toHaveBeenCalled();
     });
+    it("never names the lock key, and its CUIT, in the error", async () => {
+      const store = await factory();
+      const key = "arca:v1:lock:sequence:production:20123456786:1:11";
+      const controller = new AbortController();
+      controller.abort();
+      const failure = await store
+        .withLock?.(key, () => Promise.resolve(), {
+          signal: controller.signal,
+        })
+        .catch((error: unknown) => error);
+      expect(failure).toMatchObject({ code: "ARCA_LOCK_TIMEOUT" });
+      expect(String((failure as Error).message)).not.toContain("20123456786");
+    });
     it("keeps the lock held when the last waiter aborts", async () => {
       const store = await factory();
       let open: () => void = () => undefined;
@@ -222,7 +235,6 @@ it("gives up on a lease that stays held, without running the work", async () => 
   try {
     const work = vi.fn(() => Promise.resolve());
     const waiting = withLease(
-      "sequence",
       {
         acquire: () => Promise.resolve(false),
         renew: () => Promise.resolve(),
@@ -234,6 +246,7 @@ it("gives up on a lease that stays held, without running the work", async () => 
       name: "ArcaLockTimeoutError",
       code: "ARCA_LOCK_TIMEOUT",
       reason: "held",
+      message: "ARCA store lock stayed held; no work was attempted.",
     });
     await vi.advanceTimersByTimeAsync(2 * ARCA_LEASE_MS + 1000);
     await failure;
@@ -247,7 +260,6 @@ it("stops at once when the signal aborts during a losing acquire", async () => {
   const started = Date.now();
   await expect(
     withLease(
-      "sequence",
       {
         acquire: () => {
           controller.abort();
@@ -269,7 +281,6 @@ it("gives the lease back when the signal aborts during the winning acquire", asy
   const work = vi.fn(() => Promise.resolve());
   await expect(
     withLease(
-      "sequence",
       {
         acquire: () => {
           controller.abort();
