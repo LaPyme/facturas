@@ -119,10 +119,12 @@ Con `idempotencyKey` y un store, la emisión usa el `Id` de requerimiento de
 WSFEX: el SDK lo reserva junto con el número y, si la respuesta se pierde,
 reenvía el mismo `Id`. ARCA contesta el comprobante que ya autorizó en lugar de
 emitir otro. El `Id` es único por CUIT, así que el SDK lee el `Id` y el número
-y emite bajo un mismo lock por CUIT.
+y emite bajo un mismo lock por CUIT. Un `Id` reservado no se vuelve a usar,
+aunque su pedido nunca haya llegado a ARCA.
 
 `recover()` también resuelve una reserva de exportación: consulta el número
-reservado y reconoce el comprobante por su `Id`, sin reenviarlo. Si otro
+reservado y reconoce el comprobante por su `Id`, su fecha, su receptor, sus
+importes y sus líneas, sin reenviarlo. Si otro
 pedido tomó ese número, el resultado es `conflict` y hace falta una clave
 nueva.
 

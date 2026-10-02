@@ -865,3 +865,79 @@ describe("export input checks and locks", () => {
     ).toHaveLength(1);
   });
 });
+
+describe("request id ownership", () => {
+  const other: ExportIssueInput = {
+    ...services,
+    to: { ...services.to, name: "Otro Cliente S.A.", taxId: "99887766" },
+  };
+  const unanswered = () =>
+    ({
+      service: "wsfex",
+      operation: "FEXAuthorize",
+      kind: "indeterminate",
+      reason: "transport_error",
+      results: {},
+      errors: [],
+      observations: [],
+    }) satisfies WsfexAuthorizationOutcome;
+
+  it("never hands an unanswered key's request id to the next key", async () => {
+    const { service, behaviors, calls } = client();
+    behaviors.push(unanswered);
+    const first = await service.issue(services, { idempotencyKey: "sale-a" });
+    expect(first).toMatchObject({ kind: "indeterminate" });
+    const second = await service.issue(other, { idempotencyKey: "sale-b" });
+    expect(second).toMatchObject({
+      kind: "authorized",
+      voucher: { requestId: 42, number: 1 },
+    });
+    expect(calls.issue.mock.calls.map(([input]) => input.id)).toEqual([41, 42]);
+    // The first key's number went to the second: it can never write.
+    await expect(
+      service.issue(services, { idempotencyKey: "sale-a" })
+    ).resolves.toMatchObject({ kind: "conflict", found: { requestId: 42 } });
+    await expect(service.recover("sale-a")).resolves.toMatchObject({
+      kind: "conflict",
+      found: { requestId: 42, receiverName: "Otro Cliente S.A." },
+    });
+  });
+
+  it("refuses a voucher another system stored under this key's request id", async () => {
+    const { service, behaviors, approve } = client();
+    behaviors.push((input) => {
+      // Another system on this CUIT sent id 41 for the same number first.
+      approve({ ...input, receiverName: "Otro Cliente S.A." });
+      return unanswered();
+    });
+    await expect(
+      service.issue(services, { idempotencyKey: "sale-a" })
+    ).resolves.toMatchObject({
+      kind: "conflict",
+      found: { requestId: 41, receiverName: "Otro Cliente S.A." },
+    });
+  });
+
+  it("refuses a credit note with both items and all", async () => {
+    const { service } = client();
+    const invoice = await service.issue(services);
+    if (invoice.kind !== "authorized") {
+      throw new Error("expected an authorization");
+    }
+    await expect(
+      service.issueCreditNote({
+        for: { salesPoint: 5, voucherType: 19, number: invoice.voucher.number },
+        all: true,
+        items: [
+          {
+            description: "Ajuste",
+            unit: 7,
+            quantity: 1,
+            unitPrice: "10",
+            amount: 1000,
+          },
+        ],
+      } as never)
+    ).rejects.toMatchObject({ name: "ArcaInputError", field: "all" });
+  });
+});

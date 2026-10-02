@@ -549,10 +549,21 @@ function noteLines(
   original: WsfexVoucherInfo,
   input: ExportCreditNoteInput | ExportDebitNoteInput
 ): { items: readonly WsfexItem[]; total: number } {
-  if (!("all" in input) || input.all === undefined) {
+  const all = "all" in input ? input.all : undefined;
+  if ((input.items === undefined) === (all === undefined)) {
+    throw new ArcaInputError(
+      "issueCreditNote needs exactly one mode: items for a partial note, or all: true for the whole original.",
+      {
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: input.items === undefined ? "items" : "all",
+        expected: "exactly one of items or all: true",
+      }
+    );
+  }
+  if (all === undefined) {
     return deriveItems(input.items as readonly ExportItem[], "items");
   }
-  if (input.all !== true) {
+  if (all !== true) {
     invalid("all", "true");
   }
   return { items: original.items, total: originalTotal(original) };
@@ -831,7 +842,7 @@ async function issueExport(
         salesPoint: data.salesPoint,
         voucherType: data.voucherType,
       })) + 1;
-    const id = (await wsfex.getLastRequestId(auth(options))) + 1;
+    const id = await nextRequestId();
     if (idempotencyKey === undefined || !context.store) {
       return submit({ id, number, data, fresh: true });
     }
@@ -898,7 +909,7 @@ async function issueExport(
     }
     // A reused id answered another request's voucher, so ARCA never processed
     // this one: a fresh claim takes a new id, once.
-    const id = (await wsfex.getLastRequestId(auth(options))) + 1;
+    const id = await nextRequestId();
     await moveRecord(claim.record, id);
     const second = await attemptOnce(claim, id, true);
     if (second === "collided") {
@@ -990,6 +1001,32 @@ async function issueExport(
             },
           };
     }
+  }
+
+  /**
+   * ARCA's last id only counts requests it received. A reservation whose send
+   * never arrived keeps its id, so the next one starts past every id this
+   * store handed out, and a replay can never meet another key's voucher. Read
+   * and written under the CUIT lock, before the reservation that uses it.
+   */
+  async function nextRequestId(): Promise<number> {
+    const received = await wsfex.getLastRequestId(auth(options));
+    const key = requestIdKey(context.environment, issuer);
+    const store = context.store;
+    const issued = store
+      ? readRequestIdMarker(await storeCall(() => store.get(key)))
+      : (localRequestIds.get(key) ?? 0);
+    const id = Math.max(received, issued) + 1;
+    if (id > MAX_REQUEST_ID) {
+      throw new ArcaConfigurationError("WSFEX request ids are exhausted.");
+    }
+    if (store) {
+      const marker: RequestIdMarker = { v: 1, id };
+      await storeCall(() => store.set(key, JSON.stringify(marker)));
+    } else {
+      localRequestIds.set(key, id);
+    }
+    return id;
   }
 
   function send(data: WsfexVoucherInput, id: number, number: number) {
@@ -1192,14 +1229,47 @@ function hasError(outcome: WsfexAuthorizationOutcome, code: string): boolean {
 }
 
 /**
- * The stored id already proves authorship. Total and currency guard against an
- * id another system reused for this same number; free text is left out because
- * ARCA may normalize it.
+ * The stored id names the request, but another system on the same CUIT may
+ * reuse an id. ARCA answers the fields as they were sent, so the voucher is
+ * this one only if its date, receiver, money and every line match too.
  */
 function sameVoucher(found: WsfexVoucherInfo, sent: WsfexVoucherInput) {
+  const lines = (items: readonly WsfexItem[] | undefined) =>
+    (items ?? []).map((item) => [item.description.trim(), item.amount]);
   return (
+    found.voucherDate === sent.voucherDate &&
+    found.destination === sent.destination &&
+    found.receiverName?.trim() === sent.receiverName.trim() &&
     found.totalAmount === sent.totalAmount &&
-    found.currencyId === sent.currencyId
+    found.currencyId === sent.currencyId &&
+    JSON.stringify(lines(found.items)) === JSON.stringify(lines(sent.items))
+  );
+}
+
+/** `Cmp.Id` is N15. */
+const MAX_REQUEST_ID = 999_999_999_999_999;
+/** The highest request id this store handed out for a CUIT. */
+type RequestIdMarker = { v: 1; id: number };
+const localRequestIds = new Map<string, number>();
+
+function requestIdKey(environment: ArcaEnvironment, issuer: string) {
+  return `arca:v1:wsfex:request-id:${environment}:${issuer}`;
+}
+
+function readRequestIdMarker(json: string | null): number {
+  if (json === null) {
+    return 0;
+  }
+  try {
+    const marker = JSON.parse(json) as RequestIdMarker;
+    if (marker?.v === 1 && Number.isSafeInteger(marker.id) && marker.id >= 0) {
+      return marker.id;
+    }
+  } catch {
+    // Reported below.
+  }
+  throw new ArcaConfigurationError(
+    "Invalid WSFEX request id marker; preserve it for reconciliation."
   );
 }
 
