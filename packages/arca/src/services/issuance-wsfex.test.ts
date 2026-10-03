@@ -1252,3 +1252,57 @@ describe("keyed replays use what was stored", () => {
     ).resolves.toMatchObject({ kind: "authorized" });
   });
 });
+
+describe("options shared with issuance", () => {
+  it("does not refresh the ticket twice when the caller already forced it", async () => {
+    const { service, behaviors, calls } = client();
+    behaviors.push(() => ({
+      service: "wsfex",
+      operation: "FEXAuthorize",
+      kind: "indeterminate",
+      reason: "authentication_rejected",
+      results: {},
+      errors: [],
+      observations: [],
+    }));
+    await expect(
+      service.issue(services, { forceRefresh: true })
+    ).resolves.toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "not_found" },
+    });
+    expect(calls.issue).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["previewCreditNote", "previewDebitNote"] as const)(
+    "%s refuses a service option, like issuance",
+    async (method) => {
+      const { service, calls } = client();
+      const preview = service[method] as (
+        input: unknown,
+        options: unknown
+      ) => Promise<unknown>;
+      await expect(
+        preview(
+          {
+            for: { salesPoint: 5, voucherType: 19, number: 1 },
+            items: [
+              {
+                description: "Ajuste",
+                unit: 7,
+                quantity: 1,
+                unitPrice: "10",
+                amount: 1000,
+              },
+            ],
+          },
+          { service: "wsmtxca" }
+        )
+      ).rejects.toMatchObject({
+        name: "ArcaInputError",
+        field: "options.service",
+      });
+      expect(calls.lookupVoucher).not.toHaveBeenCalled();
+    }
+  );
+});

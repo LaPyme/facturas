@@ -1073,9 +1073,11 @@ async function issueExport(
           ...(forceRefresh ? { forceRefresh: true } : {}),
         }),
       });
+    // A caller that already forced a fresh ticket got its one fresh attempt.
     return once().then((outcome) =>
       outcome.kind === "indeterminate" &&
-      outcome.reason === "authentication_rejected"
+      outcome.reason === "authentication_rejected" &&
+      options.forceRefresh !== true
         ? once(true)
         : outcome
     );

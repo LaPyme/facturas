@@ -393,6 +393,14 @@ export function createVouchersService(
     kind: "creditNote" | "debitNote"
   ) {
     const options = cloneOptions(inputOptions ?? {});
+    assertIssueObject(options, "options");
+    // The options issuance accepts for an export note, and nothing more.
+    assertIssueKeys(
+      options,
+      ["representedTaxId", "forceRefresh", "abortSignal"],
+      "options",
+      kind === "creditNote" ? "previewCreditNote()" : "previewDebitNote()"
+    );
     validateOptions(options);
     const { original, prepared } = await prepareExportNote(
       structuredClone(input),
