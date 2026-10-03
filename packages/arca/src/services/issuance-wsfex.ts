@@ -8,7 +8,6 @@ import {
 } from "../errors";
 import { toIsoDate } from "../internal/dates";
 import {
-  isWithinArcaTolerance,
   roundHalfEvenRatio,
   serializeArcaExchangeRate,
 } from "../internal/decimal";
@@ -1882,19 +1881,18 @@ function pricedLine(
   if (!(Number.isSafeInteger(discount) && discount >= 0)) {
     invalid(`${field}.discount`, "a non-negative amount in minor units");
   }
-  // quantity × price is scaled 10^12; minor units are 10^2.
-  const gross = roundHalfEvenRatio(quantity * price, 10_000_000_000n);
-  if (BigInt(discount) > gross) {
+  // quantity × price is scaled 10^12, and a minor unit is 10^10 of that.
+  const exact = quantity * price - BigInt(discount) * 10_000_000_000n;
+  if (exact < 0n) {
     invalid(`${field}.discount`, "at most the line's quantity × unitPrice");
   }
-  const expected = gross - BigInt(discount);
-  if (!isWithinArcaTolerance(BigInt(item.amount), expected)) {
+  if (!withinLineTolerance(exact, BigInt(item.amount))) {
     throw new ArcaInputError(
       `${field}.amount must equal quantity × unitPrice less discount.`,
       {
         code: "ARCA_INPUT_AMOUNT_MISMATCH",
         field: `${field}.amount`,
-        expected: String(expected),
+        expected: String(roundHalfEvenRatio(exact, 10_000_000_000n)),
       }
     );
   }
@@ -1903,6 +1901,24 @@ function pricedLine(
     unitPrice: item.unitPrice as string,
     ...(discount > 0 ? { discount: discount / 100 } : {}),
   };
+}
+
+/**
+ * WSFEX rule 1815 and section 2.18: ARCA rounds quantity × price − discount
+ * half-even to 5 decimals and accepts the line if it differs from the amount
+ * by at most 0.01, or by at most 0.01% of it. The relative bound uses the
+ * smaller side, so this never accepts a line ARCA would reject.
+ */
+function withinLineTolerance(exact: bigint, amountMinorUnits: bigint) {
+  // Both sides at 5 decimals: 10^12 → 10^5, and a minor unit is 10^3.
+  const computed = roundHalfEvenRatio(exact, 10_000_000n);
+  const amount = amountMinorUnits * 1000n;
+  const error = computed > amount ? computed - amount : amount - computed;
+  if (error <= 1000n) {
+    return true;
+  }
+  const base = computed < amount ? computed : amount;
+  return base > 0n && error * 10_000n <= base;
 }
 
 function scaledQuantity(value: unknown, field: string): bigint {

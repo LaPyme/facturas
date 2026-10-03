@@ -1418,3 +1418,34 @@ describe("evidence ARCA rewrites or loses", () => {
     expect(await store.get(attemptKey("test", TAX_ID, "note-1"))).toBeNull();
   });
 });
+
+describe("line tolerance at ARCA's precision", () => {
+  const line = (unitPrice: string, amount: number, quantity = 1) => ({
+    ...services,
+    items: [{ description: "Horas", unit: 7, quantity, unitPrice, amount }],
+  });
+
+  it("refuses a line 0.0149 off, which rounding to cents would hide", () => {
+    expect(() => deriveExportInvoice(line("1.0149", 100))).toThrowError(
+      expect.objectContaining({
+        code: "ARCA_INPUT_AMOUNT_MISMATCH",
+        field: "items[0].amount",
+      })
+    );
+  });
+
+  it.each([
+    ["1.01", 100, 1],
+    ["1.0149", 101, 1],
+    ["0.333333", 100, 3],
+    ["1000000.00", 99_999_000, 1],
+  ])("accepts %s × %i within 0.01 or 0.01%%", (unitPrice, amount, quantity) => {
+    expect(() =>
+      deriveExportInvoice(line(unitPrice, amount, quantity))
+    ).not.toThrow();
+  });
+
+  it("refuses an error over both bounds on a large line", () => {
+    expect(() => deriveExportInvoice(line("1000000.00", 99_989_000))).toThrow();
+  });
+});
