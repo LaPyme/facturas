@@ -1437,7 +1437,11 @@ function mapWsfexVoucherInfo(raw: Record<string, unknown>): WsfexVoucherInfo {
   );
   assignWsfexValue(voucher, "paymentTerms", readWsfexText(raw.Forma_pago));
   assignWsfexValue(voucher, "incoterms", readWsfexText(raw.Incoterms));
-  assignWsfexValue(voucher, "incotermsDetail", readWsfexText(raw.Incoterms_Ds));
+  assignWsfexValue(
+    voucher,
+    "incotermsDetail",
+    readWsfexIncotermsDetail(raw.Incoterms_Ds)
+  );
   assignWsfexValue(voucher, "language", readWsfexNumber(raw.Idioma_cbte));
   assignWsfexValue(voucher, "paymentDate", readWsfexText(raw.Fecha_pago));
   assignWsfexValue(
@@ -1555,6 +1559,12 @@ function readWsfexTaxId(value: unknown): string | undefined {
   return text !== undefined && /^\d+$/.test(text) && Number(text) !== 0
     ? text
     : undefined;
+}
+
+// ARCA reports "0" for a voucher sent without `Incoterms_Ds`.
+function readWsfexIncotermsDetail(value: unknown): string | undefined {
+  const text = readWsfexText(value);
+  return text === "0" ? undefined : text;
 }
 
 function readWsfexFlag(value: unknown): "S" | "N" | undefined {

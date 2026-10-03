@@ -1346,7 +1346,11 @@ function fiscalIdentity(voucher: WsfexVoucherInput | WsfexVoucherInfo) {
     ]),
     paymentTerms: trimmed(voucher.paymentTerms),
     incoterms: trimmed(voucher.incoterms),
-    incotermsDetail: trimmed(voucher.incotermsDetail),
+    // ARCA stores no detail as "0", and the lookup reads "0" as absent.
+    incotermsDetail:
+      trimmed(voucher.incotermsDetail) === "0"
+        ? undefined
+        : trimmed(voucher.incotermsDetail),
     language: voucher.language,
     items: voucher.items.map((item) => [
       trimmed(item.code),

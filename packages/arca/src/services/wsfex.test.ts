@@ -1249,6 +1249,51 @@ describe("createWsfexService lookupVoucher", () => {
     });
   });
 
+  it.each(["0", ""])(
+    "reads an Incoterms_Ds of %j as no incotermsDetail",
+    async (detail) => {
+      const options = createBaseOptions();
+      options.soap.execute.mockResolvedValueOnce(
+        createWsfexOperationResult("FEXGetCMP", {
+          FEXResultGet: {
+            Id: "41",
+            Cbte_tipo: "19",
+            Punto_vta: "3",
+            Cbte_nro: "7",
+            Dst_cmp: "203",
+            Cliente: "Joao Da Silva",
+            Domicilio_cliente: "Rua 76 km 34.5 Alagoas",
+            Moneda_Id: "DOL",
+            Imp_total: "500.00",
+            Incoterms: "FOB",
+            // What ARCA stores for a voucher sent without Incoterms_Ds.
+            Incoterms_Ds: detail,
+            Items: {
+              Item: {
+                Pro_ds: "Producto",
+                Pro_umed: "7",
+                Pro_total_item: "500.00",
+              },
+            },
+            Resultado: "A",
+          },
+          FEXErr: { ErrCode: "0", ErrMsg: "OK" },
+        })
+      );
+
+      const result = await createWsfexService(options).lookupVoucher({
+        salesPoint: 3,
+        voucherType: 19,
+        number: 7,
+      });
+
+      expect(result.kind).toBe("found");
+      const voucher = result.kind === "found" ? result.voucher : undefined;
+      expect(voucher).toMatchObject({ incoterms: "FOB" });
+      expect(voucher).not.toHaveProperty("incotermsDetail");
+    }
+  );
+
   it("normalizes only ErrCode 1020 as voucher absence", async () => {
     const options = createBaseOptions();
     options.soap.execute
