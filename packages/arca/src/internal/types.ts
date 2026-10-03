@@ -6,6 +6,7 @@ export type ArcaEnvironment = "production" | "test";
 export type ArcaServiceName =
   | "wsaa"
   | "wsfe"
+  | "wsfex"
   | "wsmtxca"
   | "padron-a5"
   | "padron-a13";
@@ -22,6 +23,7 @@ export type ArcaPadronServiceName = Extract<
 /** WSAA service identifiers used for authentication scoping. */
 export type ArcaWsaaServiceId =
   | "wsfe"
+  | "wsfex"
   | "wsmtxca"
   | "ws_sr_constancia_inscripcion"
   | "ws_sr_padron_a13";

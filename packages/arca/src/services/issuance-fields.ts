@@ -71,16 +71,30 @@ export function voucherFamily(type: number): {
   });
 }
 
+/**
+ * Export vouchers (19, 20, 21) report `family: "export"` and class `"E"`;
+ * neither is an `issue()` input, where an export is chosen by `export`.
+ */
 export type VoucherTypeInfo = {
-  family: InvoiceFamily;
-  voucherClass: VoucherClass;
+  family: InvoiceFamily | "export";
+  voucherClass: VoucherClass | "E";
   kind: "invoice" | "debit_note" | "credit_note";
 };
 
 const KINDS = ["invoice", "debit_note", "credit_note"] as const;
+/** Factura E, Nota de Débito E and Nota de Crédito E, in KINDS order. */
+export const EXPORT_TYPES = [19, 20, 21] as const;
 
 /** What an ARCA voucher type the SDK issues is. Pure; throws for any other. */
 export function describeVoucherType(voucherType: number): VoucherTypeInfo {
+  const exportIndex = (EXPORT_TYPES as readonly number[]).indexOf(voucherType);
+  if (exportIndex !== -1) {
+    return {
+      family: "export",
+      voucherClass: "E",
+      kind: KINDS[exportIndex] as VoucherTypeInfo["kind"],
+    };
+  }
   const { family, voucherClass, types } = voucherFamily(voucherType);
   return {
     family,

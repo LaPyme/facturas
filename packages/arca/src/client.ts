@@ -11,6 +11,7 @@ import {
   type VouchersService,
 } from "./services/vouchers";
 import { createWsfeService, type WsfeService } from "./services/wsfe";
+import { createWsfexService, type WsfexService } from "./services/wsfex";
 import { createWsmtxcaService, type WsmtxcaService } from "./services/wsmtxca";
 import { createSoapTransport } from "./soap";
 import { createWsaaAuthModule } from "./wsaa";
@@ -47,6 +48,8 @@ export type ArcaClient = {
   /** The last number ARCA authorized for a sales point and type; `0` when none. */
   lastAuthorized: VouchersService["lastAuthorized"];
   wsfe: WsfeService;
+  /** WSFEX, ARCA's export service: its reference tables and exchange rates. */
+  wsfex: WsfexService;
   wsmtxca: WsmtxcaService;
   padron: PadronService;
 };
@@ -56,8 +59,8 @@ export type ArcaClient = {
  * Validates the config, wires WSAA authentication and SOAP transport,
  * and returns an object with `issue()`, `preview()`, `issueCreditNote()`,
  * `issueDebitNote()`, `previewCreditNote()`, `previewDebitNote()`, `recover()`,
- * `lookup()`, `lastAuthorized()` and the `.wsfe`, `.wsmtxca`, and `.padron`
- * service modules.
+ * `lookup()`, `lastAuthorized()` and the `.wsfe`, `.wsfex`, `.wsmtxca`, and
+ * `.padron` service modules.
  *
  * @throws {ArcaConfigurationError} When the config is missing or invalid.
  */
@@ -89,7 +92,13 @@ export function createArcaClient(config: ArcaClientOptions = {}): ArcaClient {
     auth,
     soap,
   });
-  const vouchers = createVouchersService(wsfe, normalizedConfig, wsmtxca);
+  const wsfex = createWsfexService({ config: normalizedConfig, auth, soap });
+  const vouchers = createVouchersService(
+    wsfe,
+    normalizedConfig,
+    wsmtxca,
+    wsfex
+  );
   return {
     config: publicConfig,
     issue: vouchers.issue,
@@ -102,6 +111,7 @@ export function createArcaClient(config: ArcaClientOptions = {}): ArcaClient {
     lookup: vouchers.lookup,
     lastAuthorized: vouchers.lastAuthorized,
     wsfe,
+    wsfex,
     wsmtxca,
     padron: createPadronService({ config: normalizedConfig, auth, soap }),
   };

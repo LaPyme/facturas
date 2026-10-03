@@ -190,6 +190,16 @@ export const ARCA_SERVICE_CONFIG: Record<ArcaServiceName, ArcaServiceConfig> = {
     soapActionBase: "http://ar.gov.afip.dif.FEV1/",
     useLegacyTlsSecurityLevel0: true,
   },
+  wsfex: {
+    namespace: "http://ar.gov.afip.dif.fexv1/",
+    endpoint: {
+      production: "https://servicios1.afip.gov.ar/wsfexv1/service.asmx",
+      test: "https://wswhomo.afip.gov.ar/wsfexv1/service.asmx",
+    },
+    soapVersion: "1.1",
+    soapActionBase: "http://ar.gov.afip.dif.fexv1/",
+    useLegacyTlsSecurityLevel0: true,
+  },
   wsmtxca: {
     namespace: "http://impl.service.wsmtxca.afip.gov.ar/service/",
     endpoint: {

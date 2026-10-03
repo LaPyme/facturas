@@ -212,7 +212,25 @@ export async function creditNoteConsumerContract(
   };
   oldMock.issue satisfies VouchersService["issue"];
 
-  const target = { salesPoint: 1, voucherType: 6, number: 1 };
+  // A literal domestic type keeps the domestic result types.
+  const target = { salesPoint: 1, voucherType: 6, number: 1 } as const;
+  // A voucher type that is only `number` may hold 19 to 21 at run time, so
+  // its result may be an export one until narrowed.
+  const stored: { salesPoint: number; voucherType: number; number: number } =
+    target;
+  const either = await client.issueCreditNote({ for: stored, all: true });
+  if ("service" in either) {
+    either.service satisfies "wsfex";
+  } else if (either.kind === "authorized") {
+    either.voucher.header.documentNumber satisfies string;
+  }
+  const exported = await client.issueCreditNote({
+    for: { salesPoint: 5, voucherType: 19, number: 1 },
+    all: true,
+  });
+  if (exported.kind === "authorized") {
+    exported.voucher.voucherClass satisfies "E";
+  }
   const linkedPreviewInput = {
     for: target,
     items: [{ amount: 100 }],
@@ -247,27 +265,27 @@ export async function creditNoteConsumerContract(
   });
   // @ts-expect-error all accepts only the literal true.
   await client.issueCreditNote({ for: target, all: false });
+  // @ts-expect-error The receiver comes from the original, never the caller.
   await client.issueCreditNote({
     for: target,
     all: true,
-    // @ts-expect-error The receiver comes from the original, never the caller.
     to: { condition: "exento", cuit: "20123456789" },
   });
+  // @ts-expect-error The currency comes from the original, never the caller.
   await client.issueCreditNote({
     for: target,
     all: true,
-    // @ts-expect-error The currency comes from the original, never the caller.
     currency: "USD",
   });
+  // @ts-expect-error Linked notes and period notes are mutually exclusive.
   await client.issueCreditNote({
     for: target,
     all: true,
-    // @ts-expect-error Linked notes and period notes are mutually exclusive.
     associatedPeriod: { from: "20260901", to: "20260930" },
   });
+  // @ts-expect-error One note cannot mix amount items with VAT items.
   await client.issueCreditNote({
     for: target,
-    // @ts-expect-error One note cannot mix amount items with VAT items.
     items: [{ amount: 100 }, { gross: 121, vat: 21 }],
   });
   // The class follows the original, so an item shape that contradicts it is a

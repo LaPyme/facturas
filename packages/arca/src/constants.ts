@@ -9,6 +9,9 @@ export const ARCA_VOUCHER_TYPES = {
   FACTURA_C: 11,
   NOTA_DEBITO_C: 12,
   NOTA_CREDITO_C: 13,
+  FACTURA_E: 19,
+  NOTA_DEBITO_E: 20,
+  NOTA_CREDITO_E: 21,
 } as const;
 
 /** Common document types accepted by ARCA services. */
