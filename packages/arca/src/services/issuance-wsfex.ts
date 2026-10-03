@@ -33,14 +33,15 @@ import {
   buenosAiresDate,
 } from "./wsfe-derive";
 import type { VoucherCoordinates } from "./wsfe-identity";
-import type {
-  WsfexAuthorizationOutcome,
-  WsfexExportType,
-  WsfexItem,
-  WsfexLanguage,
-  WsfexService,
-  WsfexVoucherInfo,
-  WsfexVoucherInput,
+import {
+  assertWsfexVoucherInput,
+  type WsfexAuthorizationOutcome,
+  type WsfexExportType,
+  type WsfexItem,
+  type WsfexLanguage,
+  type WsfexService,
+  type WsfexVoucherInfo,
+  type WsfexVoucherInput,
 } from "./wsfex";
 
 /** Factura E (19), Nota de Débito E (20) and Nota de Crédito E (21). */
@@ -418,6 +419,7 @@ export function deriveExportInvoice(
       ? {}
       : { paymentDate: exported.paymentDate }),
   };
+  assertWsfexVoucherInput(data);
   return {
     data,
     amounts: { computedTotal: total, sentTotal: reviewed, vatAdjustment: 0 },
@@ -499,6 +501,8 @@ export function deriveExportNote(
         : 1,
     items: lines.items,
   };
+  // An inherited line ARCA reported oddly fails here, before any reservation.
+  assertWsfexVoucherInput(data);
   return {
     data,
     amounts: {
@@ -576,6 +580,16 @@ function noteLines(
   }
   if (all !== true) {
     invalid("all", "true");
+  }
+  if (original.items.length === 0) {
+    throw new ArcaInputError(
+      "ARCA reports no lines for the original, so all: true has nothing to credit; list the items instead.",
+      {
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "all",
+        expected: "items, since the original reports no lines",
+      }
+    );
   }
   return { items: original.items, total: originalTotal(original) };
 }
@@ -1351,8 +1365,9 @@ function fiscalIdentity(voucher: WsfexVoucherInput | WsfexVoucherInfo) {
   };
 }
 
+/** XML reads every line break as LF, so both sides compare that way. */
 function trimmed(value: string | undefined): string | undefined {
-  return value?.trim() || undefined;
+  return value?.replace(/\r\n?/g, "\n").trim() || undefined;
 }
 
 /** One spelling per decimal: no exponent, no trailing zeros, no leading ones. */

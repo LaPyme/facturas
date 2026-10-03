@@ -42,10 +42,12 @@ export type WsfexLanguage = 1 | 2 | 3;
 export type WsfexItem = {
   code?: string;
   description: string;
-  quantity?: number;
+  /** A number, or an exact decimal string; a lookup answers the string. */
+  quantity?: number | string;
   unit: number;
   unitPrice?: string;
-  discount?: number;
+  /** A number, or an exact decimal string; a lookup answers the string. */
+  discount?: number | string;
   amount: number;
 };
 export type WsfexPermit = { id: string; destination: number };
@@ -586,6 +588,15 @@ const WSFEX_TAX_ID_PATTERN = /^\d{11}$/;
  * each field. Business rules (which fields a voucher type needs) belong to the
  * caller and to ARCA.
  */
+/**
+ * Throws every structural error `issue()` would throw for this voucher, with
+ * no I/O. Run it before a reservation stores the voucher, so a retry never
+ * replays one that cannot be sent.
+ */
+export function assertWsfexVoucherInput(voucher: WsfexVoucherInput): void {
+  createWsfexRequest({ ...voucher, id: 0, number: 1 });
+}
+
 function createWsfexRequest(input: WsfexIssueInput): Record<string, unknown> {
   return {
     Id: assertWsfexInteger(input.id, "id", 0, WSFEX_MAX_REQUEST_ID),
@@ -1447,9 +1458,10 @@ function mapWsfexVoucherInfo(raw: Record<string, unknown>): WsfexVoucherInfo {
 function mapWsfexLookupItem(row: Record<string, unknown>): WsfexItem {
   const operation = "FEXGetCMP";
   const code = readWsfexText(row.Pro_codigo);
-  const quantity = readWsfexNumber(row.Pro_qty);
+  // N12,6 needs up to 18 digits, more than a number keeps: stay exact.
+  const quantity = canonicalizeWsfexDecimal(row.Pro_qty);
   const unitPrice = canonicalizeWsfexDecimal(row.Pro_precio_uni);
-  const discount = readWsfexNumber(row.Pro_bonificacion);
+  const discount = canonicalizeWsfexDecimal(row.Pro_bonificacion);
   return {
     ...(code === undefined ? {} : { code }),
     description: readWsfexText(row.Pro_ds) ?? "",

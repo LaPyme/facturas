@@ -1063,6 +1063,47 @@ describe("createWsfexService reads", () => {
 });
 
 describe("createWsfexService lookupVoucher", () => {
+  it("keeps N12,6 quantities and discounts exact", async () => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce(
+      createWsfexOperationResult("FEXGetCMP", {
+        FEXResultGet: {
+          Id: "41",
+          Cbte_tipo: "19",
+          Punto_vta: "3",
+          Cbte_nro: "7",
+          Dst_cmp: "203",
+          Cliente: "Joao Da Silva",
+          Domicilio_cliente: "Rua 76",
+          Moneda_Id: "DOL",
+          Imp_total: "1234567890.12",
+          Items: {
+            Item: {
+              Pro_ds: "Horas",
+              Pro_qty: "123456789012.123456",
+              Pro_umed: "7",
+              Pro_precio_uni: "0.010000",
+              Pro_bonificacion: "999999999999.999999",
+              Pro_total_item: "1234567890.12",
+            },
+          },
+          Resultado: "A",
+        },
+        FEXErr: { ErrCode: "0", ErrMsg: "OK" },
+      })
+    );
+    const result = await createWsfexService(options).lookupVoucher({
+      salesPoint: 3,
+      voucherType: 19,
+      number: 7,
+    });
+    expect(result.kind === "found" && result.voucher.items[0]).toMatchObject({
+      quantity: "123456789012.123456",
+      discount: "999999999999.999999",
+      unitPrice: "0.01",
+    });
+  });
+
   it("consults with ClsFEXGetCMP's lowercase Cbte_tipo and maps the voucher", async () => {
     const options = createBaseOptions();
     options.soap.execute.mockResolvedValueOnce(
@@ -1184,18 +1225,18 @@ describe("createWsfexService lookupVoucher", () => {
         {
           code: "PRO1",
           description: "Producto",
-          quantity: 2,
+          quantity: "2",
           unit: 7,
           unitPrice: "250.5",
-          discount: 1,
+          discount: "1",
           amount: 500,
         },
         {
           description: "Descuento",
-          quantity: 0,
+          quantity: "0",
           unit: 99,
           unitPrice: "0",
-          discount: 0,
+          discount: "0",
           amount: -0.5,
         },
       ],

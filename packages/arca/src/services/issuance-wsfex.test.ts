@@ -1336,3 +1336,85 @@ describe("voucher helpers for export types", () => {
     ).toThrowError(expect.objectContaining({ field: "service" }));
   });
 });
+
+describe("evidence ARCA rewrites or loses", () => {
+  const unanswered = () =>
+    ({
+      service: "wsfex",
+      operation: "FEXAuthorize",
+      kind: "indeterminate",
+      reason: "transport_error",
+      results: {},
+      errors: [],
+      observations: [],
+    }) satisfies WsfexAuthorizationOutcome;
+
+  it("matches a multi-line description after XML turns CRLF into LF", async () => {
+    const fake = client();
+    const input: ExportIssueInput = {
+      ...services,
+      items: [
+        { ...services.items[0], description: "Desarrollo\r\nSeptiembre" },
+      ],
+    };
+    fake.behaviors.push((sent) => {
+      fake.approve({
+        ...sent,
+        items: [{ ...sent.items[0], description: "Desarrollo\nSeptiembre" }],
+      });
+      return unanswered();
+    });
+    await expect(fake.service.issue(input)).resolves.toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+    });
+  });
+
+  it("credits an original's lines with their exact decimals", async () => {
+    const fake = client();
+    await fake.service.issue(services);
+    const stored = fake.vouchers.get("5:19:1");
+    if (!stored) {
+      throw new Error("expected the original");
+    }
+    // What a lookup now answers for a quantity a number cannot hold.
+    fake.vouchers.set("5:19:1", {
+      ...stored,
+      items: [
+        {
+          description: "Horas",
+          unit: 7,
+          quantity: "123456789012.123456",
+          unitPrice: "0.01",
+          amount: 1_234_567_890.12,
+        },
+      ],
+      totalAmount: 1_234_567_890.12,
+    });
+    await fake.service.issueCreditNote({
+      for: { salesPoint: 5, voucherType: 19, number: 1 },
+      all: true,
+    });
+    expect(fake.calls.issue.mock.calls.at(-1)?.[0].items[0]).toMatchObject({
+      quantity: "123456789012.123456",
+    });
+  });
+
+  it("refuses all: true before reserving when ARCA reports no lines", async () => {
+    const store = createMemoryStore();
+    const fake = client(store);
+    await fake.service.issue(services);
+    const stored = fake.vouchers.get("5:19:1");
+    if (!stored) {
+      throw new Error("expected the original");
+    }
+    fake.vouchers.set("5:19:1", { ...stored, items: [] });
+    await expect(
+      fake.service.issueCreditNote(
+        { for: { salesPoint: 5, voucherType: 19, number: 1 }, all: true },
+        { idempotencyKey: "note-1" }
+      )
+    ).rejects.toMatchObject({ name: "ArcaInputError", field: "all" });
+    expect(await store.get(attemptKey("test", TAX_ID, "note-1"))).toBeNull();
+  });
+});
