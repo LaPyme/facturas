@@ -440,15 +440,16 @@ async function issueInvoice(
   const options = cloneOptions(inputOptions);
   validateOptions(options);
   validateKeyStore(options, context);
-  const prepared = prepareInvoice(input, options);
+  // One copy taken before any await: the invoice and the reservation's hash
+  // both come from the same input.
+  const snapshot = structuredClone(input);
   return await runOperation(
     wsfe,
     "issue",
-    input,
-    () => Promise.resolve(prepared),
+    snapshot,
+    async () => prepareInvoice(snapshot, options),
     options,
     context,
-    prepared.amounts,
     select
   );
 }
@@ -462,6 +463,10 @@ function withIssuerName(input: unknown): unknown {
   return name === undefined ? input : { ...input, issuer: name };
 }
 
+/**
+ * `prepare` derives the voucher and runs only when this key has no
+ * reservation: a replay resends what was stored, whatever today's date.
+ */
 async function runOperation(
   wsfe: IssueWsfeService,
   operation: ArcaAttemptRecord["operation"],
@@ -469,7 +474,6 @@ async function runOperation(
   prepare: () => Promise<Prepared>,
   options: IssueOptions,
   context?: StoreContext,
-  replayAmounts?: Prepared["amounts"],
   select?: SelectService
 ): Promise<IssueOutcome<IssueOptions>> {
   const issuer = issuerTaxId(options, context);
@@ -655,10 +659,7 @@ async function runOperation(
       current,
       runAuthorization(
         wsfe,
-        {
-          ...preparedFromRecord(current),
-          ...(replayAmounts ? { amounts: replayAmounts } : {}),
-        },
+        preparedFromRecord(current),
         options,
         issuer,
         current.number,
@@ -1713,7 +1714,6 @@ async function issueCreditNote(
     () => prepareNote(wsfe, note, options, context, kind),
     options,
     context,
-    undefined,
     select
   );
 }
