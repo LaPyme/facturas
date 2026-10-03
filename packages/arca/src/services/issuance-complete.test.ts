@@ -282,7 +282,12 @@ describe("complete WSFE issuance", () => {
           associatedVouchers: [{ type: debit, number: 2 }],
         },
       });
-      if (type >= 200 && credited.kind === "authorized") {
+      // `debit` is a plain number here, so the note may be an export one.
+      if (
+        type >= 200 &&
+        credited.kind === "authorized" &&
+        !("service" in credited)
+      ) {
         expect(credited.request.associatedVouchers?.[0]?.taxId).toBe(
           "20123456789"
         );

@@ -29,6 +29,7 @@ import type {
   IssuanceService,
 } from "./fiscal-evidence";
 import {
+  type FAMILIES,
   normalizedFceAnnulment,
   validateFiscalHeader,
   voucherFamily,
@@ -119,6 +120,21 @@ export type NotePreview<S extends IssuanceService = "wsfe"> =
     /** The originals consulted, in input order; absent for a period note. */
     originals?: readonly VoucherSummary[];
   };
+/** Every voucher type the WSFE and WSMTXCA facade issues, as literals. */
+type DomesticVoucherType = {
+  [F in keyof typeof FAMILIES]: (typeof FAMILIES)[F][keyof (typeof FAMILIES)[F]];
+}[keyof typeof FAMILIES][number];
+type DomesticCoordinates = VoucherCoordinates & {
+  voucherType: DomesticVoucherType;
+};
+/**
+ * A note whose original is a literal domestic type, or a list of originals,
+ * which are always domestic. Only a `voucherType` typed as plain `number` may
+ * hold 19 to 21 at run time, so only that input gets the result union.
+ */
+type DomesticNote<T> = T & {
+  for?: DomesticCoordinates | readonly VoucherCoordinates[];
+};
 export type RecoveryOptions = Pick<
   IssueOptions,
   "representedTaxId" | "forceRefresh" | "include" | "abortSignal"
@@ -134,9 +150,13 @@ export type VouchersService = {
       voucher: VoucherCoordinates & { voucherType: ExportVoucherType },
       options?: PreviewOptions
     ): Promise<ExportVoucherSummary | null>;
+    (
+      voucher: DomesticCoordinates,
+      options?: PreviewOptions
+    ): Promise<VoucherSummary | null>;
     /**
-     * A `voucherType` typed as `number` may hold 19 to 21 at run time, so the
-     * answer may be an export summary: narrow on `voucherClass === "E"`.
+     * A `voucherType` typed as plain `number` may hold 19 to 21 at run time,
+     * so its answer may be an export summary: narrow on `voucherClass`.
      */
     (
       voucher: VoucherCoordinates,
@@ -169,9 +189,17 @@ export type VouchersService = {
       options?: O
     ): Promise<ExportIssueOutcome<O>>;
     <O extends IssueOptions = { include?: never }>(
-      input: DebitNoteInput,
+      input: DomesticNote<DebitNoteInput>,
       options?: O
     ): Promise<IssueOutcome<O>>;
+    /**
+     * A `for.voucherType` typed as plain `number` may hold 19 to 21 at run
+     * time, so the result may be an export one: narrow with `"service" in outcome`.
+     */
+    <O extends IssueOptions = { include?: never }>(
+      input: DebitNoteInput,
+      options?: O
+    ): Promise<IssueOutcome<O> | ExportIssueOutcome<O>>;
   };
   /**
    * Derives what issueCreditNote() would send. Unlike the zero-I/O preview(),
@@ -185,9 +213,17 @@ export type VouchersService = {
       options?: PreviewOptions
     ): Promise<ExportPreview>;
     <O extends PreviewOptions = { service?: never }>(
-      input: CreditNoteInput | PeriodNoteInput,
+      input: DomesticNote<CreditNoteInput | PeriodNoteInput>,
       options?: O
     ): Promise<NotePreview<ServiceFor<O>>>;
+    /**
+     * A `for.voucherType` typed as plain `number` may hold 19 to 21 at run
+     * time, so the preview may be an export one: narrow on `voucherClass`.
+     */
+    <O extends PreviewOptions = { service?: never }>(
+      input: CreditNoteInput | PeriodNoteInput,
+      options?: O
+    ): Promise<NotePreview<ServiceFor<O>> | ExportPreview>;
   };
   /** Same contract as previewCreditNote(), for issueDebitNote() input. */
   previewDebitNote: {
@@ -196,9 +232,17 @@ export type VouchersService = {
       options?: PreviewOptions
     ): Promise<ExportPreview>;
     <O extends PreviewOptions = { service?: never }>(
-      input: DebitNoteInput,
+      input: DomesticNote<DebitNoteInput>,
       options?: O
     ): Promise<NotePreview<ServiceFor<O>>>;
+    /**
+     * A `for.voucherType` typed as plain `number` may hold 19 to 21 at run
+     * time, so the preview may be an export one: narrow on `voucherClass`.
+     */
+    <O extends PreviewOptions = { service?: never }>(
+      input: DebitNoteInput,
+      options?: O
+    ): Promise<NotePreview<ServiceFor<O>> | ExportPreview>;
   };
   /**
    * Issues a credit note against an authorized invoice or debit note of the
@@ -218,9 +262,17 @@ export type VouchersService = {
       options?: O
     ): Promise<ExportIssueOutcome<O>>;
     <O extends IssueOptions = { include?: never }>(
-      input: CreditNoteInput | PeriodNoteInput,
+      input: DomesticNote<CreditNoteInput | PeriodNoteInput>,
       options?: O
     ): Promise<IssueOutcome<O>>;
+    /**
+     * A `for.voucherType` typed as plain `number` may hold 19 to 21 at run
+     * time, so the result may be an export one: narrow with `"service" in outcome`.
+     */
+    <O extends IssueOptions = { include?: never }>(
+      input: CreditNoteInput | PeriodNoteInput,
+      options?: O
+    ): Promise<IssueOutcome<O> | ExportIssueOutcome<O>>;
   };
   /**
    * Configure a store and pass idempotencyKey to recover retries after a crash.

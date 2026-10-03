@@ -20,6 +20,7 @@ import {
 import {
   applyIssuanceFields,
   CONCEPT_IDS,
+  EXPORT_TYPES,
   FAMILIES,
   type InvoiceFamily,
   ISSUANCE_KEYS,
@@ -488,9 +489,15 @@ const FCE_NOTE_TYPES = FCE_TYPES.flatMap(([, ...notes]) => notes);
 
 export type VoucherDateWindowInput = {
   voucherType: number;
-  /** What the voucher bills; `"products"` when omitted, as in `issue()`. */
+  /**
+   * What the voucher bills; `"products"` when omitted, as in `issue()`. For
+   * an export voucher (19, 20, 21), `"services"` is an export of services.
+   */
   concept?: NonNullable<IssuanceFields["concept"]>;
-  /** The service that will authorize it; `"wsfe"` when omitted. */
+  /**
+   * The service that will authorize it; `"wsfe"` when omitted. Omit it for
+   * an export voucher, which WSFEX always authorizes.
+   */
   service?: "wsfe" | "wsmtxca";
   /** When it will be sent; its day in Argentina anchors the window. */
   now?: Date;
@@ -522,6 +529,17 @@ export function voucherDateWindow(
   const now = input.now ?? new Date();
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
     invalid("now", "a valid Date");
+  }
+  if ((EXPORT_TYPES as readonly number[]).includes(input.voucherType)) {
+    if (input.service !== undefined) {
+      invalid("service", "absent: export vouchers always use WSFEX");
+    }
+    // WSFEX rule 1500: only an export of services stays within the month.
+    const { from, to } = exportDateWindow(
+      concept === "services",
+      buenosAiresDate(now)
+    );
+    return { from: isoDay(from), to: isoDay(to) };
   }
   voucherFamily(input.voucherType);
   const { from, to } = dateWindow(
@@ -579,14 +597,19 @@ export function assertExportDateWindow(
   services: boolean,
   today: WsfeDateInput
 ): void {
-  const from = addDays(today, -5);
-  let to = addDays(today, 5);
-  if (services) {
-    to = minDate(to, endOfMonth(today));
-  }
+  const { from, to } = exportDateWindow(services, today);
   if (voucherDate < from || voucherDate > to) {
     throwOutsideWindow(from, to, today);
   }
+}
+
+function exportDateWindow(
+  services: boolean,
+  today: WsfeDateInput
+): { from: WsfeDateInput; to: WsfeDateInput } {
+  const from = addDays(today, -5);
+  const to = addDays(today, 5);
+  return { from, to: services ? minDate(to, endOfMonth(today)) : to };
 }
 
 function throwOutsideWindow(

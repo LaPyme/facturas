@@ -212,7 +212,25 @@ export async function creditNoteConsumerContract(
   };
   oldMock.issue satisfies VouchersService["issue"];
 
-  const target = { salesPoint: 1, voucherType: 6, number: 1 };
+  // A literal domestic type keeps the domestic result types.
+  const target = { salesPoint: 1, voucherType: 6, number: 1 } as const;
+  // A voucher type that is only `number` may hold 19 to 21 at run time, so
+  // its result may be an export one until narrowed.
+  const stored: { salesPoint: number; voucherType: number; number: number } =
+    target;
+  const either = await client.issueCreditNote({ for: stored, all: true });
+  if ("service" in either) {
+    either.service satisfies "wsfex";
+  } else if (either.kind === "authorized") {
+    either.voucher.header.documentNumber satisfies string;
+  }
+  const exported = await client.issueCreditNote({
+    for: { salesPoint: 5, voucherType: 19, number: 1 },
+    all: true,
+  });
+  if (exported.kind === "authorized") {
+    exported.voucher.voucherClass satisfies "E";
+  }
   const linkedPreviewInput = {
     for: target,
     items: [{ amount: 100 }],

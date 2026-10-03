@@ -9,6 +9,7 @@ import {
 } from "vitest";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey } from "../store/types";
+import { describeVoucherType } from "./issuance-fields";
 import {
   createExportIssuance,
   deriveExportInvoice,
@@ -16,6 +17,7 @@ import {
   type ExportIssueInput,
 } from "./issuance-wsfex";
 import { createVouchersService } from "./vouchers";
+import { voucherDateWindow } from "./wsfe-derive";
 import type {
   WsfexAuthorizationOutcome,
   WsfexIssueInput,
@@ -1305,4 +1307,32 @@ describe("options shared with issuance", () => {
       expect(calls.lookupVoucher).not.toHaveBeenCalled();
     }
   );
+});
+
+describe("voucher helpers for export types", () => {
+  it.each([
+    [19, "invoice"],
+    [20, "debit_note"],
+    [21, "credit_note"],
+  ] as const)("describes type %i", (voucherType, kind) => {
+    expect(describeVoucherType(voucherType)).toEqual({
+      family: "export",
+      voucherClass: "E",
+      kind,
+    });
+  });
+
+  it("computes the export date window, within the month for services", () => {
+    const now = new Date("2026-10-29T15:00:00Z");
+    expect(voucherDateWindow({ voucherType: 19, now })).toEqual({
+      from: "2026-10-24",
+      to: "2026-11-03",
+    });
+    expect(
+      voucherDateWindow({ voucherType: 21, concept: "services", now })
+    ).toEqual({ from: "2026-10-24", to: "2026-10-31" });
+    expect(() =>
+      voucherDateWindow({ voucherType: 19, service: "wsfe", now })
+    ).toThrowError(expect.objectContaining({ field: "service" }));
+  });
 });

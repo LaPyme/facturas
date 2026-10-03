@@ -21,6 +21,7 @@ import {
   storeCall,
 } from "../store/types";
 import type { ArcaFiscalIssue } from "./fiscal-evidence";
+import { EXPORT_TYPES } from "./issuance-fields";
 import { type ArcaQrPayload, arcaQrPayload, qrUrlForPayload } from "./qr";
 import type { IssueOptions } from "./vouchers-types";
 import { normalizeWsfeDateInput, type WsfeDateInput } from "./wsfe";
@@ -226,7 +227,8 @@ export type ExportIssueRequest = WsfexVoucherInput & {
   number: number;
 };
 /** `request` is always present when `include.request` is `true`. */
-export type ExportIssueOutcome<O extends IssueOptions = { include?: never }> = (
+/** What happened to one export attempt, before the service tag. */
+type ExportResult =
   | {
       kind: "authorized";
       recoveredByMatch: false;
@@ -263,11 +265,18 @@ export type ExportIssueOutcome<O extends IssueOptions = { include?: never }> = (
       attempt: Evidence;
       found: ExportVoucherSummary;
       reason: string;
+    };
+/**
+ * `service: "wsfex"` tells an export outcome apart at the top level: where a
+ * result may be domestic or export, `"service" in outcome` narrows it. With
+ * `include.request: true`, `request` is always present.
+ */
+export type ExportIssueOutcome<O extends IssueOptions = { include?: never }> =
+  ExportResult & { service: "wsfex" } & (O extends {
+      include: { request: true };
     }
-) &
-  (O extends { include: { request: true } }
-    ? { request: ExportIssueRequest }
-    : { request?: ExportIssueRequest });
+      ? { request: ExportIssueRequest }
+      : { request?: ExportIssueRequest });
 
 type ExportOperation = "issue" | "creditNote" | "debitNote";
 type Prepared = { data: WsfexVoucherInput; amounts: IssueAmounts };
@@ -291,18 +300,16 @@ type ExportAttemptRecord = {
   createdAt: string;
 };
 
-const EXPORT_TYPES: readonly number[] = [
-  ARCA_VOUCHER_TYPES.FACTURA_E,
-  ARCA_VOUCHER_TYPES.NOTA_DEBITO_E,
-  ARCA_VOUCHER_TYPES.NOTA_CREDITO_E,
-];
 const LANGUAGES = { es: 1, en: 2, pt: 3 } as const;
 const EXPORT_KINDS = { goods: 1, services: 2, other: 4 } as const;
 /** Units whose lines carry no quantity or price (rule 1775). */
 const UNPRICED_UNITS: readonly number[] = [0, 97, 99];
 
 export function isExportVoucherType(voucherType: unknown): boolean {
-  return typeof voucherType === "number" && EXPORT_TYPES.includes(voucherType);
+  return (
+    typeof voucherType === "number" &&
+    (EXPORT_TYPES as readonly number[]).includes(voucherType)
+  );
 }
 
 export function isExportInput(input: unknown): input is ExportIssueInput {
@@ -721,16 +728,19 @@ async function recoverExport(
       : null;
     const record = latest === null ? first : readExportRecord(latest);
     const outcome = await consultReservation(wsfex, record, consulted, issuer);
-    return options.include?.request
-      ? {
-          ...outcome,
-          request: {
-            ...structuredClone(record.sent),
-            id: record.requestId,
-            number: record.number,
-          },
-        }
-      : outcome;
+    return {
+      ...outcome,
+      service: "wsfex" as const,
+      ...(options.include?.request
+        ? {
+            request: {
+              ...structuredClone(record.sent),
+              id: record.requestId,
+              number: record.number,
+            },
+          }
+        : {}),
+    };
   });
 }
 
@@ -739,7 +749,7 @@ async function consultReservation(
   record: ExportAttemptRecord,
   options: IssueOptions,
   issuer: string
-): Promise<ExportIssueOutcome> {
+): Promise<ExportResult> {
   const attempted = {
     salesPoint: record.salesPoint,
     voucherType: record.voucherType,
@@ -962,10 +972,13 @@ async function issueExport(
       voucherType: data.voucherType,
       number,
     };
-    const finish = (outcome: ExportIssueOutcome): ExportIssueOutcome =>
-      options.include?.request
-        ? { ...outcome, request: { ...structuredClone(data), id, number } }
-        : outcome;
+    const finish = (outcome: ExportResult): ExportIssueOutcome => ({
+      ...outcome,
+      service: "wsfex",
+      ...(options.include?.request
+        ? { request: { ...structuredClone(data), id, number } }
+        : {}),
+    });
     const outcome = await send(data, id, number);
     const attempt = evidence(outcome);
     const direct = answered(outcome, attempt, id, attempted);
@@ -1002,9 +1015,7 @@ async function issueExport(
     outcome: WsfexAuthorizationOutcome,
     attempt: Evidence,
     attempted: VoucherCoordinates
-  ): Promise<
-    { found: WsfexVoucherInfo | null } | { outcome: ExportIssueOutcome }
-  > {
+  ): Promise<{ found: WsfexVoucherInfo | null } | { outcome: ExportResult }> {
     const aborted = () => ({
       outcome: {
         kind: "indeterminate" as const,
@@ -1161,7 +1172,7 @@ function answered(
       voucher: Authorized;
       authorization: Evidence;
     }
-  | Extract<ExportIssueOutcome, { kind: "rejected" }>
+  | Extract<ExportResult, { kind: "rejected" }>
   | undefined {
   if (
     outcome.kind === "authorized" &&
@@ -1195,7 +1206,7 @@ function settled(
   attempted: VoucherCoordinates,
   sent: WsfexVoucherInput,
   issue: (authorization: Authorized) => ExportIssuedVoucher
-): ExportIssueOutcome {
+): ExportResult {
   if (found !== null && found.id === id && sameVoucher(found, sent)) {
     const authorized = outcome.kind === "authorized" ? outcome : undefined;
     const cae = found.cae ?? authorized?.cae;

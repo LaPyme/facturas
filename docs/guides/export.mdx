@@ -149,6 +149,10 @@ configure:
 
 `lookup()` y `lastAuthorized()` usan WSFEX cuando el tipo es 19, 20 o 21.
 Si `voucherType` es un `number` cualquiera, `lookup()` puede devolver un
-resumen de exportación: se distingue por `voucherClass: "E"`.
+resumen de exportación: se distingue por `voucherClass: "E"`. Lo mismo pasa con
+`issueCreditNote()` e `issueDebitNote()` cuando `for.voucherType` es un
+`number` cualquiera: el resultado puede ser de exportación y se distingue con
+`"service" in resultado`. Con un tipo literal, como `voucherType: 6` o
+`voucherType: 19`, el tipo del resultado ya es el que corresponde.
 `arca.wsfex` expone las tablas de referencia: países, CUIT de países, monedas,
 Incoterms, unidades, idiomas, actividades, puntos de venta y cotizaciones.
