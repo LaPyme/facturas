@@ -38,6 +38,7 @@
         "pages": [
           "guides/invoices",
           "guides/credit-notes",
+          "guides/export",
           "guides/avoid-duplicates",
           "guides/taxpayers",
           "guides/production",

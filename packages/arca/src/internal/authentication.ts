@@ -35,6 +35,22 @@ const WSFE_AUTHENTICATION_CODES: Readonly<
   "601": "missing_relationship",
 };
 
+// WSFEX answers every operation's token check with 1000 and a CUIT outside the
+// ticket's represented taxpayers with 1001.
+const WSFEX_AUTHENTICATION_CODES: Readonly<
+  Record<string, ArcaAuthenticationReason>
+> = {
+  "1000": "invalid_token",
+  "1001": "missing_relationship",
+};
+
+const STRUCTURED_AUTHENTICATION_CODES: Partial<
+  Record<ArcaServiceName, Readonly<Record<string, ArcaAuthenticationReason>>>
+> = {
+  wsfe: WSFE_AUTHENTICATION_CODES,
+  wsfex: WSFEX_AUTHENTICATION_CODES,
+};
+
 /** Classifies one safe provider code/message pair without inspecting object graphs. */
 export function classifyArcaAuthenticationCandidate(
   candidate: AuthenticationCandidate
@@ -187,10 +203,11 @@ function getStructuredAuthenticationReason(
   service: ArcaServiceName,
   providerCode: string | number | undefined
 ): ArcaAuthenticationReason | undefined {
-  if (service !== "wsfe" || providerCode === undefined) {
+  const codes = STRUCTURED_AUTHENTICATION_CODES[service];
+  if (!codes || providerCode === undefined) {
     return undefined;
   }
-  return WSFE_AUTHENTICATION_CODES[String(providerCode).trim()];
+  return codes[String(providerCode).trim()];
 }
 
 function getTextAuthenticationReason(

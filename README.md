@@ -127,6 +127,8 @@ una reserva sin emitir.
   contrato fiscal de emisión.
 - [Notas de crédito](https://facturas-sdk.dev/guides/credit-notes): `issueCreditNote()`, modo
   parcial y modo total.
+- [Factura E](https://facturas-sdk.dev/guides/export): exportación de bienes y servicios por
+  WSFEX con el mismo `issue()`.
 - [Evitar comprobantes duplicados](https://facturas-sdk.dev/guides/avoid-duplicates): claves para
   reintentos, Postgres, Redis, archivos y memoria.
 - [WSMTXCA para casos requeridos](https://facturas-sdk.dev/guides/wsmtxca): configuración
@@ -134,8 +136,8 @@ una reserva sin emitir.
 - [Configuración](https://facturas-sdk.dev/reference/configuration): variables de entorno, opciones del
   cliente, sesiones WSAA, logs, reintentos y límites de tiempo.
 - [Módulos de transporte](https://facturas-sdk.dev/reference/arca-services): `client.wsfe`,
-  `client.wsmtxca` y `client.padron` para lecturas, catálogos, estado del
-  servicio y Padrón.
+  `client.wsfex`, `client.wsmtxca` y `client.padron` para lecturas, catálogos,
+  estado del servicio y Padrón.
 - [Errores](https://facturas-sdk.dev/reference/errors): clases de error y diagnóstico.
 - [Referencia](https://facturas-sdk.dev/reference/public-api): constantes, API pública con semver y
   seguridad.

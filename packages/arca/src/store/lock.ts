@@ -9,7 +9,8 @@ import type { ArcaLockOptions } from "./types";
 export const ARCA_LEASE_MS = 60_000;
 const RENEW_MS = 20_000;
 const POLL_MS = 50;
-const MAX_WAIT_MS = 2 * ARCA_LEASE_MS;
+/** How long a caller waits for any ARCA lock before giving up. */
+export const MAX_WAIT_MS = 2 * ARCA_LEASE_MS;
 
 /** One lease backend: acquire, keep alive, and give back only what it owns. */
 export type ArcaLeaseDriver = {

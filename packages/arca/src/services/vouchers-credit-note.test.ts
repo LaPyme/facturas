@@ -855,11 +855,12 @@ describe("notes against several originals", () => {
     "%s rejects duplicate originals before lookup",
     async (method) => {
       const { service, wsfe } = fake();
+      const issueNote = service[method] as (
+        input: CreditNoteInput,
+        options?: IssueOptions
+      ) => Promise<unknown>;
       await expect(
-        service[method](
-          { for: [target, target], items: [{ amount: 150 }] },
-          options
-        )
+        issueNote({ for: [target, target], items: [{ amount: 150 }] }, options)
       ).rejects.toMatchObject({
         name: "ArcaInputError",
         field: "input.for[1]",

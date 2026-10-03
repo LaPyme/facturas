@@ -1,7 +1,7 @@
 import type { ArcaAuthenticationReason } from "../errors";
 
 /** The ARCA service a call targets. It is chosen explicitly, never switched. */
-export type IssuanceService = "wsfe" | "wsmtxca";
+export type IssuanceService = "wsfe" | "wsmtxca" | "wsfex";
 
 /** Location of a structured authorization result in the service response. */
 export type ArcaFiscalResultLevel = "header" | "detail" | "operation";
