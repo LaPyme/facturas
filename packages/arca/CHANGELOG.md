@@ -1,5 +1,18 @@
 # facturas
 
+## 0.22.0
+
+### Minor Changes
+
+- 46fd6bc: Factura E de exportación por WSFEX, para bienes y servicios. `issue()` la emite cuando el input trae `export`, `issueCreditNote()` e `issueDebitNote()` emiten notas E cuando `for` apunta a un comprobante 19, 20 o 21, y `lookup()` y `lastAuthorized()` consultan esos tipos en WSFEX. Con `idempotencyKey` la emisión usa el `Id` de requerimiento de WSFEX y un lock por CUIT. `client.wsfex` expone las tablas de referencia y la cotización de ARCA. Lo propuso @juansegnana en #99.
+
+### Patch Changes
+
+- 9e2ee5a: Un `issue()` con `idempotencyKey` cuya clave ya tiene reserva reenvía lo guardado sin volver a derivar la factura. Antes, una factura de servicios sin `date` con `service.dueDate` de hoy no se podía reintentar al día siguiente: la derivación tiraba `ArcaInputError` antes de llegar a la reserva. El input se copia al entrar, así que cambiar el objeto durante la llamada no cambia lo que se manda ni lo que se guarda. Un reintento que reenvía informa los `amounts` del pedido guardado, como `recover()`.
+- c2f11e9: El mensaje de `ArcaLockTimeoutError` ya no incluye la clave del lock, que lleva el CUIT del contribuyente. Así, una aplicación que loguea o guarda `error.message` no lo expone. Para distinguir el caso alcanzan `code` y `reason`.
+- 57034a2: El QR de un comprobante a consumidor final sin identificar ahora incluye `tipoDocRec: 99` y `nroDocRec: 0`. Sin esos campos, la página de constatación de ARCA dejaba el receptor vacío y había que cargarlo a mano. El QR lleva siempre el documento que se le mandó a ARCA. Lo reportó @santigiuf en #83.
+- 118f534: El diagnóstico de `coe.alreadyAuthenticated` en `npx facturas check` ya no dice que hay que esperar hasta 12 horas: ARCA acepta un login nuevo unos minutos después del anterior, 2 en producción y 10 en homologación.
+
 ## 0.21.0
 
 ### Minor Changes
