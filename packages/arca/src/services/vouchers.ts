@@ -377,8 +377,15 @@ export function createVouchersService(
     kind: "creditNote" | "debitNote"
   ) {
     const options = exportOptions(inputOptions);
-    const { prepared } = await prepareExportNote(input, options, kind);
-    return exporting().issue(prepared, kind, input, options);
+    // One copy taken before any await: the original, the note and the
+    // reservation's hash all come from the same input.
+    const snapshot = structuredClone(input);
+    return await exporting().issue(
+      async () => (await prepareExportNote(snapshot, options, kind)).prepared,
+      kind,
+      snapshot,
+      options
+    );
   }
   async function previewExportNote(
     input: ExportCreditNoteInput | ExportDebitNoteInput,
@@ -388,7 +395,7 @@ export function createVouchersService(
     const options = cloneOptions(inputOptions ?? {});
     validateOptions(options);
     const { original, prepared } = await prepareExportNote(
-      input,
+      structuredClone(input),
       options,
       kind
     );
@@ -519,10 +526,11 @@ export function createVouchersService(
     ) => {
       if (isExportInput(input)) {
         const checked = exportOptions(options);
+        const snapshot = structuredClone(input);
         return await exporting().issue(
-          deriveExportInvoice(input),
+          () => deriveExportInvoice(snapshot),
           "issue",
-          input,
+          snapshot,
           checked
         );
       }

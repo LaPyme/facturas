@@ -1179,3 +1179,76 @@ describe("complete fiscal identity on recovery", () => {
     }
   });
 });
+
+describe("keyed replays use what was stored", () => {
+  it("replays a services invoice after its payment date", async () => {
+    const { service, calls } = client();
+    const input: ExportIssueInput = {
+      ...services,
+      export: { kind: "services", paymentDate: "2026-10-03" },
+    };
+    const first = await service.issue(input, { idempotencyKey: "sale-1" });
+    expect(first).toMatchObject({ kind: "authorized", voucher: { number: 1 } });
+    // Days later, today's date is past the payment date, so deriving the
+    // invoice again would fail. The replay never derives it.
+    vi.setSystemTime(new Date("2026-10-06T15:00:00Z"));
+    await expect(
+      service.issue(input, { idempotencyKey: "sale-1" })
+    ).resolves.toMatchObject({
+      kind: "authorized",
+      voucher: { number: 1, requestId: 41, date: "2026-10-02" },
+    });
+    expect(calls.issue).toHaveBeenCalledTimes(2);
+  });
+
+  it("issues a note from the input as it was when called", async () => {
+    const fake = client();
+    await fake.service.issue(services);
+    await fake.service.issue(services);
+    const note = {
+      for: { salesPoint: 5, voucherType: 19 as const, number: 1 },
+      items: [
+        {
+          description: "Ajuste",
+          unit: 7,
+          quantity: 1,
+          unitPrice: "10",
+          amount: 1000,
+        },
+      ],
+    };
+    const real = fake.calls.lookupVoucher.getMockImplementation();
+    fake.calls.lookupVoucher.mockImplementationOnce((coordinates) => {
+      // The caller changes its object while the original is being read.
+      note.for.number = 2;
+      note.items[0] = { ...note.items[0], unitPrice: "100", amount: 10_000 };
+      return real?.(coordinates) as ReturnType<NonNullable<typeof real>>;
+    });
+    const outcome = await fake.service.issueCreditNote(note, {
+      idempotencyKey: "note-1",
+    });
+    expect(outcome).toMatchObject({ kind: "authorized" });
+    expect(fake.calls.issue.mock.calls.at(-1)?.[0]).toMatchObject({
+      totalAmount: 10,
+      associatedVouchers: [{ voucherType: 19, salesPoint: 5, number: 1 }],
+    });
+    // The reservation belongs to the input as called, not as mutated.
+    await expect(
+      fake.service.issueCreditNote(
+        {
+          for: { salesPoint: 5, voucherType: 19, number: 1 },
+          items: [
+            {
+              description: "Ajuste",
+              unit: 7,
+              quantity: 1,
+              unitPrice: "10",
+              amount: 1000,
+            },
+          ],
+        },
+        { idempotencyKey: "note-1" }
+      )
+    ).resolves.toMatchObject({ kind: "authorized" });
+  });
+});

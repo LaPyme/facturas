@@ -613,8 +613,12 @@ export function exportPreview(
 }
 
 export type ExportIssuance = {
+  /**
+   * `prepare` derives the voucher and runs only when this key has no
+   * reservation: a replay resends what was stored, whatever today's date.
+   */
   issue(
-    prepared: Prepared,
+    prepare: () => Prepared | Promise<Prepared>,
     operation: ExportOperation,
     hashInput: unknown,
     options: IssueOptions
@@ -654,8 +658,8 @@ export function createExportIssuance(
   context: Context
 ): ExportIssuance {
   return {
-    issue: (prepared, operation, hashInput, options) =>
-      issueExport(wsfex, context, prepared, operation, hashInput, options),
+    issue: (prepare, operation, hashInput, options) =>
+      issueExport(wsfex, context, prepare, operation, hashInput, options),
     async original(coordinates, options) {
       const result = await wsfex.lookupVoucher({
         ...auth(options),
@@ -815,7 +819,7 @@ function auth(options: IssueOptions) {
 async function issueExport(
   wsfex: WsfexService,
   context: Context,
-  prepared: Prepared,
+  prepare: () => Prepared | Promise<Prepared>,
   operation: ExportOperation,
   hashInput: unknown,
   options: IssueOptions
@@ -834,8 +838,9 @@ async function issueExport(
   const lock = exportLock(context, issuer, options);
   const idempotencyKey = options.idempotencyKey;
   if (idempotencyKey === undefined || !context.store) {
+    const prepared = await prepare();
     assertExportWindow(prepared.data);
-    return lock(() => fresh());
+    return lock(() => fresh(prepared));
   }
   const store = context.store;
   const recordKey = attemptKey(
@@ -855,13 +860,14 @@ async function issueExport(
       replay((await storeCall(() => store.get(recordKey))) ?? existing)
     );
   }
+  const prepared = await prepare();
   assertExportWindow(prepared.data);
   return lock(async () => {
     const prior = await storeCall(() => store.get(recordKey));
-    return prior === null ? fresh() : replay(prior);
+    return prior === null ? fresh(prepared) : replay(prior);
   });
 
-  async function fresh(): Promise<ExportIssueOutcome> {
+  async function fresh(prepared: Prepared): Promise<ExportIssueOutcome> {
     const { data } = prepared;
     const number =
       (await wsfex.getLastVoucherNumber({
@@ -1093,12 +1099,14 @@ async function issueExport(
     id: number,
     authorization: Authorized
   ): ExportIssuedVoucher {
+    // An export voucher's total is the sum of its lines: nothing to adjust.
+    const total = Math.round(data.totalAmount * 100);
     return issuedVoucher(
       data,
       attempted,
       id,
       authorization,
-      prepared.amounts,
+      { computedTotal: total, sentTotal: total, vatAdjustment: 0 },
       issuer
     );
   }
