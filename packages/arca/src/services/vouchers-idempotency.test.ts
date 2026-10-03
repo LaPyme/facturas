@@ -225,6 +225,76 @@ describe("keyed issue", () => {
     expect(wsfe.issue).toHaveBeenCalledTimes(1);
     expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
   });
+  it.each(["found", "absent"] as const)(
+    "replays an undated services invoice after its due date, but refuses a new one: %s",
+    async (lookup) => {
+      const { store, wsfe, service } = fake();
+      const value: IssueInput = {
+        ...input,
+        date: undefined,
+        service: { from: "20260901", to: "20260905", dueDate: "20260905" },
+      };
+      await service.issue(value, { idempotencyKey: "sale" });
+      const first = wsfe.issue.mock.calls[0][0];
+      // Deriving the invoice again would date it after its due date.
+      vi.setSystemTime(new Date("2026-09-06T15:00:00Z"));
+      wsfe.lookupVoucher.mockResolvedValue(
+        lookup === "found" ? found(first.data) : absent
+      );
+      await expect(
+        service.issue(value, { idempotencyKey: "sale" })
+      ).resolves.toMatchObject({
+        kind: "authorized",
+        voucher: { number: 77, date: "2026-09-05" },
+      });
+      expect(wsfe.issue).toHaveBeenCalledTimes(lookup === "found" ? 1 : 2);
+      expect(wsfe.issue.mock.calls.at(-1)?.[0]).toEqual(first);
+      // A new key still derives, and refuses before reading a number.
+      await expect(
+        service.issue(value, { idempotencyKey: "other" })
+      ).rejects.toMatchObject({
+        name: "ArcaInputError",
+        field: "service.dueDate",
+      });
+      expect(
+        await store.get(attemptKey("test", "20123456789", "other"))
+      ).toBeNull();
+      expect(wsfe.getNextVoucherNumber).toHaveBeenCalledTimes(1);
+    }
+  );
+  it("replays an undated services period note after its due date", async () => {
+    const { wsfe, service } = fake();
+    const note = {
+      ...input,
+      date: undefined,
+      service: { from: "20260901", to: "20260905", dueDate: "20260905" },
+      associatedPeriod: { from: "20260801", to: "20260831" },
+    } as const;
+    await service.issueCreditNote(note, { idempotencyKey: "sale" });
+    const first = wsfe.issue.mock.calls[0][0];
+    vi.setSystemTime(new Date("2026-09-06T15:00:00Z"));
+    wsfe.lookupVoucher.mockResolvedValue(absent);
+    await expect(
+      service.issueCreditNote(note, { idempotencyKey: "sale" })
+    ).resolves.toMatchObject({ kind: "authorized", voucher: { number: 77 } });
+    expect(wsfe.issue.mock.calls[1][0]).toEqual(first);
+  });
+  it("issues from the input as it was when called", async () => {
+    const { store, wsfe, service } = fake();
+    const value = { ...input, items: [{ amount: 100 }] };
+    const get = store.get.bind(store);
+    vi.spyOn(store, "get").mockImplementationOnce(async (name) => {
+      // The caller changes its object while the key is being read.
+      value.items[0].amount = 200;
+      return await get(name);
+    });
+    await service.issue(value, { idempotencyKey: "sale" });
+    expect(wsfe.issue.mock.calls[0][0].data.totalAmount).toBe(1);
+    // The reservation belongs to the input as called, not as mutated.
+    await expect(
+      service.issue(input, { idempotencyKey: "sale" })
+    ).resolves.toMatchObject({ kind: "authorized", recoveredByMatch: true });
+  });
   it("mismatched input or represented taxpayer causes zero provider calls", async () => {
     const { wsfe, service } = fake();
     await service.issue(input, { idempotencyKey: "sale" });
