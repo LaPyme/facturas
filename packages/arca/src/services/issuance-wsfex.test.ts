@@ -7,6 +7,7 @@ import {
   it,
   vi,
 } from "vitest";
+import { ArcaTransportError } from "../errors";
 import { createMemoryStore } from "../store/memory";
 import { attemptKey } from "../store/types";
 import { describeVoucherType } from "./issuance-fields";
@@ -18,11 +19,12 @@ import {
 } from "./issuance-wsfex";
 import { createVouchersService } from "./vouchers";
 import { voucherDateWindow } from "./wsfe-derive";
-import type {
-  WsfexAuthorizationOutcome,
-  WsfexIssueInput,
-  WsfexService,
-  WsfexVoucherInfo,
+import {
+  createWsfexService,
+  type WsfexAuthorizationOutcome,
+  type WsfexIssueInput,
+  type WsfexService,
+  type WsfexVoucherInfo,
 } from "./wsfex";
 
 // ARCA only accepts an export voucher dated 5 days either side of today.
@@ -1447,5 +1449,153 @@ describe("line tolerance at ARCA's precision", () => {
 
   it("refuses an error over both bounds on a large line", () => {
     expect(() => deriveExportInvoice(line("1000000.00", 99_989_000))).toThrow();
+  });
+});
+
+/**
+ * WSFEX behind the real SOAP adapter: FEXAuthorize stores the voucher and
+ * loses the answer, and FEXGetCMP reports it the way ARCA does, with
+ * `Incoterms_Ds` as "0" when none was sent.
+ */
+function soapArca() {
+  let lastId = 40;
+  const stored = new Map<string, Record<string, unknown>>();
+  const key = (point: unknown, type: unknown, number: unknown) =>
+    `${point}:${type}:${number}`;
+  const lose = new Set<number>();
+  const answer = (operation: string, result: Record<string, unknown>) => ({
+    result: {
+      [`${operation}Response`]: {
+        [`${operation}Result`]: {
+          ...result,
+          FEXErr: { ErrCode: "0", ErrMsg: "OK" },
+        },
+      },
+    },
+  });
+  const soap = {
+    execute: vi.fn().mockImplementation(async ({ operation, body }) => {
+      await Promise.resolve();
+      if (operation === "FEXGetLast_ID") {
+        return answer(operation, { FEXResultGet: { Id: String(lastId) } });
+      }
+      if (operation === "FEXGetLast_CMP") {
+        const { Pto_venta, Cbte_Tipo } = body.Auth;
+        const numbers = [...stored.values()]
+          .filter((v) => v.Punto_vta === Pto_venta && v.Cbte_tipo === Cbte_Tipo)
+          .map((v) => Number(v.Cbte_nro));
+        return answer(operation, {
+          FEXResult_LastCMP: { Cbte_nro: String(Math.max(0, ...numbers)) },
+        });
+      }
+      if (operation === "FEXAuthorize") {
+        const { Cbte_Tipo, Incoterms_Ds, ...cmp } = structuredClone(body.Cmp);
+        lastId = Math.max(lastId, cmp.Id);
+        stored.set(key(cmp.Punto_vta, Cbte_Tipo, cmp.Cbte_nro), {
+          ...cmp,
+          Cbte_tipo: Cbte_Tipo,
+          Incoterms_Ds: Incoterms_Ds ?? "0",
+          Resultado: "A",
+          Cae: "75123456789012",
+          Fch_venc_Cae: "20261012",
+        });
+        if (lose.has(Cbte_Tipo)) {
+          throw new ArcaTransportError("The FEXAuthorize answer was lost");
+        }
+        return answer(operation, {
+          FEXResultAuth: {
+            Id: cmp.Id,
+            Cuit: TAX_ID,
+            Cbte_tipo: Cbte_Tipo,
+            Punto_vta: cmp.Punto_vta,
+            Cbte_nro: cmp.Cbte_nro,
+            Cae: "75123456789012",
+            Fch_venc_Cae: "20261012",
+            Fch_cbte: cmp.Fecha_cbte,
+            Resultado: "A",
+            Reproceso: "N",
+          },
+        });
+      }
+      if (operation === "FEXGetCMP") {
+        const { Punto_vta, Cbte_tipo, Cbte_nro } = body.Cmp;
+        const voucher = stored.get(key(Punto_vta, Cbte_tipo, Cbte_nro));
+        return voucher
+          ? answer(operation, { FEXResultGet: structuredClone(voucher) })
+          : {
+              result: {
+                FEXGetCMPResponse: {
+                  FEXGetCMPResult: {
+                    FEXErr: { ErrCode: "1020", ErrMsg: "No existe" },
+                  },
+                },
+              },
+            };
+      }
+      throw new Error(`Unexpected operation: ${operation}`);
+    }),
+  };
+  const auth = {
+    login: vi.fn().mockResolvedValue({
+      token: "token",
+      sign: "sign",
+      expiresAt: "2099-01-01T00:00:00Z",
+    }),
+  };
+  const config = {
+    taxId: TAX_ID,
+    certificatePem: "cert",
+    privateKeyPem: "key",
+    environment: "test" as const,
+  };
+  const store = createMemoryStore();
+  return {
+    soap,
+    lose,
+    service: createVouchersService(
+      wsfe,
+      { store, environment: "test", taxId: TAX_ID },
+      undefined,
+      createWsfexService({ config, auth, soap })
+    ),
+  };
+}
+
+describe("recovery through the WSFEX SOAP adapter", () => {
+  it("matches goods sent without incotermsDetail when ARCA reports it as 0", async () => {
+    const arcaSoap = soapArca();
+    arcaSoap.lose.add(19);
+    await expect(arcaSoap.service.issue(goods)).resolves.toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { voucherType: 19, salesPoint: 5, number: 1 },
+    });
+  });
+
+  it("matches goods sent with an incotermsDetail of 0", async () => {
+    const arcaSoap = soapArca();
+    arcaSoap.lose.add(19);
+    await expect(
+      arcaSoap.service.issue({
+        ...goods,
+        export: { kind: "goods", incoterms: "FOB", incotermsDetail: "0" },
+      })
+    ).resolves.toMatchObject({ kind: "authorized", recoveredByMatch: true });
+  });
+
+  it("matches a note, which never sends incotermsDetail, the same way", async () => {
+    const arcaSoap = soapArca();
+    await arcaSoap.service.issue(goods);
+    arcaSoap.lose.add(21);
+    await expect(
+      arcaSoap.service.issueCreditNote({
+        for: { salesPoint: 5, voucherType: 19, number: 1 },
+        all: true,
+      })
+    ).resolves.toMatchObject({
+      kind: "authorized",
+      recoveredByMatch: true,
+      voucher: { voucherType: 21, salesPoint: 5, number: 1 },
+    });
   });
 });
