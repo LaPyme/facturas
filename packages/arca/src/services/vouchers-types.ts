@@ -29,6 +29,30 @@ export type FiscalHeader = {
   paymentDueDate?: string;
 };
 
+/**
+ * The money of the authorized voucher, as sent and authorized, in minor units
+ * of the voucher currency. `vatRates` is ARCA's AlicIva: one row per rate,
+ * which a class A voucher must print (RG 1415, Anexo II, A, IV, a) 1). It is
+ * empty for class C. `rate` is absent only for a rate id this SDK does not
+ * know. `taxes` is ARCA's Tributos, with `rate` as a percentage.
+ */
+export type VoucherTotals = {
+  total: number;
+  netTaxed: number;
+  untaxed: number;
+  exempt: number;
+  vat: number;
+  otherTaxes: number;
+  vatRates: { id: number; rate?: number; base: number; amount: number }[];
+  taxes: {
+    id: number;
+    description?: string;
+    base: number;
+    rate: number;
+    amount: number;
+  }[];
+};
+
 export type IssueOptions = {
   service?: "wsfe" | "wsmtxca";
   /** An externally reserved number. Never reads the next number when supplied. */
@@ -54,6 +78,7 @@ export type IssuedVoucher = VoucherCoordinates & {
   cae: string;
   caeExpiry: string;
   amounts: IssueAmounts;
+  totals: VoucherTotals;
   /**
    * The URL the printed voucher's QR must encode, per ARCA's specification.
    * Absent only if ARCA answered a CAE the specification cannot encode: an

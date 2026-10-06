@@ -268,6 +268,72 @@ describe("vouchers.issue", () => {
       expect(result.reason).toContain("totalAmount");
     }
   });
+  it("carries the authorized money in minor units, with VAT by rate", async () => {
+    const { service } = fake();
+    const result = await service.issue({
+      ...input,
+      to: { condition: "responsable_inscripto", cuit: "20123456789" },
+      items: [
+        { net: 10_000, vat: 21 },
+        { net: 4000, vat: 10.5 },
+        { net: 500, vat: "exempt" },
+      ],
+      taxes: [
+        { id: 2, description: "IIBB", base: 10_000, rate: 3, amount: 300 },
+      ],
+    });
+    if (result.kind !== "authorized") {
+      throw new Error(result.kind);
+    }
+    expect(result.voucher.totals).toEqual({
+      total: 17_320,
+      netTaxed: 14_000,
+      untaxed: 0,
+      exempt: 500,
+      vat: 2520,
+      otherTaxes: 300,
+      vatRates: [
+        { id: 5, rate: 21, base: 10_000, amount: 2100 },
+        { id: 4, rate: 10.5, base: 4000, amount: 420 },
+      ],
+      taxes: [
+        { id: 2, description: "IIBB", base: 10_000, rate: 3, amount: 300 },
+      ],
+    });
+  });
+  it("carries the same totals on a recovered voucher, and none by rate for class C", async () => {
+    const direct = await fake().service.issue(input);
+    const recovered = await fake(uncertain).service.issue(input);
+    if (direct.kind !== "authorized" || recovered.kind !== "authorized") {
+      throw new Error(`${direct.kind} ${recovered.kind}`);
+    }
+    expect(recovered.recoveredByMatch).toBe(true);
+    expect(recovered.voucher.totals).toEqual(direct.voucher.totals);
+    expect(direct.voucher.totals).toMatchObject({
+      total: 12_100,
+      netTaxed: 10_000,
+      vat: 2100,
+      vatRates: [{ id: 5, rate: 21, base: 10_000, amount: 2100 }],
+    });
+    const classC = await fake().service.issue({
+      ...input,
+      issuer: "monotributo",
+      items: [{ amount: 10_000 }],
+    });
+    if (classC.kind !== "authorized") {
+      throw new Error(classC.kind);
+    }
+    expect(classC.voucher.totals).toEqual({
+      total: 10_000,
+      netTaxed: 10_000,
+      untaxed: 0,
+      exempt: 0,
+      vat: 0,
+      otherTaxes: 0,
+      vatRates: [],
+      taxes: [],
+    });
+  });
   it("carries the ARCA QR of the printed voucher", async () => {
     const { service } = fake();
     const result = await service.issue(input);

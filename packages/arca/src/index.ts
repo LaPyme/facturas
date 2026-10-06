@@ -95,6 +95,18 @@ export { createPadronService } from "./services/padron";
 export type { ArcaQrInput, ArcaQrPayload } from "./services/qr";
 export { ARCA_QR_URL, arcaQrPayload, arcaQrUrl } from "./services/qr";
 export type {
+  PrintedIssuerCondition,
+  VoucherDocument,
+  VoucherDocumentInput,
+  VoucherDocumentLine,
+} from "./services/voucher-document";
+export {
+  buildVoucherDocument,
+  MONOTRIBUTO_CREDIT_LEGEND,
+  PRINTED_CAE_DUE_DATE_MIN_FONT_SIZE_PT,
+  PRINTED_VOUCHER_TEXT,
+} from "./services/voucher-document";
+export type {
   DebitNoteInput,
   NotePreview,
   PeriodNoteInput,
@@ -109,6 +121,7 @@ export type {
   IssueOutcome,
   IssuePreview,
   IssueRequest,
+  VoucherTotals,
 } from "./services/vouchers-types";
 export type {
   CreateWsfeServiceOptions,

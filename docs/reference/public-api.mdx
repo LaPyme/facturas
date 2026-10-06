@@ -72,6 +72,15 @@ comprobante impreso desde datos guardados, con `ArcaQrInput` y
 `ArcaQrPayload` como tipos y `ARCA_QR_URL` como base. `IssuedVoucher.qr` trae
 esa misma URL en cada resultado autorizado, e `IssuedVoucher.qrPayload` su JSON.
 
+`buildVoucherDocument()` arma sin I/O todo lo que muestra el
+[comprobante impreso](/guides/printed-voucher), con `VoucherDocumentInput`,
+`VoucherDocument`, `VoucherDocumentLine` y `PrintedIssuerCondition` como tipos.
+`PRINTED_VOUCHER_TEXT` trae los textos fijos que exigen las normas,
+`MONOTRIBUTO_CREDIT_LEGEND` la leyenda de la Ley 27.618 y
+`PRINTED_CAE_DUE_DATE_MIN_FONT_SIZE_PT` el tamaño mínimo del vencimiento del
+CAE. `IssuedVoucher.totals` es el dinero autorizado en centavos, con el IVA por
+alícuota, y su tipo es `VoucherTotals`.
+
 `voucherDateWindow()` calcula sin I/O la
 [ventana de fechas](/guides/invoices#datos-de-la-factura) que `issue()` controla
 antes de enviar, con `VoucherDateWindowInput` y `VoucherDateWindow` como tipos.

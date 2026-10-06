@@ -85,6 +85,10 @@ and Título I inciso c). Unless noted, the source is Anexo II, Apartado A.
 | C11 | Issue date | I d) | All |
 | C12 | Numbers of the remitos issued and linked to the operation | I e) | When there are any |
 
+Apartado A writes `IVA RESPONSABLE INSCRITO`. The SDK prints `IVA RESPONSABLE
+INSCRIPTO`, the wording of the later RG 5003 texts and of the vouchers ARCA
+renders, for both the issuer and the receiver.
+
 Not required on electronic vouchers by RG 4291 article 14 d): the first and
 last number of the print run and the printer licence (I a) 9), and the words
 `ORIGINAL` and `DUPLICADO` (I c)). See O2 for the printer identity of I a) 8.
@@ -181,12 +185,13 @@ norm, not the observation text.
 | O5 | Pin the source of `Operación sujeta a retención` for class A with retention legend. | G4 |
 | O6 | Pin the FCE legends and data (RG 4367). | D3 |
 | O7 | Pin the RG 3561 ticket models. | D2 |
+| O8 | Which ARCA tributos are "Otros Impuestos Nacionales Indirectos" (C24, L8)? The SDK counts tributo 1 (Impuestos nacionales) and 4 (Impuestos internos), and not perceptions, provincial or municipal taxes. | The C24 amount |
 
-## Next steps
+## Status
 
-1. Build a pure document model in `facturas` that derives every field above
-   from the authorized voucher, the items and the issuer profile, and expose
-   the VAT breakdown by rate on `IssuedVoucher` (C25).
-2. Ship a separate PDF package with the fiscal components, an A4 template that
+1. Done: `buildVoucherDocument()` derives the fields above from the
+   authorized voucher, the items and the issuer profile, and
+   `IssuedVoucher.totals` carries the VAT breakdown by rate (C25).
+2. Next: a separate PDF package with the fiscal components, an A4 template that
    follows L1 to L9, and a compliance check that reports each failed rule by
    id.
