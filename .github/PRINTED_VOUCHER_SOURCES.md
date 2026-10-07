@@ -33,9 +33,14 @@ sections below were unchanged.
 | RG 1415, same page | `Art. 18. —` → `Art. 20. —` | `66d8df037e78a76863cfaf3e58ecc437e40cb07f6f70f72b709a6118b933aa3d` |
 | RG 1415, same page | `ANEXO II – RESOLUCION GENERAL N° 1415` → `ANEXO III – RESOLUCION GENERAL N° 1415` | `9022ba77ffecb3a9c9e986ec59c10afcba89f4c67ce5dc481757384889c167b3` |
 | [RG 4291, texto actualizado](https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-4291-2018-313088/actualizacion) | `ARTÍCULO 14.-` → `ARTÍCULO 16.-` | `ac9e870239f4d9de9110d67f158b606659ffedd693a8a03f0ff64d7a99046eb2` |
+| RG 4291, same page | `ARTÍCULO 12.-` → `ARTÍCULO 13.-` | `7f3616526c03fdfbebd7e43581bb4689433259d582c3cb1a00585b8634c900d6` |
 | [RG 4892](https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-4892-2020-345661/texto) | `ARTÍCULO 1°.-` → `ARTÍCULO 4°.-` | `d441a4fcf9e6bd67c6361ade92355ded3be673108626603db0e6bb916e9974b4` |
 | [RG 5614](https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-5614-2024-407183/texto) | `ARTÍCULO 1°.-` → `ARTÍCULO 7°.-` | `6058936967b2d8e331a0290d5b1ff476e4bcdd8a684e117e8732620654d558da` |
 | [RG 5003, texto actualizado](https://www.argentina.gob.ar/normativa/nacional/norma-350574/actualizacion) | `ARTÍCULO 20.-` → `ARTÍCULO 21.-` | `cf622bef91aa84c82a0fa81de95017657515878afd45ed7e60b33f3048e311d0` |
+| [RG 5762, texto original](https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-5762-2025-417981/texto) | `ARTÍCULO 10.-` → `ARTÍCULO 12.-` | `b7a8eb79236a64d179b760b35a899b94270741f16a9f24a8db10a5aead538111` |
+| RG 5762, same page | `ARTÍCULO 20.-` → `ARTÍCULO 22.-` | `d257242900b3ec4c8976bdaeacab1ce836f4236d7b940adf8877bf89973ee1b3` |
+| RG 5762, same page | `ARTÍCULO 30.-` → `ARTÍCULO 33.-` | `3f2da035e44f4cdaa8ec5e747ab7670dd240ce87eac3a3f2db16613c92d79bfe` |
+| [Ley 27.440, texto actualizado](https://www.argentina.gob.ar/normativa/nacional/ley-27440-310084/actualizacion) | `Art. 5°- Los requisitos mínimos` → `Art. 6°-` | `6655c0f6f0a683096c7102f8e0d7170e104fc4cb7cba6869fffd876c0a5ea6a1` |
 | [QR specification](https://www.afip.gob.ar/fe/qr/documentos/QRespecificaciones.pdf) | Whole file | `a6d0f71e14f282836f07834af76a975dd885386bf972d860878d4b44278deaac` |
 
 RG 1415 is the general invoicing regime. Article 18 sends the content of a
@@ -43,7 +48,12 @@ class A, B, C or E voucher to Anexo II, Apartado A. Article 19 sets a minimum
 size of 15 × 20 cm and sends the placement of some data to Apartado B. RG 4291
 applies RG 1415 to electronic vouchers. RG 4892 adds the QR. RG 5614 adds the
 Ley 27.743 consumer transparency block. RG 5003 article 20 wrote the class A
-to monotributo legend into RG 1415 article 15.
+to monotributo legend into RG 1415 article 15. RG 5762 replaced RG 1575 and
+class M from 2025-12-01 with class A vouchers that carry a legend next to the
+letter. Its consolidated text was not published at retrieval, so the original
+is pinned. Ley 27.440 article 5 lists what an FCE must show.
+
+The RG 5762 retrieval was 2026-10-07.
 
 ## How RG 4291 article 15 is read
 
@@ -55,11 +65,18 @@ previstos para cada tipo de documento", and that it may instead follow the
 ticket models of RG 3561 with the CAE at the foot. A last paragraph, added by
 RG 5614, requires the Apartado B transparency block in any image or print.
 
-The SDK takes the conservative reading: a printed or PDF voucher follows the
-Apartado B placement. The layout rules below are therefore requirements of the
-default template and errors of the compliance check. If a professional review
-settles on the permissive reading, the layout rules become warnings. The
-content rules do not depend on this choice.
+The first paragraph is explicit, so a layout that departs from Apartado B is
+not, by itself, a breach. The second asks the representation to follow "los
+modelos", and the only models the norms describe are Apartado B and the RG 3561
+tickets. The SDK reads both together:
+
+- The default template follows the Apartado B placement, so nobody has to
+  argue about it.
+- The compliance check reports a failed layout rule (L1 to L4, L6, L7 and L9)
+  as a warning, and a failed content rule as an error. A custom template can
+  move a block and still pass, but it cannot drop a datum.
+- L8 is the exception: RG 4291 article 15, last paragraph, requires the
+  transparency data in every image or print, so a missing block is an error.
 
 ## Content rules
 
@@ -91,7 +108,7 @@ renders, for both the issuer and the receiver.
 
 Not required on electronic vouchers by RG 4291 article 14 d): the first and
 last number of the print run and the printer licence (I a) 9), and the words
-`ORIGINAL` and `DUPLICADO` (I c)). See O2 for the printer identity of I a) 8.
+`ORIGINAL` and `DUPLICADO` (I c)). See R2 for the printer identity of I a) 8.
 
 ### Receiver
 
@@ -153,39 +170,46 @@ go anywhere, as long as it is legible (RG 1415 article 19, second paragraph).
 | Id | Legend | When | Source |
 | --- | --- | --- | --- |
 | G1 | `El crédito fiscal discriminado en el presente comprobante, sólo podrá ser computado a efectos del Régimen de Sostenimiento e Inclusión Fiscal para Pequeños Contribuyentes de la Ley Nº 27.618` | Class A to a monotributo receiver | RG 1415 art. 15 a), as replaced by RG 5003 art. 20 from 2021-07-01 |
-| G2 | The L8 transparency block | Where C26 applies: responsable inscripto issuer, receiver exento, no alcanzado or consumidor final. See O3 for class C | RG 1415 An. II B g) 1, RG 4291 art. 15, RG 5614 art. 6 |
-| G3 | The code of the legend saying the tax cannot be computed as credit | When it applies, see O4 | RG 4291 art. 14 c) |
-| G4 | `Operación sujeta a retención` | Class A with retention legend | Not pinned yet, see O5 |
+| G2 | The L8 transparency block | Where C26 applies: responsable inscripto issuer, receiver exento, no alcanzado or consumidor final. Not on class C, see R3 | RG 1415 An. II B g) 1, RG 4291 art. 15, RG 5614 art. 6 |
+| G3 | `Observaciones de ARCA:` followed by the codes ARCA returned with the CAE | Class A authorized with observations, see R4 | RG 4291 art. 12 and 14 c) |
+| G4 | `OPERACIÓN SUJETA A RETENCIÓN`, next to the letter A | Types 51 to 53, issued from 2025-12-01 | RG 5762 art. 10, 11 and 31 |
+| G5 | `PAGO EN CBU INFORMADA`, next to the letter A | Class A, when the issuer opted for that regime | RG 5762 art. 20 and 21 |
 
 WSFE observation 10217 words the G1 legend differently ("Procedimiento
 permanente de transición al Régimen General"). The printed legend follows the
 norm, not the observation text.
 
+Types 51 to 53 were class M until 2025-11-30. RG 5762 article 28 keeps their
+numbering, so a voucher of those types dated before 2025-12-01 is a class M
+voucher, which the SDK does not render.
+
 ## Decisions for the first release
 
 | Id | Decision |
 | --- | --- |
-| D1 | Conservative reading of RG 4291 article 15. The layout rules are errors of the compliance check. |
-| D2 | A4 only. The ticket models of RG 3561 are left for a later release. |
-| D3 | FCE vouchers (201 to 203, 206 to 208, 211 to 213) are not rendered. The model refuses them with an explicit error until their legends are pinned. |
+| D1 | Apartado B placement in the default template. Layout findings are warnings and content findings are errors, see "How RG 4291 article 15 is read". |
+| D2 | A4 only. A thermal template follows the RG 3561 Tique-Factura model with the CAE at the foot (RG 4291 art. 15), and pins RG 3561 when it is built. |
+| D3 | FCE vouchers (201 to 203, 206 to 208, 211 to 213) are not rendered yet. The model refuses them with an explicit error. R6 lists what rendering them needs. |
 | D4 | Export vouchers (class E) are not rendered in the first release. |
-| D5 | The printer identity and print-run data are not printed, as on the vouchers ARCA itself renders. See O2. |
+| D5 | The printer identity and print-run data are not printed, see R2. |
 | D6 | `ORIGINAL` and `DUPLICADO` are not required. A copy label is optional and off by default. |
 | D7 | No ARCA logo and no "Comprobante Autorizado" mark. No norm requires them, and they would present a third-party document as rendered by ARCA. |
 | D8 | On an electronic voucher, the due date of C9 and L9 is read as the CAE due date. A payment due date is a separate, optional field. |
 
-## Open questions
+## Resolved questions
 
-| Id | Question | Blocks |
+These had no single answer in the texts. Each resolution states its reading.
+
+| Id | Question | Resolution |
 | --- | --- | --- |
-| O1 | Is the conservative reading of RG 4291 article 15 required, or is the content enough? | Whether layout findings are errors or warnings |
-| O2 | RG 4291 article 14 d) excludes I a) 9 but not I a) 8, the identity of the printer. ARCA's own vouchers omit it. What written basis supports omitting it on electronic vouchers? | Nothing in practice, see D5 |
-| O3 | Must a class C voucher to a consumidor final carry the transparency block with zero amounts, or no block? IV b) forbids breaking out VAT for a monotributo issuer. | The class C template |
-| O4 | Which ARCA observation codes trigger G3, and how is the code printed? The authorization evidence carries ARCA's observations, but a voucher recovered by match has none. | G3 |
-| O5 | Pin the source of `Operación sujeta a retención` for class A with retention legend. | G4 |
-| O6 | Pin the FCE legends and data (RG 4367). | D3 |
-| O7 | Pin the RG 3561 ticket models. | D2 |
-| O8 | Which ARCA tributos are "Otros Impuestos Nacionales Indirectos" (C24, L8)? The SDK counts tributo 1 (Impuestos nacionales) and 4 (Impuestos internos), and not perceptions, provincial or municipal taxes. | The C24 amount |
+| R1 | Is the Apartado B layout required for an electronic voucher? | Not by itself: RG 4291 article 15 deems it met. The default template follows it anyway and the check warns on it, see D1. |
+| R2 | RG 4291 article 14 d) excludes I a) 9 but not I a) 8, the printer identity. | Omitted. I a) 8 identifies "quien efectuó la impresión", and V 1 and V 2 define that as printing by a graphic-arts establishment, which an electronic voucher never has. V 7 also spares self-printers those data, and ARCA's own vouchers omit them. |
+| R3 | Does a class C voucher to a consumidor final carry the transparency block? | No. B g) 1 asks for the VAT contained "con la discriminación indicada en el Apartado A, Título IV, inciso a), punto 2", which only applies to a responsable inscripto issuer, and IV b) forbids a monotributo issuer from breaking out VAT. RG 5614 replaced IV a) and left IV b) as it was. |
+| R4 | Which observation codes does RG 4291 article 14 c) ask for? | Every observation ARCA returns with the CAE of a class A voucher. RG 4291 article 12, as replaced by RG 5003 article 25, authorizes such a voucher "junto con los códigos representativos de las irregularidades observadas", and the tax it breaks out cannot be computed as credit. The caller passes `authorization.observations`. A voucher recovered by match carries none, so it prints none. |
+| R5 | Where does `Operación sujeta a retención` come from? | RG 5762 article 10, in force from 2025-12-01, see G4. RG 5762 article 21 adds G5. |
+| R6 | What does an FCE need on paper? | Ley 27.440 article 5: payment due date, CBU or alias, both CUITs, the amount in figures and words, the remito, and a text saying it is accepted after the legal term without rejection, that it is then an executive title, and that acceptance allows transferring its data. The term is 15 days, and 21 from 2025-11-01 to 2026-10-31 by Resolución 219/2025, so the text depends on the date. FCE stays out until those fields are modelled, see D3. |
+| R7 | Which model does a thermal ticket follow? | The RG 3561 Tique-Factura, see D2. |
+| R8 | Which ARCA tributos are "Otros Impuestos Nacionales Indirectos" (C24, L8)? | Tributo 1 (Impuestos nacionales) and 4 (Impuestos internos). Ley 27.743 article 99 names the national indirect taxes that shape the price. Perceptions are payments on account of another tax, not a tax in the price, and provincial and municipal taxes are not national. |
 
 ## Status
 

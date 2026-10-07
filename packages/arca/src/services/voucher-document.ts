@@ -67,7 +67,18 @@ export type VoucherDocumentInput = {
      * their fees and service providers without premises (Anexo II, A, V 6).
      */
     activitiesStartDate: string | null;
+    /**
+     * G5: the issuer opted to issue class A "PAGO EN CBU INFORMADA" (RG 5762,
+     * art. 20 and 21). Only class A vouchers print it.
+     */
+    paymentToInformedCbu?: boolean;
   };
+  /**
+   * G3: the observations ARCA returned with the CAE, as
+   * `authorization.observations` of an `authorized` outcome carries them. On a
+   * class A voucher their codes are printed (RG 4291, art. 12 and 14 c)).
+   */
+  observations?: readonly { code?: string | number }[];
   /** C13 to C17. Name and address are required unless the receiver is a consumidor final. */
   receiver?: { name?: string; address?: string };
   /** L6: contado, cuenta corriente and so on. */
@@ -100,6 +111,8 @@ export type VoucherDocument = {
   voucherType: number;
   /** L4: the type code, three digits. */
   code: string;
+  /** G4 and G5: the legend printed next to the letter A, when there is one. */
+  letterLegend?: "OPERACIÓN SUJETA A RETENCIÓN" | "PAGO EN CBU INFORMADA";
   title: "FACTURA" | "NOTA DE DÉBITO" | "NOTA DE CRÉDITO";
   /** C6: sales point and number, `00003-00000041`. */
   number: string;
@@ -149,7 +162,7 @@ export type VoucherDocument = {
   /** Q1 and Q2. */
   qr: string;
   /** Conditional legends, in order, each with its rule id. */
-  legends: { rule: "G1"; text: string }[];
+  legends: { rule: "G1" | "G3"; text: string }[];
 };
 
 const ISSUER_LEGENDS: Record<PrintedIssuerCondition, string> = {
@@ -185,6 +198,9 @@ const DOCUMENT_LABELS: Record<number, string> = {
 };
 const UNIDENTIFIED_DOCUMENT = 99;
 
+/** G3: precedes the codes of the observations ARCA returned with the CAE. */
+const ARCA_OBSERVATIONS_LABEL = "Observaciones de ARCA:";
+
 /** G1: RG 1415, art. 15, inc. a), as replaced by RG 5003, art. 20. */
 export const MONOTRIBUTO_CREDIT_LEGEND =
   "El crédito fiscal discriminado en el presente comprobante, sólo podrá ser computado a efectos del Régimen de Sostenimiento e Inclusión Fiscal para Pequeños Contribuyentes de la Ley Nº 27.618";
@@ -205,6 +221,9 @@ const TAX_NAMES: Record<number, string> = {
   99: "Otros tributos",
 };
 
+/** RG 5762 replaced class M by class A with retention legend on this date. */
+const RETENTION_LEGEND_FROM = "2025-12-01";
+
 const TITLES = {
   invoice: "FACTURA",
   debit_note: "NOTA DE DÉBITO",
@@ -216,17 +235,26 @@ const TITLES = {
  * authorized voucher, the items it was issued from and the issuer's profile.
  * Pure. It throws `ArcaInputError` when a required datum is missing, when the
  * items do not add up to the authorized money, or for a voucher it does not
- * render yet: FCE and retention-legend types.
+ * render: FCE, and class M vouchers issued before 2025-12-01.
  */
 export function buildVoucherDocument(
   input: VoucherDocumentInput
 ): VoucherDocument {
   const { voucher, issuer } = input;
   const info = describeVoucherType(voucher.voucherType);
-  if (info.family !== "ordinary") {
+  if (info.family === "fce") {
     invalid(
       "voucher.voucherType",
-      "an ordinary class A, B or C invoice or note: FCE and retention-legend vouchers are not rendered yet"
+      "a class A, B or C invoice or note: FCE vouchers are not rendered yet"
+    );
+  }
+  if (
+    info.family === "retention_legend" &&
+    voucher.date < RETENTION_LEGEND_FROM
+  ) {
+    invalid(
+      "voucher.voucherType",
+      "a voucher issued from 2025-12-01: types 51 to 53 were class M before RG 5762"
     );
   }
   const voucherClass = voucher.voucherClass;
@@ -249,6 +277,7 @@ export function buildVoucherDocument(
     voucherClass,
     voucherType: voucher.voucherType,
     code: String(voucher.voucherType).padStart(3, "0"),
+    ...letterLegend(info.family, voucherClass, issuer.paymentToInformedCbu),
     title: TITLES[info.kind],
     number: `${String(voucher.salesPoint).padStart(5, "0")}-${String(voucher.number).padStart(8, "0")}`,
     issueDate: voucher.date,
@@ -313,12 +342,48 @@ export function buildVoucherDocument(
       dueDate: voucher.caeExpiry,
     },
     qr: voucher.qr,
-    legends:
-      voucherClass === "A" &&
-      MONOTRIBUTO_RECEIVERS.has(header.receiverVatConditionId)
-        ? [{ rule: "G1", text: MONOTRIBUTO_CREDIT_LEGEND }]
-        : [],
+    legends: legends(input, voucherClass),
   };
+}
+
+function letterLegend(
+  family: string,
+  voucherClass: "A" | "B" | "C",
+  paymentToInformedCbu: boolean | undefined
+): Pick<VoucherDocument, "letterLegend"> {
+  if (family === "retention_legend") {
+    return { letterLegend: "OPERACIÓN SUJETA A RETENCIÓN" };
+  }
+  return voucherClass === "A" && paymentToInformedCbu === true
+    ? { letterLegend: "PAGO EN CBU INFORMADA" }
+    : {};
+}
+
+function legends(
+  input: VoucherDocumentInput,
+  voucherClass: "A" | "B" | "C"
+): VoucherDocument["legends"] {
+  if (voucherClass !== "A") {
+    return [];
+  }
+  const found: VoucherDocument["legends"] = [];
+  if (MONOTRIBUTO_RECEIVERS.has(input.voucher.header.receiverVatConditionId)) {
+    found.push({ rule: "G1", text: MONOTRIBUTO_CREDIT_LEGEND });
+  }
+  const codes = [
+    ...new Set(
+      (input.observations ?? [])
+        .map((observation) => String(observation.code ?? "").trim())
+        .filter((code) => code !== "")
+    ),
+  ];
+  if (codes.length > 0) {
+    found.push({
+      rule: "G3",
+      text: `${ARCA_OBSERVATIONS_LABEL} ${codes.join(", ")}`,
+    });
+  }
+  return found;
 }
 
 function assertIssuerMatchesClass(

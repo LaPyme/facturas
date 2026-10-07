@@ -433,4 +433,89 @@ describe("buildVoucherDocument", () => {
       );
     });
   });
+
+  describe("legends next to the letter and ARCA observations", () => {
+    const items = [{ description: "Servicio", net: 10_000, vat: 21 }] as const;
+    const receiver = { name: "Cliente SA", address: "Calle 2" };
+    const toCompany = {
+      issuer: "responsable_inscripto",
+      salesPoint: 3,
+      to: { condition: "responsable_inscripto", cuit: "20111111112" },
+      items,
+    } as const;
+
+    it("prints OPERACIÓN SUJETA A RETENCIÓN on types 51 to 53 (RG 5762, art. 10)", async () => {
+      const voucher = await issued({
+        ...toCompany,
+        family: "retention_legend",
+      });
+      const doc = document(voucher, items, { receiver });
+      expect(doc).toMatchObject({
+        voucherClass: "A",
+        code: "051",
+        title: "FACTURA",
+        letterLegend: "OPERACIÓN SUJETA A RETENCIÓN",
+      });
+      expect(() =>
+        document({ ...voucher, date: "2025-11-30" }, items, { receiver })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "voucher.voucherType",
+        })
+      );
+    });
+
+    it("prints PAGO EN CBU INFORMADA on class A only, for an issuer that opted for it (RG 5762, art. 21)", async () => {
+      const issuer = { ...registered, paymentToInformedCbu: true };
+      const classA = await issued(toCompany);
+      expect(document(classA, items, { issuer, receiver }).letterLegend).toBe(
+        "PAGO EN CBU INFORMADA"
+      );
+      expect(document(classA, items, { receiver })).not.toHaveProperty(
+        "letterLegend"
+      );
+      const consumerItems = [
+        { description: "Servicio", gross: 12_100, vat: 21 },
+      ] as const;
+      const classB = await issued({
+        ...toCompany,
+        to: { condition: "consumidor_final" },
+        items: consumerItems,
+      });
+      expect(document(classB, consumerItems, { issuer })).not.toHaveProperty(
+        "letterLegend"
+      );
+    });
+
+    it("prints the codes of ARCA's observations on class A (RG 4291, art. 14 c))", async () => {
+      const voucher = await issued({
+        ...toCompany,
+        to: { condition: "monotributo", cuit: "20111111112" },
+      });
+      const observations = [
+        { code: "10217", message: "El crédito fiscal…" },
+        { code: 10_217 },
+        { code: "10063" },
+        { message: "sin código" },
+      ];
+      expect(
+        document(voucher, items, { receiver, observations }).legends
+      ).toEqual([
+        { rule: "G1", text: MONOTRIBUTO_CREDIT_LEGEND },
+        { rule: "G3", text: "Observaciones de ARCA: 10217, 10063" },
+      ]);
+      const consumerItems = [
+        { description: "Servicio", gross: 12_100, vat: 21 },
+      ] as const;
+      const classB = await issued({
+        ...toCompany,
+        to: { condition: "consumidor_final" },
+        items: consumerItems,
+      });
+      expect(document(classB, consumerItems, { observations }).legends).toEqual(
+        []
+      );
+    });
+  });
 });

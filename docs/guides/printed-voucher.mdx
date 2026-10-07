@@ -73,9 +73,11 @@ más tarde, el modelo sale igual.
 | `issuer.condition` | `responsable_inscripto`, `exento`, `no_alcanzado`, `monotributo`, `monotributo_social` o `monotributo_trabajador_independiente_promovido`. Tiene que poder emitir la clase del comprobante. |
 | `issuer.grossIncome` | El número de ingresos brutos, o la condición de no contribuyente. |
 | `issuer.activitiesStartDate` | `YYYY-MM-DD`. `null` solo para profesionales universitarios que facturan honorarios y para quien presta servicios sin local. |
+| `issuer.paymentToInformedCbu` | `true` si ARCA te habilitó comprobantes A con leyenda `PAGO EN CBU INFORMADA` (RG 5762). |
 | `receiver.name`, `receiver.address` | Obligatorios salvo para un consumidor final. |
 | `saleConditions` | Contado, cuenta corriente o la que corresponda. |
 | `remitos` | Los remitos vinculados a la operación, si los hay. |
+| `observations` | Las observaciones con las que ARCA autorizó el comprobante, tal como vienen en `authorization.observations` del resultado `authorized`. En la clase A se imprimen sus códigos. |
 
 Si falta un dato obligatorio, tira `ArcaInputError` con
 `ARCA_INPUT_MISSING_FIELD` y el `field` que falta.
@@ -83,7 +85,9 @@ Si falta un dato obligatorio, tira `ArcaInputError` con
 ## Qué devuelve
 
 - La letra, el código de tres dígitos, el título y el número con punto de
-  venta, como `00003-00000041`.
+  venta, como `00003-00000041`. En `letterLegend`, la leyenda que va junto a
+  la letra A: `OPERACIÓN SUJETA A RETENCIÓN` para los tipos 51 a 53 o
+  `PAGO EN CBU INFORMADA`.
 - El emisor y el receptor con su leyenda de condición frente al IVA, por
   ejemplo `IVA RESPONSABLE INSCRIPTO` o `A CONSUMIDOR FINAL`, y el documento del
   receptor cuando está identificado.
@@ -94,8 +98,9 @@ Si falta un dato obligatorio, tira `ArcaInputError` con
   en ninguna línea, aparece en `totals.adjustment` para que lo muestres.
 - En la clase B, el bloque del Régimen de Transparencia Fiscal al Consumidor
   con el IVA contenido y los otros impuestos nacionales indirectos.
-- El CAE con su vencimiento, el QR y las leyendas que correspondan, como la de
-  la Ley 27.618 en una factura A a un monotributista.
+- El CAE con su vencimiento, el QR y las leyendas que correspondan: la de la
+  Ley 27.618 en una factura A a un monotributista y, en la clase A, los códigos
+  de las observaciones de ARCA.
 
 Los importes siguen en centavos y las fechas en `YYYY-MM-DD`. El formato de
 moneda y el diseño quedan en tu plantilla.
@@ -112,6 +117,7 @@ comprobante electrónico:
 - Arriba a la izquierda: nombre de fantasía, razón social, domicilio y
   condición frente al IVA.
 - Arriba en el centro y destacada: la letra, y debajo `Código Nº` con el código.
+  Si hay `letterLegend`, va junto a la letra.
 - Arriba a la derecha: número, fecha, CUIT, ingresos brutos e inicio de
   actividades. Estos datos y los de la izquierda van dentro de un recuadro de
   al menos 7 × 3 cm.
@@ -134,8 +140,9 @@ generado ARCA.
   `ARCA_INPUT_AMOUNT_MISMATCH`.
 - Un emisor que no puede emitir esa clase o un CUIT distinto del comprobante:
   `ARCA_INPUT_INVALID_VALUE`.
-- Comprobantes FCE y con leyenda de retención, que todavía no arma, y un
-  comprobante sin QR: `ARCA_INPUT_INVALID_VALUE`.
+- Comprobantes FCE, que todavía no arma, comprobantes M de los tipos 51 a 53
+  anteriores al 1 de diciembre de 2025 y un comprobante sin QR:
+  `ARCA_INPUT_INVALID_VALUE`.
 
 Las fuentes de cada regla, con su norma, inciso y checksum, están en
 [PRINTED_VOUCHER_SOURCES.md](https://github.com/LaPyme/facturas/blob/main/.github/PRINTED_VOUCHER_SOURCES.md).
