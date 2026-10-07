@@ -72,6 +72,10 @@ La guía del [CLI](./docs/getting-started/cli.mdx) explica `init`, `check` e
 - Si cambiás una regla que el SDK toma del manual de ARCA, actualizá
   [`.github/ARCA_SOURCES.md`](./.github/ARCA_SOURCES.md) con la regla y la
   página del manual. Ese archivo no se publica en el sitio de documentación.
+- Si cambiás una regla de lo que muestra el comprobante impreso, actualizá
+  [`.github/PRINTED_VOUCHER_SOURCES.md`](./.github/PRINTED_VOUCHER_SOURCES.md)
+  con la norma, el inciso y el checksum del texto. Tampoco se publica en el
+  sitio.
 
 ## Documentación
 

@@ -137,7 +137,11 @@ switch (factura.kind) {
 ```
 
 `voucher.qr` es la URL que codifica el QR del comprobante impreso y
-`voucher.qrPayload` su JSON. Lo que sí se lanza son los errores de input
+`voucher.qrPayload` su JSON. Para el PDF, no armes letra, leyendas ni IVA a
+mano: `buildVoucherDocument({ voucher, items, issuer, saleConditions })` deriva
+todo lo que el comprobante impreso tiene que mostrar, con los mismos `items` de
+la emisión. Está en
+[Comprobante impreso](https://facturas-sdk.dev/guides/printed-voucher.md). Lo que sí se lanza son los errores de input
 (`ArcaInputError`, con un `code` como `ARCA_INPUT_INVALID_AMOUNT`) y de
 configuración (`ArcaConfigurationError`), siempre antes de escribir en ARCA. Un
 `ArcaInputError` significa que ARCA no emitió nada por esa llamada: corregí el

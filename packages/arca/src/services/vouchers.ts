@@ -69,6 +69,7 @@ import type {
   IssuePreview,
   IssueRequest,
   ServiceFor,
+  VoucherTotals,
 } from "./vouchers-types";
 import {
   normalizeWsfeDateInput,
@@ -77,7 +78,11 @@ import {
   type WsfeVoucherInfo,
   type WsfeVoucherInput,
 } from "./wsfe";
-import { deriveWsmtxcaSettlement, type IssueAmounts } from "./wsfe-amounts";
+import {
+  deriveWsmtxcaSettlement,
+  type IssueAmounts,
+  vatRatePercent,
+} from "./wsfe-amounts";
 import {
   assertCreditNoteInput,
   type CreditNoteInput,
@@ -2524,7 +2529,44 @@ function issuedVoucher(
     cae,
     caeExpiry: toIsoDate(caeExpiry) ?? caeExpiry,
     amounts,
+    totals: voucherTotals(data),
     ...qr,
+  };
+}
+
+/**
+ * The sent request's money in minor units. A recovered voucher only answers
+ * authorized after its identity matched ARCA's record, so the request is the
+ * authorized money. Runs after the fiscal write on values validated before it.
+ */
+function voucherTotals(data: IssuanceHeader): VoucherTotals {
+  const minor = (value: number | undefined, field: string) =>
+    Number(normalizeArcaAmountToMinorUnits(value ?? 0, field));
+  return {
+    total: minor(data.totalAmount, "totalAmount"),
+    netTaxed: minor(data.netAmount, "netAmount"),
+    untaxed: minor(data.nonTaxableAmount, "nonTaxableAmount"),
+    exempt: minor(data.exemptAmount, "exemptAmount"),
+    vat: minor(data.vatAmount, "vatAmount"),
+    otherTaxes: minor(data.taxAmount, "taxAmount"),
+    vatRates: (data.vatRates ?? []).map((row) => {
+      const rate = vatRatePercent(row.id);
+      return {
+        id: row.id,
+        ...(rate === undefined ? {} : { rate }),
+        base: minor(row.baseAmount, "vatRates.baseAmount"),
+        amount: minor(row.amount, "vatRates.amount"),
+      };
+    }),
+    taxes: (data.taxes ?? []).map((tax) => ({
+      id: tax.id,
+      ...(tax.description === undefined
+        ? {}
+        : { description: tax.description }),
+      base: minor(tax.baseAmount, "taxes.baseAmount"),
+      rate: tax.rate,
+      amount: minor(tax.amount, "taxes.amount"),
+    })),
   };
 }
 

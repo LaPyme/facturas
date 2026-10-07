@@ -283,7 +283,10 @@ rechazo en un store sin `withLock`. Una repetición con esa clave, o un
 | `conflict` | Hay otro comprobante en el número reservado. Detené el flujo e investigá. |
 
 `voucher` habla en las unidades del input: `date` y `caeExpiry` vienen como
-`YYYY-MM-DD` y `amounts` en centavos. `voucher.header` trae `concept`, la
+`YYYY-MM-DD` y `amounts` en centavos. `voucher.totals` trae el dinero
+autorizado en centavos: total, neto gravado, no gravado, exento, IVA, tributos,
+una fila por alícuota de IVA en `vatRates` y el detalle de `taxes`. Es lo que
+el [comprobante impreso](/guides/printed-voucher) muestra. `voucher.header` trae `concept`, la
 identidad y condición del receptor, `currencyId`, `exchangeRate` y, cuando
 corresponden, las fechas de servicio y `paymentDueDate`. Las fechas son
 `YYYY-MM-DD`, el documento del receptor es un string y el tipo, la condición y

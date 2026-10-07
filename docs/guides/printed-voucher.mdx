@@ -1,0 +1,151 @@
+---
+title: "Comprobante impreso"
+description: "Armá con buildVoucherDocument() todo lo que el PDF de un comprobante autorizado tiene que mostrar, derivado y controlado."
+keywords: ["PDF", "comprobante impreso", "RG 1415", "CAE", "QR", "transparencia fiscal"]
+---
+
+ARCA no genera el PDF de un comprobante emitido por web service. Lo arma tu
+sistema, y las normas fijan qué datos lleva y dónde van. `buildVoucherDocument()`
+toma el comprobante autorizado, los mismos ítems con los que lo emitiste y los
+datos del emisor, y devuelve todo lo que el comprobante impreso tiene que
+mostrar. Tu plantilla lo dibuja.
+
+El SDK todavía no dibuja el PDF. Te da el modelo ya derivado y controlado, sin
+I/O, para que la plantilla no tenga que saber de clases, leyendas ni IVA.
+
+## Del comprobante autorizado al modelo
+
+Este bloque es [examples/comprobante-impreso.ts](https://github.com/LaPyme/facturas/blob/main/examples/comprobante-impreso.ts):
+
+```ts
+import { buildVoucherDocument, createArcaClient, type VatItem } from "facturas";
+
+const arca = createArcaClient();
+
+const items = [
+  {
+    description: "Taladro percutor 13 mm",
+    quantity: 2,
+    unitPrice: "605.00",
+    gross: 121_000,
+    vat: 21,
+  },
+  { description: "Mechas para metal", gross: 2420, vat: 10.5 },
+] satisfies VatItem[];
+
+const factura = await arca.issue({
+  issuer: "responsable_inscripto",
+  salesPoint: 3,
+  to: { condition: "consumidor_final" },
+  items,
+});
+
+if (factura.kind === "authorized") {
+  const comprobante = buildVoucherDocument({
+    voucher: factura.voucher,
+    items,
+    issuer: {
+      legalName: "Ferretería del Sur SRL",
+      address: "Av. Rivadavia 1234, CABA",
+      taxId: "20-12345678-9",
+      condition: "responsable_inscripto",
+      grossIncome: "901-123456-7",
+      activitiesStartDate: "2019-10-01",
+    },
+    saleConditions: "Contado",
+  });
+}
+```
+
+Sirve para cualquier resultado `authorized`, directo o recuperado, y para las
+notas de crédito y débito. Guardá los ítems junto a la venta: si se reimprime
+más tarde, el modelo sale igual.
+
+## Qué te pide
+
+| Campo | Qué es |
+| --- | --- |
+| `voucher` | El `IssuedVoucher` de un resultado `authorized`. |
+| `items` | Los mismos ítems de la emisión, cada uno con `description`. Si un ítem trae `quantity`, también trae `unitPrice`: sin IVA en la clase A y con IVA en la clase B. Sin cantidad, la línea sale como una unidad por su importe. |
+| `issuer.legalName`, `issuer.address` | La razón social y el domicilio comercial del lugar donde se emite. |
+| `issuer.tradeName` | El nombre de fantasía, solo si tenés uno. |
+| `issuer.taxId` | Tu CUIT. Se controla contra el QR del comprobante. |
+| `issuer.condition` | `responsable_inscripto`, `exento`, `no_alcanzado`, `monotributo`, `monotributo_social` o `monotributo_trabajador_independiente_promovido`. Tiene que poder emitir la clase del comprobante. |
+| `issuer.grossIncome` | El número de ingresos brutos, o la condición de no contribuyente. |
+| `issuer.activitiesStartDate` | `YYYY-MM-DD`. `null` solo para profesionales universitarios que facturan honorarios y para quien presta servicios sin local. |
+| `issuer.paymentToInformedCbu` | `true` si ARCA te habilitó comprobantes A con leyenda `PAGO EN CBU INFORMADA` (RG 5762). |
+| `receiver.name`, `receiver.address` | Obligatorios salvo para un consumidor final. |
+| `saleConditions` | Contado, cuenta corriente o la que corresponda. |
+| `remitos` | Los remitos vinculados a la operación, si los hay. |
+| `observations` | Las observaciones con las que ARCA autorizó el comprobante, tal como vienen en `authorization.observations` del resultado `authorized`. En la clase A se imprimen sus códigos. |
+
+Si falta un dato obligatorio, tira `ArcaInputError` con
+`ARCA_INPUT_MISSING_FIELD` y el `field` que falta.
+
+## Qué devuelve
+
+- La letra, el código de tres dígitos, el título y el número con punto de
+  venta, como `00003-00000041`. En `letterLegend`, la leyenda que va junto a
+  la letra A: `OPERACIÓN SUJETA A RETENCIÓN` para los tipos 51 a 53 o
+  `PAGO EN CBU INFORMADA`.
+- El emisor y el receptor con su leyenda de condición frente al IVA, por
+  ejemplo `IVA RESPONSABLE INSCRIPTO` o `A CONSUMIDOR FINAL`, y el documento del
+  receptor cuando está identificado.
+- Las líneas. En la clase A van sin IVA y con su alícuota, en la clase B con
+  IVA. Suman exactamente lo que autorizó ARCA.
+- Los totales: el subtotal, el exento, el no gravado, el IVA por alícuota en la
+  clase A, los tributos y el total. Si un ajuste de IVA de la cabecera no entra
+  en ninguna línea, aparece en `totals.adjustment` para que lo muestres.
+- En la clase B, el bloque del Régimen de Transparencia Fiscal al Consumidor
+  con el IVA contenido y los otros impuestos nacionales indirectos.
+- El CAE con su vencimiento, el QR y las leyendas que correspondan: la de la
+  Ley 27.618 en una factura A a un monotributista y, en la clase A, los códigos
+  de las observaciones de ARCA.
+
+Los importes siguen en centavos y las fechas en `YYYY-MM-DD`. El formato de
+moneda y el diseño quedan en tu plantilla.
+
+`PRINTED_VOUCHER_TEXT` trae los textos fijos tal como los escriben las normas,
+por ejemplo `C.A.E. N°` y el título de transparencia fiscal.
+
+## Dónde va cada dato
+
+La RG 1415, Anexo II, Apartado B ubica los datos. El SDK sigue esa ubicación
+en el comprobante impreso aunque la RG 4291 dé por cumplidas las medidas de un
+comprobante electrónico:
+
+- Arriba a la izquierda: nombre de fantasía, razón social, domicilio y
+  condición frente al IVA.
+- Arriba en el centro y destacada: la letra, y debajo `Código Nº` con el código.
+  Si hay `letterLegend`, va junto a la letra.
+- Arriba a la derecha: número, fecha, CUIT, ingresos brutos e inicio de
+  actividades. Estos datos y los de la izquierda van dentro de un recuadro de
+  al menos 7 × 3 cm.
+- Después: el receptor, las condiciones de venta y las líneas, con el IVA por
+  alícuota a continuación en la clase A.
+- Abajo a la izquierda: el bloque de transparencia fiscal.
+- Abajo a la derecha: el CAE y `Fecha Vto.:` con su vencimiento, en letra de
+  12 puntos o más (`PRINTED_CAE_DUE_DATE_MIN_FONT_SIZE_PT`).
+
+El QR va en el frente sin tapar ningún dato obligatorio. No uses el logo de
+ARCA: ninguna norma lo pide y presenta tu documento como si lo hubiera
+generado ARCA.
+
+## Qué rechaza
+
+`buildVoucherDocument()` prefiere fallar a imprimir algo incorrecto:
+
+- Ítems que no suman lo autorizado: `ARCA_INPUT_AMOUNT_MISMATCH`.
+- Un receptor sin documento que no sea consumidor final:
+  `ARCA_INPUT_MISSING_FIELD`.
+- Una cantidad por precio unitario que no da el importe de la línea:
+  `ARCA_INPUT_AMOUNT_MISMATCH`.
+- Un emisor que no puede emitir esa clase o un CUIT distinto del comprobante:
+  `ARCA_INPUT_INVALID_VALUE`.
+- Comprobantes FCE, que todavía no arma, comprobantes M de los tipos 51 a 53
+  anteriores al 1 de diciembre de 2025 y un comprobante sin QR:
+  `ARCA_INPUT_INVALID_VALUE`.
+
+Las fuentes de cada regla, con su norma, inciso y checksum, están en
+[PRINTED_VOUCHER_SOURCES.md](https://github.com/LaPyme/facturas/blob/main/.github/PRINTED_VOUCHER_SOURCES.md).
+Es una lectura técnica de las normas, no asesoramiento impositivo.
