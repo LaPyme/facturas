@@ -105,21 +105,7 @@ export function createStyles(theme: ResolvedTheme) {
     conditionLegend: { fontSize: 7.5, color: theme.mutedColor, marginTop: 2 },
     title: { ...bold, fontSize: 18, lineHeight: 1.1, color: theme.accentColor },
     number: { ...bold, fontSize: 10, marginBottom: 6 },
-    // Stripe's "$48.99 due …": the total, large, before the detail.
-    summary: {
-      marginTop: 22,
-      flexDirection: "row",
-      alignItems: "flex-end",
-      gap: 8,
-    },
-    summaryAmount: {
-      ...bold,
-      fontSize: 18,
-      lineHeight: 1,
-      color: theme.accentColor,
-    },
-    summaryNote: { color: theme.mutedColor, paddingBottom: 1 },
-    section: { marginTop: 20 },
+    section: { marginTop: 24 },
     sectionTitle: {
       ...bold,
       fontSize: 7.5,

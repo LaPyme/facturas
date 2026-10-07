@@ -7,7 +7,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  AmountSummary,
   FiscalFooter,
   IssuerHeader,
   LegendsBlock,
@@ -97,7 +96,6 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
       >
         <Page size="A4" style={styles.page}>
           <IssuerHeader brand={slots.brand} />
-          <AmountSummary />
           <ReceiverBlock />
           <LinesTable />
           <TotalsBlock />

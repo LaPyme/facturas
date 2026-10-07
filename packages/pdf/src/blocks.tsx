@@ -83,26 +83,6 @@ function LetterBox() {
   );
 }
 
-/**
- * The total, large, before the detail, as Stripe opens its invoices. It
- * repeats C23 for the reader; the totals block below still carries it.
- */
-export function AmountSummary() {
-  const { doc, styles } = useVoucher("AmountSummary");
-  return (
-    <View style={styles.summary}>
-      <Text style={styles.summaryAmount}>
-        {formatMoney(doc.totals.total, doc.currency.id)}
-      </Text>
-      <Text style={styles.summaryNote}>
-        {doc.paymentDueDate
-          ? `a pagar hasta el ${formatDate(doc.paymentDueDate)}`
-          : doc.saleConditions}
-      </Text>
-    </View>
-  );
-}
-
 /** C13 to C17, L5 and L6, C12, C22 and the service period. */
 export function ReceiverBlock() {
   const { doc, styles } = useVoucher("ReceiverBlock");
