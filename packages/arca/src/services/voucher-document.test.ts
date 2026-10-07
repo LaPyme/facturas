@@ -317,6 +317,33 @@ describe("buildVoucherDocument", () => {
     expectBalanced(doc);
   });
 
+  it("renders every receiver condition issue() accepts, with the transparency block only where VAT contained applies", async () => {
+    const items = [
+      { description: "Servicio", gross: 12_100, vat: 21 },
+    ] as const;
+    const receiver = { name: "Cliente", address: "Calle 3" };
+    for (const [condition, legend, transparency] of [
+      [4, "IVA EXENTO", true],
+      [5, "A CONSUMIDOR FINAL", true],
+      [7, "SUJETO NO CATEGORIZADO", false],
+      [8, "PROVEEDOR DEL EXTERIOR", false],
+      [9, "CLIENTE DEL EXTERIOR", false],
+      [10, "IVA LIBERADO - LEY Nº 19.640", false],
+      [15, "NO RESPONSABLE IVA", true],
+    ] as const) {
+      const voucher = await issued({
+        issuer: "responsable_inscripto",
+        salesPoint: 3,
+        to: { condition, cuit: "20111111112" },
+        items,
+      });
+      const doc = document(voucher, items, { receiver });
+      expect(doc.voucherClass).toBe("B");
+      expect(doc.receiver.conditionLegend).toBe(legend);
+      expect("transparency" in doc).toBe(transparency);
+    }
+  });
+
   it("adds the discount back into a synthesized unit price", async () => {
     const items = [
       {

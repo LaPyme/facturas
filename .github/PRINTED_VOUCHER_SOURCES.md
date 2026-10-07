@@ -119,6 +119,7 @@ last number of the print run and the printer licence (I a) 9), and the words
 | C15 | Consumidor final | `A CONSUMIDOR FINAL`. From ARS 10,000,000, the DNI, CUIL or CDI, or the foreign document or passport. The CUIT, regardless of amount, when the buyer asks for it to deduct income tax. Name and address may be `NR` or zeros | II d), as replaced by RG 5866/2026 from 2026-07-01 |
 | C16 | Monotributo | Name, business address, CUIT, `RESPONSABLE MONOTRIBUTO`, `MONOTRIBUTO TRABAJADOR INDEPENDIENTE PROMOVIDO` or `MONOTRIBUTISTA SOCIAL` | II e) |
 | C17 | Not categorized | Name, business address, CUIT, `SUJETO NO CATEGORIZADO` | II f) |
+| C17b | Proveedor del exterior (8), cliente del exterior (9), IVA liberado Ley 19.640 (10) | Name, address, document, and the legend `PROVEEDOR DEL EXTERIOR`, `CLIENTE DEL EXTERIOR` or `IVA LIBERADO - LEY Nº 19.640` | ARCA receiver conditions accepted by WSFE, see R9 |
 | C18 | Export | Importer name, address and foreign tax id or CUIT, `IVA EXENTO OPERACION DE EXPORTACION` | II g), see D4 |
 
 ### Operation
@@ -210,6 +211,7 @@ These had no single answer in the texts. Each resolution states its reading.
 | R6 | What does an FCE need on paper? | Ley 27.440 article 5: payment due date, CBU or alias, both CUITs, the amount in figures and words, the remito, and a text saying it is accepted after the legal term without rejection, that it is then an executive title, and that acceptance allows transferring its data. The term is 15 days, and 21 from 2025-11-01 to 2026-10-31 by Resolución 219/2025, so the text depends on the date. FCE stays out until those fields are modelled, see D3. |
 | R7 | Which model does a thermal ticket follow? | The RG 3561 Tique-Factura, see D2. |
 | R8 | Which ARCA tributos are "Otros Impuestos Nacionales Indirectos" (C24, L8)? | Tributo 1 (Impuestos nacionales) and 4 (Impuestos internos). Ley 27.743 article 99 names the national indirect taxes that shape the price. Perceptions are payments on account of another tax, not a tax in the price, and provincial and municipal taxes are not national. |
+| R9 | Which legend for receiver conditions 8, 9 and 10, which WSFE accepts and Apartado A does not name? | ARCA's own name for the condition, as in its receiver condition table. Name and address are required as for any receiver other than a consumidor final. No transparency block: they are not among the C26 receivers. |
 
 ## Status
 

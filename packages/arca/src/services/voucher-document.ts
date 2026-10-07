@@ -182,11 +182,17 @@ const RECEIVER_LEGENDS: Record<number, string> = {
   5: "A CONSUMIDOR FINAL",
   6: "RESPONSABLE MONOTRIBUTO",
   7: "SUJETO NO CATEGORIZADO",
+  // Apartado A names no legend for these: ARCA's own condition names.
+  8: "PROVEEDOR DEL EXTERIOR",
+  9: "CLIENTE DEL EXTERIOR",
+  10: "IVA LIBERADO - LEY Nº 19.640",
   13: "MONOTRIBUTISTA SOCIAL",
   15: "NO RESPONSABLE IVA",
   16: "MONOTRIBUTO TRABAJADOR INDEPENDIENTE PROMOVIDO",
 };
 const CONSUMIDOR_FINAL = 5;
+/** C26 and G2: exento, consumidor final and no alcanzado. */
+const VAT_CONTAINED_RECEIVERS = new Set([4, 5, 15]);
 const MONOTRIBUTO_RECEIVERS = new Set([6, 13, 16]);
 
 const DOCUMENT_LABELS: Record<number, string> = {
@@ -326,7 +332,8 @@ export function buildVoucherDocument(
       adjustment: lines.adjustment,
       total: voucher.totals.total,
     },
-    ...(voucherClass === "B"
+    ...(voucherClass === "B" &&
+    VAT_CONTAINED_RECEIVERS.has(header.receiverVatConditionId)
       ? {
           transparency: {
             vatContained: voucher.totals.vat,
@@ -413,7 +420,7 @@ function documentReceiver(
   if (conditionLegend === undefined) {
     invalid(
       "voucher.header.receiverVatConditionId",
-      "a receiver condition the SDK renders: 1, 4, 5, 6, 7, 13, 15 or 16"
+      "a receiver condition the SDK renders: 1, 4 to 10, 13, 15 or 16"
     );
   }
   const name = input.receiver?.name?.trim();
