@@ -6,6 +6,7 @@ import {
   formatMoney,
   formatQuantity,
   formatTaxId,
+  formatTitle,
   formatVatRate,
 } from "./format";
 
@@ -32,5 +33,11 @@ describe("es-AR formatting", () => {
     expect(formatVatRate(10.5)).toBe("10,5%");
     expect(formatVatRate("exempt")).toBe("Exento");
     expect(formatVatRate("untaxed")).toBe("No gravado");
+  });
+
+  it("writes the voucher title in sentence case", () => {
+    expect(formatTitle("FACTURA")).toBe("Factura");
+    expect(formatTitle("NOTA DE DÉBITO")).toBe("Nota de débito");
+    expect(formatTitle("NOTA DE CRÉDITO")).toBe("Nota de crédito");
   });
 });

@@ -115,6 +115,9 @@ describe("<Voucher>", () => {
     // Class B never breaks out VAT by rate.
     expect(hasText(page, "IVA 21%")).toBe(false);
     expect(hasText(page, "Importe total")).toBe(true);
+    // The title, in sentence case, top right.
+    expect(findExact(page, "Factura").x).toBeGreaterThan(page.width / 2);
+    expect(hasText(page, "FACTURA")).toBe(false);
   });
 
   it("breaks VAT out by rate on class A, with its legends and no transparency block", async () => {

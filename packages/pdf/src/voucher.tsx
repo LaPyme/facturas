@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  AmountSummary,
   FiscalFooter,
   IssuerHeader,
   LegendsBlock,
@@ -15,6 +16,7 @@ import {
   TotalsBlock,
 } from "./blocks";
 import { useVoucher, VoucherContext } from "./context";
+import { formatTitle } from "./format";
 import { createStyles, resolveTheme, type VoucherTheme } from "./theme";
 
 export type VoucherProps = {
@@ -91,10 +93,11 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
         author={doc.issuer.legalName}
         creator="facturas"
         producer="@facturas/pdf"
-        title={`${doc.title} ${doc.voucherClass} ${doc.number}`}
+        title={`${formatTitle(doc.title)} ${doc.voucherClass} ${doc.number}`}
       >
         <Page size="A4" style={styles.page}>
           <IssuerHeader brand={slots.brand} />
+          <AmountSummary />
           <ReceiverBlock />
           <LinesTable />
           <TotalsBlock />

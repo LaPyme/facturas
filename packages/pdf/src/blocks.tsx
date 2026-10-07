@@ -9,6 +9,7 @@ import {
   formatMoney,
   formatQuantity,
   formatTaxId,
+  formatTitle,
   formatVatRate,
 } from "./format";
 import { ArcaQr } from "./qr";
@@ -45,11 +46,11 @@ export function IssuerHeader({ brand }: { brand?: ReactNode }) {
           {issuer.legalName}
         </Text>
         <Text>{issuer.address}</Text>
-        <Text style={styles.bold}>{issuer.conditionLegend}</Text>
+        <Text style={styles.conditionLegend}>{issuer.conditionLegend}</Text>
       </View>
       <LetterBox />
       <View style={styles.headerRight}>
-        <Text style={styles.title}>{doc.title}</Text>
+        <Text style={styles.title}>{formatTitle(doc.title)}</Text>
         <Text style={styles.number}>Nº {doc.number}</Text>
         <Labeled label="Fecha de emisión:">{formatDate(doc.issueDate)}</Labeled>
         <Labeled label="CUIT:">{formatTaxId(issuer.taxId)}</Labeled>
@@ -82,6 +83,26 @@ function LetterBox() {
   );
 }
 
+/**
+ * The total, large, before the detail, as Stripe opens its invoices. It
+ * repeats C23 for the reader; the totals block below still carries it.
+ */
+export function AmountSummary() {
+  const { doc, styles } = useVoucher("AmountSummary");
+  return (
+    <View style={styles.summary}>
+      <Text style={styles.summaryAmount}>
+        {formatMoney(doc.totals.total, doc.currency.id)}
+      </Text>
+      <Text style={styles.summaryNote}>
+        {doc.paymentDueDate
+          ? `a pagar hasta el ${formatDate(doc.paymentDueDate)}`
+          : doc.saleConditions}
+      </Text>
+    </View>
+  );
+}
+
 /** C13 to C17, L5 and L6, C12, C22 and the service period. */
 export function ReceiverBlock() {
   const { doc, styles } = useVoucher("ReceiverBlock");
@@ -90,6 +111,7 @@ export function ReceiverBlock() {
     <View style={styles.section}>
       <View style={styles.row}>
         <View style={styles.half}>
+          <Text style={styles.sectionTitle}>Receptor</Text>
           {receiver.name ? (
             <Labeled label="Razón social:">{receiver.name}</Labeled>
           ) : null}
@@ -104,6 +126,7 @@ export function ReceiverBlock() {
           <Text style={styles.bold}>{receiver.conditionLegend}</Text>
         </View>
         <View style={styles.half}>
+          <Text style={styles.sectionTitle}>Operación</Text>
           <Labeled label="Condición de venta:">{doc.saleConditions}</Labeled>
           {doc.servicePeriod ? (
             <Labeled label="Período facturado:">
@@ -250,7 +273,7 @@ export function FiscalFooter() {
       </View>
       <View style={styles.footerRight}>
         <ArcaQr url={doc.qr} />
-        <View style={{ gap: 4 }}>
+        <View style={{ gap: 3 }}>
           <Text style={styles.cae}>
             {PRINTED_VOUCHER_TEXT.cae} {doc.authorization.code}
           </Text>
@@ -275,11 +298,11 @@ function Transparency({ doc }: { doc: VoucherDocument }) {
       <Text style={styles.transparencyTitle}>
         {PRINTED_VOUCHER_TEXT.transparencyTitle}
       </Text>
-      <Text>
+      <Text style={styles.transparency}>
         {PRINTED_VOUCHER_TEXT.vatContained}:{" "}
         {formatMoney(transparency.vatContained, doc.currency.id)}
       </Text>
-      <Text>
+      <Text style={styles.transparency}>
         {PRINTED_VOUCHER_TEXT.otherNationalIndirectTaxes}:{" "}
         {formatMoney(transparency.otherNationalIndirectTaxes, doc.currency.id)}
       </Text>

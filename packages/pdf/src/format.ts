@@ -1,6 +1,19 @@
+import type { VoucherDocument } from "facturas";
+
 /** es-AR formatting of the model's minor units, ISO dates and identifiers. */
 
 const CURRENCY_PREFIX: Record<string, string> = { PES: "$", DOL: "USD" };
+
+const TITLES: Record<VoucherDocument["title"], string> = {
+  FACTURA: "Factura",
+  "NOTA DE DÉBITO": "Nota de débito",
+  "NOTA DE CRÉDITO": "Nota de crédito",
+};
+
+/** The model's title, `FACTURA`, as the PDF prints it: `Factura`. */
+export function formatTitle(title: VoucherDocument["title"]): string {
+  return TITLES[title];
+}
 
 /** Minor units as `1.234,56`, with no floating point on the way. */
 export function formatAmount(minor: number): string {
