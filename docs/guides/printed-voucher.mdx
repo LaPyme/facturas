@@ -136,6 +136,8 @@ generado ARCA.
 `buildVoucherDocument()` prefiere fallar a imprimir algo incorrecto:
 
 - Ítems que no suman lo autorizado: `ARCA_INPUT_AMOUNT_MISMATCH`.
+- Un receptor sin documento que no sea consumidor final:
+  `ARCA_INPUT_MISSING_FIELD`.
 - Una cantidad por precio unitario que no da el importe de la línea:
   `ARCA_INPUT_AMOUNT_MISMATCH`.
 - Un emisor que no puede emitir esa clase o un CUIT distinto del comprobante:

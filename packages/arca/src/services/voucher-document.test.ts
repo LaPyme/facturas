@@ -344,6 +344,28 @@ describe("buildVoucherDocument", () => {
     }
   });
 
+  it("refuses an unidentified receiver that is not a consumidor final", async () => {
+    const items = [
+      { description: "Servicio", gross: 12_100, vat: 21 },
+    ] as const;
+    const voucher = await issued({
+      issuer: "responsable_inscripto",
+      salesPoint: 3,
+      to: { condition: 7, document: { type: 99, number: 0 } },
+      items,
+    });
+    expect(() =>
+      document(voucher, items, {
+        receiver: { name: "Cliente", address: "Calle 3" },
+      })
+    ).toThrow(
+      expect.objectContaining({
+        code: "ARCA_INPUT_MISSING_FIELD",
+        field: "voucher.header.documentNumber",
+      })
+    );
+  });
+
   it("adds the discount back into a synthesized unit price", async () => {
     const items = [
       {

@@ -432,6 +432,16 @@ function documentReceiver(
   const identified =
     header.documentType !== UNIDENTIFIED_DOCUMENT &&
     /[1-9]/.test(header.documentNumber);
+  if (!identified && condition !== CONSUMIDOR_FINAL) {
+    throw new ArcaInputError(
+      "Only a consumidor final may be unidentified on a printed voucher.",
+      {
+        code: "ARCA_INPUT_MISSING_FIELD",
+        field: "voucher.header.documentNumber",
+        expected: "the receiver's document (C13 to C17)",
+      }
+    );
+  }
   const label = DOCUMENT_LABELS[header.documentType];
   return {
     conditionLegend,
