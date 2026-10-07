@@ -83,15 +83,17 @@ export function createStyles(theme: ResolvedTheme) {
       paddingTop: 14,
       gap: 5,
     },
+    // L4: the letter stands out by its size and weight, in an outlined box.
     letterBox: {
+      ...hairline,
       width: 40,
       height: 40,
+      borderWidth: 0.75,
       borderRadius: 8,
-      backgroundColor: theme.accentColor,
       alignItems: "center",
       justifyContent: "center",
     },
-    letter: { ...bold, fontSize: 24, lineHeight: 1, color: "#FFFFFF" },
+    letter: { ...bold, fontSize: 24, lineHeight: 1, color: theme.accentColor },
     code: { fontSize: 7, color: theme.mutedColor },
     letterLegend: { ...bold, fontSize: 6.5, textAlign: "center" },
     issuerName: {
