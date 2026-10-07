@@ -317,6 +317,38 @@ describe("buildVoucherDocument", () => {
     expectBalanced(doc);
   });
 
+  it("adds the discount back into a synthesized unit price", async () => {
+    const items = [
+      {
+        description: "Servicio con bonificación",
+        gross: 9000,
+        vat: 21,
+        discount: 1000,
+      },
+    ] as const;
+    const voucher = await issued({
+      issuer: "responsable_inscripto",
+      salesPoint: 3,
+      to: { condition: "consumidor_final" },
+      items,
+    });
+    expect(document(voucher, items).lines).toEqual([
+      {
+        description: "Servicio con bonificación",
+        quantity: 1,
+        unitPrice: "100.00",
+        discount: 1000,
+        amount: 9000,
+      },
+    ]);
+    expect(() => document(voucher, [{ ...items[0], discount: -1 }])).toThrow(
+      expect.objectContaining({
+        code: "ARCA_INPUT_INVALID_VALUE",
+        field: "items[0].discount",
+      })
+    );
+  });
+
   it("carries the exchange rate of a foreign-currency voucher and the note titles", async () => {
     const items = [
       { description: "Licencia", gross: 12_100, vat: 21 },

@@ -552,8 +552,13 @@ function lineQuantity(
   amount: number,
   path: string
 ): { quantity: number; unitPrice: string } {
+  const discount = item.discount ?? 0;
+  if (!(Number.isSafeInteger(discount) && discount >= 0)) {
+    invalid(`${path}.discount`, "a non-negative safe integer in minor units");
+  }
   if (item.quantity === undefined && item.unitPrice === undefined) {
-    return { quantity: 1, unitPrice: majorUnits(amount) };
+    // The line amount is net of the discount: the unit price is not.
+    return { quantity: 1, unitPrice: majorUnits(amount + discount) };
   }
   const { quantity, unitPrice } = item;
   if (
@@ -567,8 +572,7 @@ function lineQuantity(
       "a major-unit decimal string with at most six decimals, given with quantity"
     );
   }
-  const printed =
-    Math.round(quantity * Number(unitPrice) * 100) - (item.discount ?? 0);
+  const printed = Math.round(quantity * Number(unitPrice) * 100) - discount;
   if (Math.abs(printed - amount) > 1) {
     throw new ArcaInputError(
       `${path}: quantity × unitPrice − discount does not match the line amount.`,
