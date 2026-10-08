@@ -122,6 +122,23 @@ Not checked locally: the date must be on or after the last voucher of the same
 type and sales point (WSFE 10016, WSMTXCA 104), and an FCE note on or after its
 associated invoice. Both need a provider read, and ARCA stays authoritative.
 
+## FCE service note payment due date (2026-10-08)
+
+Re-downloaded both pinned manuals. Their checksums above and below are
+unchanged. No live issuance backs this correction.
+
+| Rule | Physical PDF page | Contract |
+| --- | --- | --- |
+| WSFE 10175 | 65 | `FchVtoPago` must be omitted from FCE debit and credit notes unless the note is an annulment. |
+| WSMTXCA 149 | 46 | `fechaVencimientoPago` is forbidden on FCE debit and credit notes (202, 203, 207 and 208). |
+
+The SDK now omits the original payment due date on FCE notes explicitly marked
+without annulment (optional field 22 = N), for both services. It preserves the
+original service window for concepts 2 and 3. The generic service due-date
+requirement (WSFE 10035, physical page 46) does not override 10175 for these
+notes. Ordinary notes and WSFE annulments keep their existing due-date
+behavior. WSMTXCA annulment behavior is outside this correction.
+
 ## WSMTXCA
 
 - [Linked official manual](https://www.arca.gob.ar/fe/ayuda/documentos/wsmtxca-RG-2904.pdf).

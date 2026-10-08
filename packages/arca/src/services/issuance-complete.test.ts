@@ -1157,6 +1157,76 @@ describe("WSMTXCA high-level API through the real transport adapter", () => {
       recoveredByMatch: true,
     });
   });
+  it.each(["services", "products_and_services"] as const)(
+    "omits the due date on WSMTXCA FCE %s notes and replays them safely",
+    async (concept) => {
+      const { client, vouchers, calls } = transportFixture();
+      await client.issue(
+        {
+          ...detailed,
+          family: "fce",
+          concept,
+          service: {
+            from: "20260901",
+            to: "20260904",
+            dueDate: "20260930",
+          },
+          fce: { cbu: "1234567890123456789012" },
+        },
+        { service: "wsmtxca", idempotencyKey: "service-fce-invoice" }
+      );
+      const note = {
+        for: { salesPoint: 1, voucherType: 201 as const, number: 9 },
+        date: "20260906" as const,
+        fce: { annulment: false },
+      };
+      const credit = { ...note, all: true as const };
+      const debit = { ...note, items: detailed.items };
+      const preview = await client.previewCreditNote(credit, {
+        service: "wsmtxca",
+      });
+      expect(preview.originals?.[0]).toMatchObject({
+        paymentDueDate: "2026-09-30",
+      });
+      expect(preview.header).not.toHaveProperty("paymentDueDate");
+      expect(preview.request.comprobanteCAERequest).toMatchObject({
+        fechaServicioDesde: "2026-09-01",
+        fechaServicioHasta: "2026-09-04",
+        fechaVencimientoPago: undefined,
+      });
+      expect(
+        JSON.stringify(preview.request.comprobanteCAERequest)
+      ).not.toContain("fechaVencimientoPago");
+      for (const kind of ["credit", "debit"] as const) {
+        const options = {
+          service: "wsmtxca" as const,
+          idempotencyKey: `service-fce-${kind}`,
+        };
+        const issue = () =>
+          kind === "credit"
+            ? client.issueCreditNote(credit, options)
+            : client.issueDebitNote(debit, options);
+        expect(await issue()).toMatchObject({ kind: "authorized" });
+        expect(vouchers.get(kind === "credit" ? 203 : 202)).toMatchObject({
+          fechaServicioDesde: "2026-09-01",
+          fechaServicioHasta: "2026-09-04",
+          fechaVencimientoPago: undefined,
+          arrayDatosAdicionales: { datoAdicional: [{ t: 22, c1: "N" }] },
+        });
+        const authorizations = calls.filter(
+          (call) => call === "autorizarComprobante"
+        ).length;
+        expect(await client.recover(options.idempotencyKey)).toMatchObject({
+          kind: "authorized",
+          recoveredByMatch: true,
+        });
+        expect(await issue()).toMatchObject({ kind: "authorized" });
+        expect(
+          calls.filter((call) => call === "autorizarComprobante")
+        ).toHaveLength(authorizations);
+      }
+    }
+  );
   it("supports period-associated WSMTXCA notes and single-object SOAP arrays", async () => {
     const { client, vouchers } = transportFixture();
     const input = {
