@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatAmount,
+  formatConditionLegend,
   formatDate,
   formatDecimal,
   formatMoney,
@@ -33,6 +34,21 @@ describe("es-AR formatting", () => {
     expect(formatVatRate(10.5)).toBe("10,5%");
     expect(formatVatRate("exempt")).toBe("Exento");
     expect(formatVatRate("untaxed")).toBe("No gravado");
+  });
+
+  it("writes VAT condition legends as ARCA prints them", () => {
+    expect(formatConditionLegend("IVA RESPONSABLE INSCRIPTO")).toBe(
+      "IVA Responsable Inscripto"
+    );
+    expect(formatConditionLegend("A CONSUMIDOR FINAL")).toBe(
+      "A Consumidor Final"
+    );
+    expect(formatConditionLegend("PROVEEDOR DEL EXTERIOR")).toBe(
+      "Proveedor del Exterior"
+    );
+    expect(formatConditionLegend("IVA LIBERADO - LEY Nº 19.640")).toBe(
+      "IVA Liberado - Ley Nº 19.640"
+    );
   });
 
   it("writes the voucher title in sentence case", () => {

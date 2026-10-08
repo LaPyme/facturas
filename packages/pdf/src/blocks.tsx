@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useVoucher } from "./context";
 import {
   formatAmount,
+  formatConditionLegend,
   formatDate,
   formatDecimal,
   formatMoney,
@@ -52,7 +53,9 @@ export function IssuerHeader({
           {issuer.legalName}
         </Text>
         <Text>{issuer.address}</Text>
-        <Text style={styles.conditionLegend}>{issuer.conditionLegend}</Text>
+        <Text style={styles.conditionLegend}>
+          {formatConditionLegend(issuer.conditionLegend)}
+        </Text>
         {details}
       </View>
       <LetterBox />
@@ -100,18 +103,19 @@ export function ReceiverBlock({ details }: { details?: ReactNode }) {
       <View style={styles.row}>
         <View style={styles.columnLeft}>
           <Text style={styles.sectionTitle}>Receptor</Text>
+          {/* Who, their fiscal identity, then where and how to reach them. */}
           {receiver.name ? (
-            <Labeled label="Razón social:">{receiver.name}</Labeled>
+            <Text style={styles.bold}>{receiver.name}</Text>
           ) : null}
           {receiver.document ? (
             <Labeled label={`${receiver.document.label ?? "Documento"}:`}>
-              {formatTaxId(receiver.document.number)}
+              {formatTaxId(receiver.document.number)} ·{" "}
+              {formatConditionLegend(receiver.conditionLegend)}
             </Labeled>
-          ) : null}
-          {receiver.address ? (
-            <Labeled label="Domicilio:">{receiver.address}</Labeled>
-          ) : null}
-          <Text style={styles.bold}>{receiver.conditionLegend}</Text>
+          ) : (
+            <Text>{formatConditionLegend(receiver.conditionLegend)}</Text>
+          )}
+          {receiver.address ? <Text>{receiver.address}</Text> : null}
           {details}
         </View>
         <View style={styles.columnRight}>

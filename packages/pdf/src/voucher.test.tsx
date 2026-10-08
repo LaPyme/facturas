@@ -7,6 +7,7 @@ import {
   classCDocument,
   longDocument,
 } from "./fixtures.test-helper";
+import { formatConditionLegend } from "./format";
 import {
   find,
   findExact,
@@ -53,7 +54,7 @@ function expectApartadoB(page: PdfPage, doc: VoucherDocument) {
   for (const fragment of [
     doc.issuer.legalName,
     doc.issuer.address,
-    doc.issuer.conditionLegend,
+    formatConditionLegend(doc.issuer.conditionLegend),
   ]) {
     const text = find(page, fragment);
     expect(text.x).toBeLessThan(middle - 40);
@@ -106,7 +107,7 @@ describe("<Voucher>", () => {
       0
     );
     // C15: the receiver legend; L6 and C12: sale conditions and remitos.
-    expect(hasText(page, "A CONSUMIDOR FINAL")).toBe(true);
+    expect(hasText(page, "A Consumidor Final")).toBe(true);
     expect(hasText(page, "Condición de venta: Contado")).toBe(true);
     expect(hasText(page, "Remitos: 0003-00000012")).toBe(true);
     // C19 to C21: description, quantity, unit and total prices with VAT.
@@ -142,10 +143,9 @@ describe("<Voucher>", () => {
     expectFiscalFooter(page, doc);
     // C13, C16: the receiver's name, document, address and legend.
     for (const fragment of [
-      "Razón social: Juan Pérez",
-      "CUIT: 20-11111111-2",
-      "Domicilio: Calle 1, Rosario",
-      "RESPONSABLE MONOTRIBUTO",
+      "Juan Pérez",
+      "CUIT: 20-11111111-2 · Responsable Monotributo",
+      "Calle 1, Rosario",
     ]) {
       expect(hasText(page, fragment)).toBe(true);
     }
@@ -186,7 +186,7 @@ describe("<Voucher>", () => {
     }
     expectApartadoB(page, doc);
     expectFiscalFooter(page, doc);
-    expect(hasText(page, "RESPONSABLE MONOTRIBUTO")).toBe(true);
+    expect(hasText(page, "Responsable Monotributo")).toBe(true);
     expect(hasText(page, "DNI: 30111222")).toBe(true);
     expect(hasText(page, "Inicio de actividades")).toBe(false);
     expect(hasText(page, "IVA ")).toBe(false);
@@ -253,14 +253,14 @@ describe("<Voucher>", () => {
     const issuerDetails = find(page, "Tel. 11 4321-5678");
     expect(issuerDetails.x).toBeLessThan(middle);
     expect(issuerDetails.top).toBeGreaterThan(
-      find(page, doc.issuer.conditionLegend).top
+      find(page, formatConditionLegend(doc.issuer.conditionLegend)).top
     );
     expect(issuerDetails.top).toBeLessThan(find(page, "Receptor").top);
     // Receiver details: after the receiver's data, in its column.
     const receiverDetails = find(page, "Cliente Nº 1042");
     expect(receiverDetails.x).toBeLessThan(middle);
     expect(receiverDetails.top).toBeGreaterThan(
-      find(page, "A CONSUMIDOR FINAL").top
+      find(page, "A Consumidor Final").top
     );
     // Aside: left of the totals, never in their column.
     const aside = find(page, "Saldo actual $ 196.773,50");

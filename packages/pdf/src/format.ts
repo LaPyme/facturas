@@ -10,6 +10,29 @@ const TITLES: Record<VoucherDocument["title"], string> = {
   "NOTA DE CRÉDITO": "Nota de crédito",
 };
 
+const LOWERCASE_PARTICLES = new Set(["de", "del"]);
+
+/**
+ * D9: a VAT condition legend, written in capitals by the norms, in the case
+ * ARCA's own vouchers print it: `IVA RESPONSABLE INSCRIPTO` as
+ * `IVA Responsable Inscripto`.
+ */
+export function formatConditionLegend(legend: string): string {
+  return legend
+    .split(" ")
+    .map((word, index) => {
+      if (word === "IVA" || /\d/.test(word)) {
+        return word;
+      }
+      const lower = word.toLocaleLowerCase("es-AR");
+      if (index > 0 && LOWERCASE_PARTICLES.has(lower)) {
+        return lower;
+      }
+      return lower.charAt(0).toLocaleUpperCase("es-AR") + lower.slice(1);
+    })
+    .join(" ");
+}
+
 /** The model's title, `FACTURA`, as the PDF prints it: `Factura`. */
 export function formatTitle(title: VoucherDocument["title"]): string {
   return TITLES[title];
