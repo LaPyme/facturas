@@ -135,6 +135,11 @@ export function ReceiverBlock() {
   );
 }
 
+/** Descriptions wrap between words, never as "Col-or". */
+function wholeWord(word: string): string[] {
+  return [word];
+}
+
 /** C19 to C21: the lines, without VAT on class A and with VAT on class B. */
 export function LinesTable() {
   const { doc, styles } = useVoucher("LinesTable");
@@ -161,7 +166,9 @@ export function LinesTable() {
           {showCode ? (
             <Text style={styles.cellCode}>{line.code ?? ""}</Text>
           ) : null}
-          <Text style={styles.cellDescription}>{line.description}</Text>
+          <Text hyphenationCallback={wholeWord} style={styles.cellDescription}>
+            {line.description}
+          </Text>
           <Text style={styles.cellNarrow}>{formatQuantity(line.quantity)}</Text>
           <Text style={styles.cellNumber}>{formatDecimal(line.unitPrice)}</Text>
           {showDiscount ? (
@@ -215,8 +222,13 @@ export function TotalsBlock() {
           label={`IVA ${row.rate === undefined ? `(${row.id})` : formatVatRate(row.rate)}`}
         />
       ))}
-      {totals.otherTaxes.map((tax) => (
-        <TotalRow amount={tax.amount} key={tax.id} label={tax.description} />
+      {totals.otherTaxes.map((tax, index) => (
+        <TotalRow
+          amount={tax.amount}
+          // Two provinces' IIBB perceptions share the tribute id.
+          key={`${index}-${tax.id}`}
+          label={tax.description}
+        />
       ))}
       {totals.adjustment === 0 ? null : (
         <TotalRow amount={totals.adjustment} label="Ajuste" />
