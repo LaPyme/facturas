@@ -49,6 +49,17 @@ export const ISSUER_BOX_MIN_HEIGHT = 3 * CM;
 export const CAE_DUE_DATE_FONT_SIZE = 12;
 export const QR_SIZE = 76;
 
+const A4_WIDTH = 595.28;
+const PAGE_MARGIN = 40;
+const BOX_PADDING = 14;
+const LETTER_COLUMN_WIDTH = 84;
+/**
+ * The right column of the issuer box. The receiver section's second column
+ * takes the same width, so all the text on the right starts on one vertical.
+ */
+const RIGHT_COLUMN_WIDTH =
+  (A4_WIDTH - 2 * PAGE_MARGIN - LETTER_COLUMN_WIDTH) / 2;
+
 export function createStyles(theme: ResolvedTheme) {
   const bold = { fontFamily: theme.boldFontFamily };
   const hairline = {
@@ -59,7 +70,7 @@ export function createStyles(theme: ResolvedTheme) {
     page: {
       paddingTop: 32,
       paddingBottom: 44,
-      paddingHorizontal: 40,
+      paddingHorizontal: PAGE_MARGIN,
       fontFamily: theme.fontFamily,
       fontSize: 9,
       color: theme.textColor,
@@ -75,10 +86,15 @@ export function createStyles(theme: ResolvedTheme) {
       borderWidth: 0.75,
       borderRadius: 12,
     },
-    headerSide: { flex: 1, padding: 14, gap: 2.5 },
-    headerRight: { flex: 1, padding: 14, gap: 2.5, alignItems: "flex-start" },
+    headerSide: { flex: 1, padding: BOX_PADDING, gap: 2.5 },
+    headerRight: {
+      flex: 1,
+      padding: BOX_PADDING,
+      gap: 2.5,
+      alignItems: "flex-start",
+    },
     headerCenter: {
-      width: 84,
+      width: LETTER_COLUMN_WIDTH,
       alignItems: "center",
       paddingTop: 14,
       gap: 5,
@@ -112,8 +128,13 @@ export function createStyles(theme: ResolvedTheme) {
       color: theme.mutedColor,
       marginBottom: 3,
     },
-    row: { flexDirection: "row", gap: 24 },
-    half: { flex: 1, gap: 2.5 },
+    row: { flexDirection: "row" },
+    columnLeft: { flex: 1, gap: 2.5, paddingRight: BOX_PADDING },
+    columnRight: {
+      width: RIGHT_COLUMN_WIDTH,
+      paddingLeft: BOX_PADDING,
+      gap: 2.5,
+    },
     table: { marginTop: 6 },
     // Fixed, so on later sheets its top padding separates it from the box.
     tableHead: {

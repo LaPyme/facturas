@@ -91,7 +91,7 @@ export function ReceiverBlock() {
   return (
     <View style={styles.section}>
       <View style={styles.row}>
-        <View style={styles.half}>
+        <View style={styles.columnLeft}>
           <Text style={styles.sectionTitle}>Receptor</Text>
           {receiver.name ? (
             <Labeled label="Razón social:">{receiver.name}</Labeled>
@@ -106,7 +106,7 @@ export function ReceiverBlock() {
           ) : null}
           <Text style={styles.bold}>{receiver.conditionLegend}</Text>
         </View>
-        <View style={styles.half}>
+        <View style={styles.columnRight}>
           <Text style={styles.sectionTitle}>Operación</Text>
           <Labeled label="Condición de venta:">{doc.saleConditions}</Labeled>
           {doc.servicePeriod ? (

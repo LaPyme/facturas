@@ -93,6 +93,11 @@ describe("<Voucher>", () => {
     }
     expectApartadoB(page, doc);
     expectFiscalFooter(page, doc);
+    // The receiver's second column starts where the issuer box's right column does.
+    expect(find(page, "Condición de venta:").x).toBeCloseTo(
+      find(page, "Fecha de emisión:").x,
+      0
+    );
     // C15: the receiver legend; L6 and C12: sale conditions and remitos.
     expect(hasText(page, "A CONSUMIDOR FINAL")).toBe(true);
     expect(hasText(page, "Condición de venta: Contado")).toBe(true);
