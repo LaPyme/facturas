@@ -369,7 +369,11 @@ export function validateFiscalHeader(data: WsfeVoucherInput): void {
   }
   if (data.concept === 2 || data.concept === 3) {
     if (
-      !(data.serviceStartDate && data.serviceEndDate && data.paymentDueDate)
+      !(
+        data.serviceStartDate &&
+        data.serviceEndDate &&
+        (isNonAnnulmentFceNote(data) || data.paymentDueDate)
+      )
     ) {
       bad("service");
     }
@@ -391,6 +395,18 @@ export function validateFiscalHeader(data: WsfeVoucherInput): void {
   ) {
     bad("paidInForeignCurrency");
   }
+}
+
+/** WSFE 10175 forbids a payment due date on an FCE note without annulment. */
+export function isNonAnnulmentFceNote(
+  data: Pick<WsfeVoucherInput, "voucherType" | "optionalFields">
+): boolean {
+  const { family, types } = voucherFamily(data.voucherType);
+  return (
+    family === "fce" &&
+    data.voucherType !== types[0] &&
+    normalizedFceAnnulment({ optionalFields: data.optionalFields }) === false
+  );
 }
 
 /** FCE business fields; the SDK encodes each provider's different option layout. */
@@ -486,6 +502,9 @@ function validateFceHeader(data: WsfeVoucherInput): void {
       options.has("27")
     ) {
       bad("fce.annulment");
+    }
+    if (isNonAnnulmentFceNote(data) && data.paymentDueDate !== undefined) {
+      bad("dueDate");
     }
   }
 }

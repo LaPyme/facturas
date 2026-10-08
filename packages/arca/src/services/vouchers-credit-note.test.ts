@@ -872,6 +872,94 @@ describe("notes against several originals", () => {
   );
 });
 
+describe.each([201, 206, 211])("FCE %i service note due dates", (type) => {
+  it.each([2, 3])(
+    "omits the payment due date for concept %i without annulment",
+    async (concept) => {
+      const original = deriveWsfeInvoice({
+        ...(type === 211
+          ? { issuer: "monotributo", items: [{ amount: 12_100 }] }
+          : {
+              issuer: "responsable_inscripto",
+              items: [{ net: 10_000, vat: 21 }],
+            }),
+        family: "fce",
+        salesPoint: 1,
+        date: "20260904",
+        concept: concept === 2 ? "services" : "products_and_services",
+        service: {
+          from: "20260901",
+          to: "20260904",
+          dueDate: "20260904",
+        },
+        to: {
+          condition: type === 206 ? "exento" : "responsable_inscripto",
+          cuit: "20123456789",
+        },
+        fce: { cbu: "1234567890123456789012" },
+      }).data;
+      const fields: Pick<CreditNoteInput, "fce" | "optionalFields">[] = [
+        { fce: { annulment: false } },
+        { optionalFields: [{ id: "22", value: "N" }] },
+      ];
+      for (const encoding of fields) {
+        for (const mode of ["partial", "full", "debit"] as const) {
+          const { service, wsfe, store } = fake();
+          const storeGet = vi.spyOn(store, "get");
+          wsfe.lookupVoucher.mockResolvedValue(found(original));
+          const partialInput: CreditNoteInput & { all?: never } = {
+            for: { salesPoint: 1, voucherType: type, number: 1 },
+            date: "20260905",
+            ...encoding,
+            items: type === 211 ? [{ amount: 6050 }] : [{ net: 5000, vat: 21 }],
+          };
+          const input: CreditNoteInput =
+            mode === "full"
+              ? {
+                  for: partialInput.for,
+                  date: partialInput.date,
+                  ...encoding,
+                  all: true,
+                }
+              : partialInput;
+          const preview =
+            mode === "debit"
+              ? await service.previewDebitNote(partialInput)
+              : await service.previewCreditNote(input);
+          expect(preview.request).toMatchObject({
+            voucherType: type + (mode === "debit" ? 1 : 2),
+            concept,
+            serviceStartDate: "20260901",
+            serviceEndDate: "20260904",
+            optionalFields: [{ id: "22", value: "N" }],
+          });
+          expect(preview.request).not.toHaveProperty("paymentDueDate");
+          expect(preview.header).not.toHaveProperty("paymentDueDate");
+          expect(preview.originals?.[0]).toMatchObject({
+            paymentDueDate: "2026-09-04",
+          });
+          expect(wsfe.issue).not.toHaveBeenCalled();
+          expect(storeGet).not.toHaveBeenCalled();
+          const outcome =
+            mode === "debit"
+              ? await service.issueDebitNote(partialInput, options)
+              : await service.issueCreditNote(input, options);
+          expect(outcome.kind).toBe("authorized");
+          if (outcome.kind !== "authorized") {
+            throw new Error("Expected authorized note");
+          }
+          expect(outcome.voucher.header).not.toHaveProperty("paymentDueDate");
+          expect(wsfe.issue).toHaveBeenCalledExactlyOnceWith({
+            data: preview.request,
+            voucherNumber: 9,
+            representedTaxId: undefined,
+          });
+        }
+      }
+    }
+  );
+});
+
 describe("FCE association rules", () => {
   const originals = [
     { salesPoint: 1, voucherType: 201, number: 1 },

@@ -12,6 +12,7 @@ import {
   applyFceFields,
   applyIssuanceFields,
   type IssuanceFields,
+  isNonAnnulmentFceNote,
   minor,
   tributeTotal,
   validateIssuanceFields,
@@ -443,6 +444,9 @@ function copyServiceDates(original: WsfeVoucherInfo, header: CreditNoteHeader) {
     original.serviceEndDate,
     "serviceEndDate"
   ) as WsfeDateInput;
+  if (isNonAnnulmentFceNote(header)) {
+    return;
+  }
   const due = normalizeWsfeDateInput(
     required(original.paymentDueDate, "paymentDueDate") as WsfeDateInput,
     "original.paymentDueDate"
