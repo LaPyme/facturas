@@ -1,6 +1,6 @@
 {
   "name": "@facturas/pdf",
-  "version": "0.23.0",
+  "version": "0.23.1",
   "description": "PDF de comprobantes de ARCA que cumplen la RG 1415 por construcción: el modelo de facturas dibujado con @react-pdf/renderer.",
   "type": "module",
   "license": "Apache-2.0",
