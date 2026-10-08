@@ -113,8 +113,9 @@ acreditar la factura entera.
 Del original el SDK toma la clase y por lo tanto el tipo de nota
 (1 → 3, 6 → 8, 11 → 13), el tipo, el número y la condición de IVA del receptor,
 la moneda y el tipo de cambio, el concepto y, para los conceptos 2 y 3, las
-fechas de servicio, con el vencimiento elevado a la fecha de la nota. La
-aplicación aporta `for`, el modo (`items` o `amounts`, con un `total` opcional,
+fechas de servicio. En una nota ordinaria, el vencimiento se eleva a la fecha
+de la nota cuando hace falta. Una nota FCE sin anulación no lleva vencimiento
+de pago. La aplicación aporta `for`, el modo (`items` o `amounts`, con un `total` opcional,
 o `all: true`) y puede elegir el `salesPoint` de la nota, que por defecto es el
 del original, y `date`, que por defecto es hoy en Buenos Aires. Una nota
 vinculada no tiene campos `issuer` ni `currency`. Solo las notas por
@@ -249,6 +250,11 @@ WSMTXCA, toda nota FCE lleva exactamente un original, incluso cuando es de
 anulación. Esta restricción no afecta las notas ordinarias contra varios
 originales.
 
+Para los conceptos 2 y 3, una nota FCE con `annulment: false` conserva las
+fechas de servicio del original y omite su vencimiento de pago. Esto también
+se aplica si pasás `{ id: "22", value: "N" }` en `optionalFields`, y a las
+notas de débito. ARCA rechaza ese vencimiento con el código 10175 en WSFE.
+
 ```ts
 const nota = await arca.issueCreditNote(
   {
@@ -271,10 +277,13 @@ pasaste. Un `VoucherSummary` habla en las unidades del input: importes en
 centavos y fechas `YYYY-MM-DD`. Una nota por período no tiene originales, así que tampoco necesita esa
 consulta ni devuelve esa propiedad.
 
-`header` describe la nota nueva, no sus originales. Por ejemplo, si la factura
-de servicios vencía el 10 de septiembre y la nota se fecha el 19, el SDK ajusta
-el vencimiento final de la nota al 19. Ese valor aparece en
+`header` describe la nota nueva, no sus originales. Por ejemplo, si una factura
+ordinaria de servicios vencía el 10 de septiembre y la nota se fecha el 19,
+el SDK ajusta el vencimiento final de la nota al 19. Ese valor aparece en
 `previsualizacion.header.paymentDueDate`.
+
+En una nota FCE sin anulación, `header.paymentDueDate` se omite. El
+vencimiento de la factura sigue disponible en `originals`.
 
 ```ts
 const previsualizacion = await arca.previewCreditNote({
