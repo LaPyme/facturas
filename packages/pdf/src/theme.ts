@@ -48,6 +48,7 @@ export const ISSUER_BOX_MIN_HEIGHT = 3 * CM;
 /** L9: the CAE due date is printed at 12 pt. */
 export const CAE_DUE_DATE_FONT_SIZE = 12;
 export const QR_SIZE = 76;
+const OUTLINE_COLOR = "#999999";
 
 const A4_WIDTH = 595.28;
 const PAGE_MARGIN = 40;
@@ -66,11 +67,10 @@ export function createStyles(theme: ResolvedTheme) {
   // sheet number, and react-pdf drops a `render` text that sets one. A block
   // resolves it against its own font size, so the size goes with it.
   const leading = { fontSize: 9, lineHeight: 1.35 };
-  // The issuer box and the letter box are drawn in the text colour, not the
-  // separator grey: a light line can drop out on a laser printer, and L3
-  // requires the box to show.
+  // The issuer box and the letter box: a mid grey, darker than the separators
+  // so the box L3 requires shows on screen and in print.
   const outline = {
-    borderColor: theme.textColor,
+    borderColor: OUTLINE_COLOR,
     borderStyle: "solid",
     borderWidth: 0.6,
   } as const;
