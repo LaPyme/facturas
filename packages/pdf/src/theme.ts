@@ -168,7 +168,6 @@ export function createStyles(theme: ResolvedTheme) {
     cellNumber: { width: 64, textAlign: "right" },
     cellDiscount: { width: 52, textAlign: "right" },
     cellNarrow: { width: 40, textAlign: "right" },
-    closing: { flexGrow: 1 },
     totalsRow: { flexDirection: "row", marginTop: 10, gap: 32 },
     aside: { flex: 1, paddingTop: 5 },
     totals: { ...leading, width: 240 },
@@ -194,6 +193,7 @@ export function createStyles(theme: ResolvedTheme) {
       color: theme.textColor,
     },
     notes: { ...leading, marginTop: 14, color: theme.textColor },
+    closing: { flexGrow: 1 },
     footer: {
       marginTop: "auto",
       paddingTop: 12,

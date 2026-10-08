@@ -14,6 +14,7 @@ import {
   formatVatRate,
 } from "./format";
 import { ArcaQr } from "./qr";
+import type { VoucherStyles } from "./theme";
 
 /**
  * The fiscal blocks. They are internal on purpose: `<Voucher>` places each
@@ -147,10 +148,23 @@ export function ReceiverBlock({ details }: { details?: ReactNode }) {
   );
 }
 
-/** Descriptions wrap between words, never as "Col-or". */
-function wholeWord(word: string): string[] {
-  return [word];
+/** Longer than a description column holds: such a token may break anywhere. */
+const LONG_TOKEN = 20;
+
+/**
+ * Descriptions wrap between words, never as "Col-or". Only a token too long
+ * for the column, such as a URL, breaks inside so it cannot overrun the
+ * quantity and price columns.
+ */
+function wrapDescription(word: string): string[] {
+  return word.length > LONG_TOKEN ? [...word] : [word];
 }
+
+/**
+ * A row stays on one sheet unless its description could outgrow one: an
+ * unbreakable row taller than the sheet would be clipped.
+ */
+const UNBREAKABLE_DESCRIPTION = 600;
 
 /** C19 to C21: the lines, without VAT on class A and with VAT on class B. */
 export function LinesTable() {
@@ -177,12 +191,15 @@ export function LinesTable() {
         <View
           key={`${index}-${line.description}`}
           style={styles.tableRow}
-          wrap={false}
+          wrap={line.description.length > UNBREAKABLE_DESCRIPTION}
         >
           {showCode ? (
             <Text style={styles.cellCode}>{line.code ?? ""}</Text>
           ) : null}
-          <Text hyphenationCallback={wholeWord} style={styles.cellDescription}>
+          <Text
+            hyphenationCallback={wrapDescription}
+            style={styles.cellDescription}
+          >
             {line.description}
           </Text>
           <Text style={styles.cellNarrow}>{formatQuantity(line.quantity)}</Text>
@@ -279,12 +296,17 @@ export function LegendsBlock() {
 }
 
 /** L8, G2 and Ley 27.743: bottom left. L9, Q1: CAE, its due date and QR, bottom right. */
-export function FiscalFooter() {
-  const { doc, styles } = useVoucher("FiscalFooter");
+export function FiscalFooter({
+  doc,
+  styles,
+}: {
+  doc: VoucherDocument;
+  styles: VoucherStyles;
+}) {
   return (
-    <View style={styles.footer} wrap={false}>
+    <View style={styles.footer}>
       <View style={styles.footerLeft}>
-        {doc.transparency ? <Transparency doc={doc} /> : null}
+        {doc.transparency ? <Transparency doc={doc} styles={styles} /> : null}
       </View>
       <View style={styles.footerRight}>
         <ArcaQr url={doc.qr} />
@@ -302,8 +324,13 @@ export function FiscalFooter() {
   );
 }
 
-function Transparency({ doc }: { doc: VoucherDocument }) {
-  const { styles } = useVoucher("Transparency");
+function Transparency({
+  doc,
+  styles,
+}: {
+  doc: VoucherDocument;
+  styles: VoucherStyles;
+}) {
   const transparency = doc.transparency;
   if (transparency === undefined) {
     return null;

@@ -1,4 +1,4 @@
-import { renderToBuffer, Text, View } from "@react-pdf/renderer";
+import { renderToBuffer, Text } from "@react-pdf/renderer";
 import { MONOTRIBUTO_CREDIT_LEGEND, type VoucherDocument } from "facturas";
 import { describe, expect, it } from "vitest";
 import {
@@ -268,31 +268,82 @@ describe("<Voucher>", () => {
     expect(aside.x + 150).toBeLessThan(total.x);
     expect(aside.top).toBeGreaterThan(find(page, "Mechas para metal").top);
     expect(aside.top).toBeLessThan(total.top);
-    // Notes: after the totals, before the CAE.
+    // Notes: after the receiver, before the lines, as Stripe's memo.
     const notes = find(page, "Cambios dentro de los 10 días.");
-    expect(notes.top).toBeGreaterThan(find(page, "Importe total").top);
-    expect(notes.top).toBeLessThan(find(page, "C.A.E.").top);
+    expect(notes.top).toBeGreaterThan(find(page, "A Consumidor Final").top);
+    expect(notes.top).toBeLessThan(find(page, "Descripción").top);
   });
 
-  it("moves the totals to the CAE's sheet rather than leave the CAE alone", async () => {
+  it("keeps the totals with the CAE wherever the sheet breaks", async () => {
+    const doc = longDocument();
+    // Line counts around the first sheet's edge: the closing block fits, then
+    // must move, then the lines themselves overflow.
+    for (const count of [20, 22, 24, 26, 28, 30, 32]) {
+      const pages = await readPdf(
+        await renderVoucherPdf({ ...doc, lines: doc.lines.slice(0, count) })
+      );
+      const last = pages.at(-1) as PdfPage;
+      expect(hasText(last, "Importe total"), `${count} lines`).toBe(true);
+      expectFiscalFooter(last, doc);
+      for (const page of pages.slice(0, -1)) {
+        expect(hasText(page, "C.A.E."), `${count} lines`).toBe(false);
+      }
+    }
+  });
+
+  it("lets long notes break across sheets, all of them, clear of the CAE", async () => {
     const doc = classBDocument();
-    const pages = await readPdf(
-      await renderVoucherPdf(
-        <Voucher doc={doc}>
-          <VoucherNotes>
-            <View style={{ height: 380 }}>
-              <Text>Condiciones generales de venta.</Text>
-            </View>
-          </VoucherNotes>
-        </Voucher>
-      )
+    const clauses = Array.from(
+      { length: 70 },
+      (_, index) => `Cláusula ${index + 1}: condiciones generales de venta.`
     );
-    expect(pages).toHaveLength(2);
-    const [first, last] = pages as [PdfPage, PdfPage];
-    expect(hasText(first, "Taladro percutor 13 mm")).toBe(true);
-    expect(hasText(first, "Importe total")).toBe(false);
-    expect(hasText(last, "Importe total")).toBe(true);
+    const pages = await readPdf(
+      await renderVoucherPdf(doc, { notes: clauses.join("\n") })
+    );
+    expect(pages.length).toBeGreaterThan(1);
+    const printed = pages.flatMap((page) =>
+      page.texts.filter((text) => text.text.startsWith("Cláusula "))
+    );
+    expect(printed).toHaveLength(70);
+    const last = pages.at(-1) as PdfPage;
     expectFiscalFooter(last, doc);
+    for (const text of last.texts.filter((t) =>
+      t.text.startsWith("Cláusula ")
+    )) {
+      expect(text.top).toBeLessThan(find(last, "Importe total").top);
+    }
+  });
+
+  it("breaks a token wider than the description column", async () => {
+    const doc = classBDocument();
+    const token = `https://example.com/${"x".repeat(78)}`;
+    const [page] = await render({
+      ...doc,
+      lines: doc.lines.map((line, index) =>
+        index === 0 ? { ...line, description: token } : line
+      ),
+    });
+    const runs = (page as PdfPage).texts.filter((text) =>
+      text.text.includes("xxxx")
+    );
+    expect(new Set(runs.map((run) => run.top)).size).toBeGreaterThan(1);
+  });
+
+  it("lets a row taller than a sheet continue on the next one", async () => {
+    const doc = classADocument();
+    const paragraph = `${"texto de la descripción ".repeat(30)}\n`;
+    const description = `${paragraph.repeat(6)}FIN DE LA DESCRIPCIÓN`;
+    const pages = await readPdf(
+      await renderVoucherPdf({
+        ...doc,
+        lines: doc.lines.map((line, index) =>
+          index === 0 ? { ...line, description } : line
+        ),
+      })
+    );
+    expect(pages.some((page) => hasText(page, "FIN DE LA DESCRIPCIÓN"))).toBe(
+      true
+    );
   });
 
   describe("refuses a wrong composition", () => {
