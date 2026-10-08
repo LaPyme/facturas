@@ -168,24 +168,49 @@ Lo que podés cambiar:
 - `notes`: garantía, cambios, contacto o lo que quieras decir, después de los
   totales y fuera de las zonas fiscales.
 
-Con JSX armás lo mismo con `<Voucher>` y sus dos espacios, `<VoucherBrand>` y
-`<VoucherNotes>`:
+Con JSX tenés más espacios. Cada uno va en un lugar fijo, fuera de las zonas
+fiscales:
+
+| Espacio | Dónde va | Para qué |
+| --- | --- | --- |
+| `<VoucherBrand>` | En el recuadro del emisor, sobre la razón social | El logo |
+| `<VoucherIssuerDetails>` | En el recuadro, después de los datos fiscales del emisor | Teléfono, email, sitio web |
+| `<VoucherReceiverDetails>` | Después de los datos del receptor | Teléfono, email, número de cliente |
+| `<VoucherAside>` | A la izquierda de los totales | Pagos recibidos, saldo de cuenta corriente |
+| `<VoucherNotes>` | Después de los totales y las leyendas | Garantía, CBU, observaciones |
 
 ```tsx
 import { Image, Text } from "@react-pdf/renderer";
-import { renderVoucherPdf, Voucher, VoucherBrand, VoucherNotes } from "@facturas/pdf";
+import {
+  renderVoucherPdf,
+  Voucher,
+  VoucherAside,
+  VoucherBrand,
+  VoucherIssuerDetails,
+  VoucherNotes,
+} from "@facturas/pdf";
 
 const pdf = await renderVoucherPdf(
   <Voucher doc={comprobante} theme={{ accentColor: "#C00000" }}>
     <VoucherBrand>
       <Image src="https://tu-dominio.com/logo.png" />
     </VoucherBrand>
+    <VoucherIssuerDetails>
+      <Text>Tel. 11 4321-5678</Text>
+      <Text>ventas@tu-dominio.com</Text>
+    </VoucherIssuerDetails>
+    <VoucherAside>
+      <Text>Saldo de cuenta corriente: $ 196.773,50</Text>
+    </VoucherAside>
     <VoucherNotes>
       <Text>Garantía oficial de 6 meses.</Text>
     </VoucherNotes>
   </Voucher>
 );
 ```
+
+Si los totales, las notas y el pie no entran en la hoja, pasan juntos a la
+siguiente: el CAE nunca queda solo en una hoja.
 
 Los bloques fiscales no se exportan: `<Voucher>` los ubica solo. Cualquier
 otro hijo de `<Voucher>`, o un espacio repetido, hace que `renderVoucherPdf()`

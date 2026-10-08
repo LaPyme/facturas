@@ -31,7 +31,13 @@ function Labeled({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** L1, L2, L3 and L4: the issuer box with the letter at its top centre. */
-export function IssuerHeader({ brand }: { brand?: ReactNode }) {
+export function IssuerHeader({
+  brand,
+  details,
+}: {
+  brand?: ReactNode;
+  details?: ReactNode;
+}) {
   const { doc, styles } = useVoucher("IssuerHeader");
   const { issuer } = doc;
   // Fixed: every sheet of a long voucher says whose voucher it is.
@@ -47,6 +53,7 @@ export function IssuerHeader({ brand }: { brand?: ReactNode }) {
         </Text>
         <Text>{issuer.address}</Text>
         <Text style={styles.conditionLegend}>{issuer.conditionLegend}</Text>
+        {details}
       </View>
       <LetterBox />
       <View style={styles.headerRight}>
@@ -85,7 +92,7 @@ function LetterBox() {
 }
 
 /** C13 to C17, L5 and L6, C12, C22 and the service period. */
-export function ReceiverBlock() {
+export function ReceiverBlock({ details }: { details?: ReactNode }) {
   const { doc, styles } = useVoucher("ReceiverBlock");
   const { receiver } = doc;
   return (
@@ -105,6 +112,7 @@ export function ReceiverBlock() {
             <Labeled label="Domicilio:">{receiver.address}</Labeled>
           ) : null}
           <Text style={styles.bold}>{receiver.conditionLegend}</Text>
+          {details}
         </View>
         <View style={styles.columnRight}>
           <Text style={styles.sectionTitle}>Operación</Text>
@@ -153,7 +161,7 @@ export function LinesTable() {
         <Text style={styles.cellDescription}>Descripción</Text>
         <Text style={styles.cellNarrow}>Cant.</Text>
         <Text style={styles.cellNumber}>P. unitario</Text>
-        {showDiscount ? <Text style={styles.cellNumber}>Bonif.</Text> : null}
+        {showDiscount ? <Text style={styles.cellDiscount}>Bonif.</Text> : null}
         {showRate ? <Text style={styles.cellNarrow}>IVA</Text> : null}
         <Text style={styles.cellNumber}>Subtotal</Text>
       </View>
@@ -172,7 +180,7 @@ export function LinesTable() {
           <Text style={styles.cellNarrow}>{formatQuantity(line.quantity)}</Text>
           <Text style={styles.cellNumber}>{formatDecimal(line.unitPrice)}</Text>
           {showDiscount ? (
-            <Text style={styles.cellNumber}>
+            <Text style={styles.cellDiscount}>
               {line.discount ? formatAmount(line.discount) : ""}
             </Text>
           ) : null}
@@ -198,44 +206,50 @@ function TotalRow({ label, amount }: { label: string; amount: number }) {
   );
 }
 
-/** C23, C25, L7: totals, with one VAT row per rate right after the lines on class A. */
-export function TotalsBlock() {
+/**
+ * C23, C25, L7: totals, with one VAT row per rate right after the lines on
+ * class A. The aside slot takes the room on their left.
+ */
+export function TotalsBlock({ aside }: { aside?: ReactNode }) {
   const { doc, styles } = useVoucher("TotalsBlock");
   const { totals } = doc;
   const classA = doc.voucherClass === "A";
   return (
-    <View style={styles.totals} wrap={false}>
-      <TotalRow
-        amount={totals.subtotal}
-        label={classA ? "Importe neto gravado" : "Subtotal"}
-      />
-      {classA && totals.exempt > 0 ? (
-        <TotalRow amount={totals.exempt} label="Importe exento" />
-      ) : null}
-      {classA && totals.untaxed > 0 ? (
-        <TotalRow amount={totals.untaxed} label="Importe no gravado" />
-      ) : null}
-      {totals.vatRates.map((row) => (
+    <View style={styles.totalsRow} wrap={false}>
+      {aside ?? <View style={styles.aside} />}
+      <View style={styles.totals}>
         <TotalRow
-          amount={row.amount}
-          key={row.id}
-          label={`IVA ${row.rate === undefined ? `(${row.id})` : formatVatRate(row.rate)}`}
+          amount={totals.subtotal}
+          label={classA ? "Importe neto gravado" : "Subtotal"}
         />
-      ))}
-      {totals.otherTaxes.map((tax, index) => (
-        <TotalRow
-          amount={tax.amount}
-          // Two provinces' IIBB perceptions share the tribute id.
-          key={`${index}-${tax.id}`}
-          label={tax.description}
-        />
-      ))}
-      {totals.adjustment === 0 ? null : (
-        <TotalRow amount={totals.adjustment} label="Ajuste" />
-      )}
-      <View style={[styles.totalRow, styles.grandTotal]}>
-        <Text>Importe total</Text>
-        <Text>{formatMoney(totals.total, doc.currency.id)}</Text>
+        {classA && totals.exempt > 0 ? (
+          <TotalRow amount={totals.exempt} label="Importe exento" />
+        ) : null}
+        {classA && totals.untaxed > 0 ? (
+          <TotalRow amount={totals.untaxed} label="Importe no gravado" />
+        ) : null}
+        {totals.vatRates.map((row) => (
+          <TotalRow
+            amount={row.amount}
+            key={row.id}
+            label={`IVA ${row.rate === undefined ? `(${row.id})` : formatVatRate(row.rate)}`}
+          />
+        ))}
+        {totals.otherTaxes.map((tax, index) => (
+          <TotalRow
+            amount={tax.amount}
+            // Two provinces' IIBB perceptions share the tribute id.
+            key={`${index}-${tax.id}`}
+            label={tax.description}
+          />
+        ))}
+        {totals.adjustment === 0 ? null : (
+          <TotalRow amount={totals.adjustment} label="Ajuste" />
+        )}
+        <View style={[styles.totalRow, styles.grandTotal]}>
+          <Text>Importe total</Text>
+          <Text>{formatMoney(totals.total, doc.currency.id)}</Text>
+        </View>
       </View>
     </View>
   );

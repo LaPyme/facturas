@@ -1,4 +1,4 @@
-import { renderToBuffer, Text } from "@react-pdf/renderer";
+import { renderToBuffer, Text, View } from "@react-pdf/renderer";
 import { MONOTRIBUTO_CREDIT_LEGEND, type VoucherDocument } from "facturas";
 import { describe, expect, it } from "vitest";
 import {
@@ -15,7 +15,14 @@ import {
   readPdf,
 } from "./pdf-reader.test-helper";
 import { renderVoucherPdf } from "./render";
-import { Voucher, VoucherBrand, VoucherNotes } from "./voucher";
+import {
+  Voucher,
+  VoucherAside,
+  VoucherBrand,
+  VoucherIssuerDetails,
+  VoucherNotes,
+  VoucherReceiverDetails,
+} from "./voucher";
 
 /**
  * Each rendered voucher is read back and checked rule by rule, with the ids of
@@ -190,7 +197,7 @@ describe("<Voucher>", () => {
     expect(lines).toHaveLength(60);
   });
 
-  it("takes a brand and notes, but never in a fiscal zone", async () => {
+  it("takes its slots, but never in a fiscal zone", async () => {
     const doc = classBDocument();
     const [page] = await readPdf(
       new Uint8Array(
@@ -202,6 +209,15 @@ describe("<Voucher>", () => {
             <VoucherBrand>
               <Text>TELMO</Text>
             </VoucherBrand>
+            <VoucherIssuerDetails>
+              <Text>Tel. 11 4321-5678</Text>
+            </VoucherIssuerDetails>
+            <VoucherReceiverDetails>
+              <Text>Cliente Nº 1042</Text>
+            </VoucherReceiverDetails>
+            <VoucherAside>
+              <Text>Saldo actual $ 196.773,50</Text>
+            </VoucherAside>
             <VoucherNotes>
               <Text>Cambios dentro de los 10 días.</Text>
             </VoucherNotes>
@@ -214,12 +230,54 @@ describe("<Voucher>", () => {
     }
     expectApartadoB(page, doc);
     expectFiscalFooter(page, doc);
+    const middle = page.width / 2;
+    // Brand and issuer details: in the issuer box, around the issuer's data.
     const brand = find(page, "TELMO");
-    expect(brand.x).toBeLessThan(page.width / 2);
+    expect(brand.x).toBeLessThan(middle);
     expect(brand.top).toBeLessThan(find(page, doc.issuer.legalName).top);
+    const issuerDetails = find(page, "Tel. 11 4321-5678");
+    expect(issuerDetails.x).toBeLessThan(middle);
+    expect(issuerDetails.top).toBeGreaterThan(
+      find(page, doc.issuer.conditionLegend).top
+    );
+    expect(issuerDetails.top).toBeLessThan(find(page, "Receptor").top);
+    // Receiver details: after the receiver's data, in its column.
+    const receiverDetails = find(page, "Cliente Nº 1042");
+    expect(receiverDetails.x).toBeLessThan(middle);
+    expect(receiverDetails.top).toBeGreaterThan(
+      find(page, "A CONSUMIDOR FINAL").top
+    );
+    // Aside: left of the totals, never in their column.
+    const aside = find(page, "Saldo actual $ 196.773,50");
+    const total = find(page, "Importe total");
+    expect(aside.x + 150).toBeLessThan(total.x);
+    expect(aside.top).toBeGreaterThan(find(page, "Mechas para metal").top);
+    expect(aside.top).toBeLessThan(total.top);
+    // Notes: after the totals, before the CAE.
     const notes = find(page, "Cambios dentro de los 10 días.");
     expect(notes.top).toBeGreaterThan(find(page, "Importe total").top);
     expect(notes.top).toBeLessThan(find(page, "C.A.E.").top);
+  });
+
+  it("moves the totals to the CAE's sheet rather than leave the CAE alone", async () => {
+    const doc = classBDocument();
+    const pages = await readPdf(
+      await renderVoucherPdf(
+        <Voucher doc={doc}>
+          <VoucherNotes>
+            <View style={{ height: 380 }}>
+              <Text>Condiciones generales de venta.</Text>
+            </View>
+          </VoucherNotes>
+        </Voucher>
+      )
+    );
+    expect(pages).toHaveLength(2);
+    const [first, last] = pages as [PdfPage, PdfPage];
+    expect(hasText(first, "Taladro percutor 13 mm")).toBe(true);
+    expect(hasText(first, "Importe total")).toBe(false);
+    expect(hasText(last, "Importe total")).toBe(true);
+    expectFiscalFooter(last, doc);
   });
 
   describe("refuses a wrong composition", () => {
@@ -230,7 +288,7 @@ describe("<Voucher>", () => {
             <Text>C.A.E. N° 00000000000000</Text>
           </Voucher>
         )
-      ).rejects.toThrow("only takes <VoucherBrand> and <VoucherNotes>");
+      ).rejects.toThrow("only takes <VoucherBrand>, <VoucherIssuerDetails>");
       await expect(
         renderVoucherPdf(
           <Voucher doc={classBDocument()}>

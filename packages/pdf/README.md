@@ -22,8 +22,9 @@ const pdf = await renderVoucherPdf(comprobante, {
 - Los bloques fiscales son fijos: el recuadro del emisor, la letra en el centro,
   el bloque de transparencia fiscal abajo a la izquierda y el CAE con su
   vencimiento en 12 puntos abajo a la derecha.
-- El tema cambia tipografía y colores. El logo y las notas tienen su espacio
-  fuera de las zonas fiscales.
+- El tema cambia tipografía y colores. El logo, los datos de contacto, los
+  pagos junto a los totales y las notas tienen su espacio fuera de las zonas
+  fiscales.
 - El QR se dibuja en vectores y es un link a la constatación de ARCA.
 - Sale con la misma versión que `facturas`.
 
