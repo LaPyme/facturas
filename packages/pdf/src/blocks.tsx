@@ -153,7 +153,11 @@ export function LinesTable() {
   const { doc, styles } = useVoucher("LinesTable");
   const showCode = doc.lines.some((line) => line.code !== undefined);
   const showDiscount = doc.lines.some((line) => line.discount !== undefined);
-  const showRate = doc.voucherClass === "A";
+  // The rate per line only tells something apart when the lines differ: with
+  // one rate, the VAT row of the totals already names it.
+  const showRate =
+    doc.voucherClass === "A" &&
+    new Set(doc.lines.map((line) => line.vatRate)).size > 1;
   return (
     <View style={styles.table}>
       <View fixed style={styles.tableHead}>

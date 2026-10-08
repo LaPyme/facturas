@@ -163,6 +163,21 @@ describe("<Voucher>", () => {
     expect(hasText(page, "Régimen de Transparencia Fiscal")).toBe(false);
   });
 
+  it("drops the line rate column on class A when every line has the same rate", async () => {
+    const doc = classADocument();
+    const single = {
+      ...doc,
+      lines: doc.lines.map((line) => ({ ...line, vatRate: 21 as const })),
+    };
+    const [page] = await render(single);
+    if (page === undefined) {
+      throw new Error("no page");
+    }
+    expect(page.texts.some((text) => text.text.trim() === "IVA")).toBe(false);
+    const [mixed] = await render(doc);
+    expect(mixed?.texts.some((text) => text.text.trim() === "IVA")).toBe(true);
+  });
+
   it("renders class C without VAT, transparency block or an exempt start of activities", async () => {
     const doc = classCDocument();
     const [page] = await render(doc);

@@ -73,7 +73,7 @@ export function createStyles(theme: ResolvedTheme) {
   return StyleSheet.create({
     page: {
       paddingTop: 32,
-      paddingBottom: 44,
+      paddingBottom: 36,
       paddingHorizontal: PAGE_MARGIN,
       fontFamily: theme.fontFamily,
       fontSize: 9,
@@ -127,7 +127,7 @@ export function createStyles(theme: ResolvedTheme) {
     conditionLegend: { fontSize: 7.5, color: theme.mutedColor, marginTop: 2 },
     title: { ...bold, fontSize: 18, lineHeight: 1.1, color: theme.accentColor },
     number: { ...bold, fontSize: 10, marginBottom: 6 },
-    section: { marginTop: 24 },
+    section: { marginTop: 18 },
     sectionTitle: {
       ...bold,
       fontSize: 7.5,
@@ -142,7 +142,7 @@ export function createStyles(theme: ResolvedTheme) {
       paddingLeft: BOX_PADDING,
       gap: 1,
     },
-    table: { ...leading, marginTop: 6 },
+    table: { ...leading, fontSize: 8.5, marginTop: 6 },
     // Fixed, so on later sheets its top padding separates it from the box.
     tableHead: {
       flexDirection: "row",
@@ -156,7 +156,7 @@ export function createStyles(theme: ResolvedTheme) {
     },
     tableRow: {
       flexDirection: "row",
-      paddingVertical: 4.5,
+      paddingVertical: 3,
       borderBottomWidth: 0.5,
       borderBottomColor: theme.borderColor,
       borderBottomStyle: "solid",
@@ -167,23 +167,23 @@ export function createStyles(theme: ResolvedTheme) {
     cellDiscount: { width: 52, textAlign: "right" },
     cellNarrow: { width: 40, textAlign: "right" },
     closing: { flexGrow: 1 },
-    totalsRow: { flexDirection: "row", marginTop: 14, gap: 32 },
+    totalsRow: { flexDirection: "row", marginTop: 10, gap: 32 },
     aside: { flex: 1, paddingTop: 5 },
-    totals: { ...leading, width: 260 },
+    totals: { ...leading, fontSize: 8.5, width: 240 },
     totalRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      paddingVertical: 5,
+      paddingVertical: 2.5,
       borderBottomWidth: 0.5,
       borderBottomColor: theme.borderColor,
       borderBottomStyle: "solid",
     },
     grandTotal: {
       ...bold,
-      fontSize: 11,
+      fontSize: 10.5,
       color: theme.accentColor,
       borderBottomWidth: 0,
-      paddingTop: 7,
+      paddingTop: 5,
     },
     legends: {
       marginTop: 20,
@@ -192,10 +192,10 @@ export function createStyles(theme: ResolvedTheme) {
       lineHeight: 1.4,
       color: theme.mutedColor,
     },
-    notes: { ...leading, marginTop: 20, color: theme.mutedColor },
+    notes: { ...leading, marginTop: 14, color: theme.mutedColor },
     footer: {
       marginTop: "auto",
-      paddingTop: 16,
+      paddingTop: 12,
       borderTopWidth: 0.5,
       borderTopColor: theme.borderColor,
       borderTopStyle: "solid",
