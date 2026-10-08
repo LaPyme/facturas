@@ -171,21 +171,20 @@ export function createStyles(theme: ResolvedTheme) {
     closing: { flexGrow: 1 },
     totalsRow: { flexDirection: "row", marginTop: 10, gap: 32 },
     aside: { flex: 1, paddingTop: 5 },
-    totals: { ...leading, fontSize: 8.5, width: 240 },
+    totals: { ...leading, width: 240 },
     totalRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      paddingVertical: 2.5,
+      // Stripe's pitch: 9 pt rows, 14.25 pt apart.
+      paddingVertical: 1,
       borderBottomWidth: 0.5,
       borderBottomColor: theme.borderColor,
       borderBottomStyle: "solid",
     },
     grandTotal: {
       ...bold,
-      fontSize: 10.5,
       color: theme.accentColor,
       borderBottomWidth: 0,
-      paddingTop: 5,
     },
     legends: {
       marginTop: 20,
