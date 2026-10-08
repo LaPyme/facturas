@@ -14,9 +14,9 @@ export type VoucherTheme = {
   accentColor?: string;
   /** Body text. */
   textColor?: string;
-  /** Labels and secondary text. */
+  /** The labels before a value, such as "CUIT:". */
   mutedColor?: string;
-  /** The hairlines: the issuer box, the table rows and the totals. */
+  /** The separators between table rows and totals. */
   borderColor?: string;
 };
 
@@ -25,10 +25,10 @@ export type ResolvedTheme = Required<VoucherTheme>;
 const DEFAULT_THEME: ResolvedTheme = {
   fontFamily: "Helvetica",
   boldFontFamily: "Helvetica-Bold",
-  accentColor: "#1A1F36",
-  textColor: "#30313D",
-  mutedColor: "#687385",
-  borderColor: "#E3E8EE",
+  accentColor: "#000000",
+  textColor: "#000000",
+  mutedColor: "#000000",
+  borderColor: "#EBEBEB",
 };
 
 export function resolveTheme(theme: VoucherTheme = {}): ResolvedTheme {
@@ -66,9 +66,13 @@ export function createStyles(theme: ResolvedTheme) {
   // sheet number, and react-pdf drops a `render` text that sets one. A block
   // resolves it against its own font size, so the size goes with it.
   const leading = { fontSize: 9, lineHeight: 1.35 };
-  const hairline = {
-    borderColor: theme.borderColor,
+  // The issuer box and the letter box are drawn in the text colour, not the
+  // separator grey: a light line can drop out on a laser printer, and L3
+  // requires the box to show.
+  const outline = {
+    borderColor: theme.textColor,
     borderStyle: "solid",
+    borderWidth: 0.6,
   } as const;
   return StyleSheet.create({
     page: {
@@ -82,12 +86,11 @@ export function createStyles(theme: ResolvedTheme) {
     },
     bold,
     muted: { color: theme.mutedColor },
-    // L3: the "recuadro" is a hairline rounded rectangle.
+    // L3: the "recuadro" is a thin rounded rectangle.
     header: {
-      ...hairline,
+      ...outline,
       flexDirection: "row",
       minHeight: ISSUER_BOX_MIN_HEIGHT,
-      borderWidth: 0.75,
       borderRadius: 12,
     },
     headerSide: { ...leading, flex: 1, padding: BOX_PADDING, gap: 1 },
@@ -106,16 +109,15 @@ export function createStyles(theme: ResolvedTheme) {
     },
     // L4: the letter stands out by its size and weight, in an outlined box.
     letterBox: {
-      ...hairline,
+      ...outline,
       width: 40,
       height: 40,
-      borderWidth: 0.75,
       borderRadius: 8,
       alignItems: "center",
       justifyContent: "center",
     },
     letter: { ...bold, fontSize: 24, lineHeight: 1, color: theme.accentColor },
-    code: { fontSize: 7, color: theme.mutedColor },
+    code: { fontSize: 7, color: theme.textColor },
     letterLegend: { ...bold, fontSize: 6.5, textAlign: "center" },
     issuerName: {
       ...bold,
@@ -123,15 +125,15 @@ export function createStyles(theme: ResolvedTheme) {
       color: theme.accentColor,
       marginBottom: 2,
     },
-    details: { marginTop: 4, gap: 1, color: theme.mutedColor },
-    conditionLegend: { fontSize: 7.5, color: theme.mutedColor, marginTop: 2 },
+    details: { marginTop: 4, gap: 1, color: theme.textColor },
+    conditionLegend: { fontSize: 7.5, color: theme.textColor, marginTop: 2 },
     title: { ...bold, fontSize: 18, lineHeight: 1.1, color: theme.accentColor },
     number: { ...bold, fontSize: 10, marginBottom: 6 },
     section: { marginTop: 18 },
     sectionTitle: {
       ...bold,
-      fontSize: 7.5,
-      color: theme.mutedColor,
+      fontSize: 8.5,
+      color: theme.textColor,
       marginBottom: 3,
     },
     row: { flexDirection: "row" },
@@ -152,7 +154,7 @@ export function createStyles(theme: ResolvedTheme) {
       borderBottomColor: theme.accentColor,
       borderBottomStyle: "solid",
       fontSize: 7.5,
-      color: theme.mutedColor,
+      color: theme.textColor,
     },
     tableRow: {
       flexDirection: "row",
@@ -190,9 +192,9 @@ export function createStyles(theme: ResolvedTheme) {
       gap: 2,
       fontSize: 7.5,
       lineHeight: 1.4,
-      color: theme.mutedColor,
+      color: theme.textColor,
     },
-    notes: { ...leading, marginTop: 14, color: theme.mutedColor },
+    notes: { ...leading, marginTop: 14, color: theme.textColor },
     footer: {
       marginTop: "auto",
       paddingTop: 12,
@@ -211,7 +213,7 @@ export function createStyles(theme: ResolvedTheme) {
       alignItems: "center",
     },
     transparencyTitle: { ...bold, fontSize: 7.5, marginBottom: 2 },
-    transparency: { fontSize: 8, color: theme.mutedColor },
+    transparency: { fontSize: 8, color: theme.textColor },
     cae: { ...bold, fontSize: 10, color: theme.accentColor },
     caeDueDate: {
       ...bold,
@@ -224,7 +226,7 @@ export function createStyles(theme: ResolvedTheme) {
       bottom: 20,
       right: 40,
       fontSize: 7,
-      color: theme.mutedColor,
+      color: theme.textColor,
     },
   });
 }
