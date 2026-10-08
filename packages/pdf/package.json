@@ -1,0 +1,78 @@
+{
+  "name": "@facturas/pdf",
+  "version": "0.23.1",
+  "description": "PDF de comprobantes de ARCA que cumplen la RG 1415 por construcción: el modelo de facturas dibujado con @react-pdf/renderer.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "author": "LaPyme",
+  "homepage": "https://facturas-sdk.dev/guides/printed-voucher",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LaPyme/facturas.git",
+    "directory": "packages/pdf"
+  },
+  "bugs": {
+    "url": "https://github.com/LaPyme/facturas/issues"
+  },
+  "keywords": [
+    "arca",
+    "afip",
+    "argentina",
+    "factura",
+    "pdf",
+    "react-pdf",
+    "rg-1415"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup --config tsup.config.ts",
+    "pack:check": "npm pack --dry-run",
+    "prepack": "pnpm build",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
+  },
+  "peerDependencies": {
+    "facturas": "workspace:*",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.9.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.13",
+    "@types/node": "^22.20.2",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.2.0",
+    "facturas": "workspace:*",
+    "pdfjs-dist": "^6.4.299",
+    "react": "^19.3.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "ultracite": "7.11.1",
+    "vitest": "^5.0.0"
+  }
+}

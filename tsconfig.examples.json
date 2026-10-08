@@ -8,8 +8,10 @@
       "facturas/padron": ["./packages/arca/src/padron.ts"],
       "facturas/types": ["./packages/arca/src/types.ts"],
       "facturas/wsfe": ["./packages/arca/src/wsfe.ts"],
-      "facturas/wsmtxca": ["./packages/arca/src/wsmtxca.ts"]
-    }
+      "facturas/wsmtxca": ["./packages/arca/src/wsmtxca.ts"],
+      "@facturas/pdf": ["./packages/pdf/src/index.ts"]
+    },
+    "jsx": "react-jsx"
   },
   "include": ["examples/**/*.ts"]
 }

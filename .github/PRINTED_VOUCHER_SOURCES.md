@@ -70,13 +70,15 @@ not, by itself, a breach. The second asks the representation to follow "los
 modelos", and the only models the norms describe are Apartado B and the RG 3561
 tickets. The SDK reads both together:
 
-- The default template follows the Apartado B placement, so nobody has to
-  argue about it.
-- The compliance check reports a failed layout rule (L1 to L4, L6, L7 and L9)
-  as a warning, and a failed content rule as an error. A custom template can
-  move a block and still pass, but it cannot drop a datum.
-- L8 is the exception: RG 4291 article 15, last paragraph, requires the
-  transparency data in every image or print, so a missing block is an error.
+- `@facturas/pdf` only renders the Apartado B placement. Its fiscal blocks
+  are fixed: a theme changes fonts and colours and two slots add a brand and
+  notes, but nothing moves, shrinks or drops a fiscal datum. Its tests read
+  every rendered voucher back and check each rule by id.
+- A check of PDFs made elsewhere reports a failed layout rule (L1 to L4, L6,
+  L7 and L9) as a warning and a failed content rule as an error, since the
+  layout is deemed met. L8 is the exception: RG 4291 article 15, last
+  paragraph, requires the transparency data in every image or print, so a
+  missing block is an error.
 
 ## Content rules
 
@@ -188,7 +190,7 @@ voucher, which the SDK does not render.
 
 | Id | Decision |
 | --- | --- |
-| D1 | Apartado B placement in the default template. Layout findings are warnings and content findings are errors, see "How RG 4291 article 15 is read". |
+| D1 | `@facturas/pdf` only renders the Apartado B placement. A check of other PDFs warns on layout and errs on content, see "How RG 4291 article 15 is read". |
 | D2 | A4 only. A thermal template follows the RG 3561 Tique-Factura model with the CAE at the foot (RG 4291 art. 15), and pins RG 3561 when it is built. |
 | D3 | FCE vouchers (201 to 203, 206 to 208, 211 to 213) are not rendered yet. The model refuses them with an explicit error. R6 lists what rendering them needs. |
 | D4 | Export vouchers (class E) are not rendered in the first release. |
@@ -196,6 +198,7 @@ voucher, which the SDK does not render.
 | D6 | `ORIGINAL` and `DUPLICADO` are not required. A copy label is optional and off by default. |
 | D7 | No ARCA logo and no "Comprobante Autorizado" mark. No norm requires them, and they would present a third-party document as rendered by ARCA. |
 | D8 | On an electronic voucher, the due date of C9 and L9 is read as the CAE due date. A payment due date is a separate, optional field. |
+| D9 | The norms write the expressions that precede a datum, and the VAT condition legends, in capitals, such as `INICIO DE ACTIVIDADES` and `IVA RESPONSABLE INSCRIPTO`. `@facturas/pdf` keeps their words and prints them in the case of the rest of the page, as ARCA's own Comprobantes en línea does with "Fecha de Inicio de Actividades" and "IVA Responsable Inscripto". `PRINTED_VOUCHER_TEXT` and the model's legends keep the norms' spelling. |
 
 ## Resolved questions
 
@@ -203,7 +206,7 @@ These had no single answer in the texts. Each resolution states its reading.
 
 | Id | Question | Resolution |
 | --- | --- | --- |
-| R1 | Is the Apartado B layout required for an electronic voucher? | Not by itself: RG 4291 article 15 deems it met. The default template follows it anyway and the check warns on it, see D1. |
+| R1 | Is the Apartado B layout required for an electronic voucher? | Not by itself: RG 4291 article 15 deems it met. As a product decision `@facturas/pdf` renders nothing else, and a check of other PDFs warns on it, see D1. |
 | R2 | RG 4291 article 14 d) excludes I a) 9 but not I a) 8, the printer identity. | Omitted. I a) 8 identifies "quien efectuó la impresión", and V 1 and V 2 define that as printing by a graphic-arts establishment, which an electronic voucher never has. V 7 also spares self-printers those data, and ARCA's own vouchers omit them. |
 | R3 | Does a class C voucher to a consumidor final carry the transparency block? | No. B g) 1 asks for the VAT contained "con la discriminación indicada en el Apartado A, Título IV, inciso a), punto 2", which only applies to a responsable inscripto issuer, and IV b) forbids a monotributo issuer from breaking out VAT. RG 5614 replaced IV a) and left IV b) as it was. |
 | R4 | Which observation codes does RG 4291 article 14 c) ask for? | Every observation ARCA returns with the CAE of a class A voucher. RG 4291 article 12, as replaced by RG 5003 article 25, authorizes such a voucher "junto con los códigos representativos de las irregularidades observadas", and the tax it breaks out cannot be computed as credit. The caller passes `authorization.observations`. A voucher recovered by match carries none, so it prints none. |
@@ -218,6 +221,7 @@ These had no single answer in the texts. Each resolution states its reading.
 1. Done: `buildVoucherDocument()` derives the fields above from the
    authorized voucher, the items and the issuer profile, and
    `IssuedVoucher.totals` carries the VAT breakdown by rate (C25).
-2. Next: a separate PDF package with the fiscal components, an A4 template that
-   follows L1 to L9, and a compliance check that reports each failed rule by
-   id.
+2. Done: `@facturas/pdf` renders that model on A4 with the Apartado B
+   placement, a 12 pt CAE due date and a vector QR that links to its URL.
+3. Next: `assertVoucherPdf()`, the check of PDFs made elsewhere, which
+   reports each failed rule by id.

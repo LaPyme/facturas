@@ -1,6 +1,6 @@
 ---
 title: "Comprobante impreso"
-description: "Armá con buildVoucherDocument() todo lo que el PDF de un comprobante autorizado tiene que mostrar, derivado y controlado."
+description: "Armá con buildVoucherDocument() todo lo que el PDF de un comprobante autorizado tiene que mostrar, y dibujalo con @facturas/pdf en el formato de la RG 1415."
 keywords: ["PDF", "comprobante impreso", "RG 1415", "CAE", "QR", "transparencia fiscal"]
 ---
 
@@ -8,10 +8,10 @@ ARCA no genera el PDF de un comprobante emitido por web service. Lo arma tu
 sistema, y las normas fijan qué datos lleva y dónde van. `buildVoucherDocument()`
 toma el comprobante autorizado, los mismos ítems con los que lo emitiste y los
 datos del emisor, y devuelve todo lo que el comprobante impreso tiene que
-mostrar. Tu plantilla lo dibuja.
+mostrar. `@facturas/pdf` lo dibuja en A4 con la ubicación que fija la norma.
 
-El SDK todavía no dibuja el PDF. Te da el modelo ya derivado y controlado, sin
-I/O, para que la plantilla no tenga que saber de clases, leyendas ni IVA.
+Si preferís tu propia plantilla, el modelo ya viene derivado y controlado, sin
+I/O, para que no tenga que saber de clases, leyendas ni IVA.
 
 ## Del comprobante autorizado al modelo
 
@@ -130,6 +130,93 @@ comprobante electrónico:
 El QR va en el frente sin tapar ningún dato obligatorio. No uses el logo de
 ARCA: ninguna norma lo pide y presenta tu documento como si lo hubiera
 generado ARCA.
+
+## Dibujarlo con @facturas/pdf
+
+`@facturas/pdf` es el paquete que dibuja el modelo. Sale siempre con la misma
+versión que `facturas`, así que el modelo y el dibujo nunca quedan desfasados.
+
+```bash
+pnpm add @facturas/pdf @react-pdf/renderer react
+```
+
+El ejemplo completo, de la emisión al archivo, es [examples/comprobante-pdf.ts](https://github.com/LaPyme/facturas/blob/main/examples/comprobante-pdf.ts):
+
+```ts
+import { readFile, writeFile } from "node:fs/promises";
+import { renderVoucherPdf } from "@facturas/pdf";
+
+const pdf = await renderVoucherPdf(comprobante, {
+  logo: await readFile("logo.png"),
+  notes: "Garantía oficial de 6 meses. Cambios dentro de los 10 días.",
+  theme: { accentColor: "#C00000" },
+});
+await writeFile("factura.pdf", pdf);
+```
+
+El comprobante sale con la ubicación de la sección anterior: el recuadro del
+emisor de al menos 7 × 3 cm, la letra en el centro, el bloque de transparencia
+abajo a la izquierda y el CAE con su vencimiento en 12 puntos abajo a la
+derecha. El QR se dibuja en vectores y además es un link a la constatación de
+ARCA. En un comprobante largo, el recuadro del emisor se repite en cada hoja y
+el CAE va en la última.
+
+Lo que podés cambiar:
+
+- `theme`: tipografía y colores. Los tamaños no, porque la norma fija algunos.
+- `logo`: va arriba a la izquierda, sobre la razón social.
+- `notes`: garantía, cambios, contacto o lo que quieras decir, después de los
+  totales y fuera de las zonas fiscales.
+
+Con JSX tenés más espacios. Cada uno va en un lugar fijo, fuera de las zonas
+fiscales:
+
+| Espacio | Dónde va | Para qué |
+| --- | --- | --- |
+| `<VoucherBrand>` | En el recuadro del emisor, sobre la razón social | El logo |
+| `<VoucherIssuerDetails>` | En el recuadro, después de los datos fiscales del emisor | Teléfono, email, sitio web |
+| `<VoucherReceiverDetails>` | Después de los datos del receptor | Teléfono, email, número de cliente |
+| `<VoucherAside>` | A la izquierda de los totales | Pagos recibidos, saldo de cuenta corriente |
+| `<VoucherNotes>` | Después de los totales y las leyendas | Garantía, CBU, observaciones |
+
+```tsx
+import { Image, Text } from "@react-pdf/renderer";
+import {
+  renderVoucherPdf,
+  Voucher,
+  VoucherAside,
+  VoucherBrand,
+  VoucherIssuerDetails,
+  VoucherNotes,
+} from "@facturas/pdf";
+
+const pdf = await renderVoucherPdf(
+  <Voucher doc={comprobante} theme={{ accentColor: "#C00000" }}>
+    <VoucherBrand>
+      <Image src="https://tu-dominio.com/logo.png" />
+    </VoucherBrand>
+    <VoucherIssuerDetails>
+      <Text>Tel. 11 4321-5678</Text>
+      <Text>ventas@tu-dominio.com</Text>
+    </VoucherIssuerDetails>
+    <VoucherAside>
+      <Text>Saldo de cuenta corriente: $ 196.773,50</Text>
+    </VoucherAside>
+    <VoucherNotes>
+      <Text>Garantía oficial de 6 meses.</Text>
+    </VoucherNotes>
+  </Voucher>
+);
+```
+
+Si los totales, las notas y el pie no entran en la hoja, pasan juntos a la
+siguiente: el CAE nunca queda solo en una hoja.
+
+Los bloques fiscales no se exportan: `<Voucher>` los ubica solo. Cualquier
+otro hijo de `<Voucher>`, o un espacio repetido, hace que `renderVoucherPdf()`
+tire un error que nombra el problema antes de dibujar nada. Usá
+`renderVoucherPdf()` también con JSX: si llamás directo a `renderToBuffer` de
+react-pdf, ese error llega como un `TypeError` sin el mensaje.
 
 ## Qué rechaza
 

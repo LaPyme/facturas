@@ -37,7 +37,7 @@ La skill también se puede leer en https://facturas-sdk.dev/skill.md.
 
 - [Emitir facturas](https://facturas-sdk.dev/guides/invoices.md): el input de `issue()`, la vista previa y qué hacer con cada resultado.
 - [Notas de crédito y débito](https://facturas-sdk.dev/guides/credit-notes.md): notas parciales, totales, por período y FCE.
-- [Comprobante impreso](https://facturas-sdk.dev/guides/printed-voucher.md): `buildVoucherDocument()` arma todo lo que el PDF de un comprobante autorizado tiene que mostrar.
+- [Comprobante impreso](https://facturas-sdk.dev/guides/printed-voucher.md): `buildVoucherDocument()` arma todo lo que el PDF de un comprobante autorizado tiene que mostrar, y `@facturas/pdf` lo dibuja en A4 con la ubicación de la RG 1415.
 - [Factura E de exportación](https://facturas-sdk.dev/guides/export.md): facturas y notas E de bienes y servicios por WSFEX con el mismo `issue()`.
 - [Evitar comprobantes duplicados](https://facturas-sdk.dev/guides/avoid-duplicates.md): stores de Postgres, Redis, archivos y memoria, y `recover()`.
 - [Consultar contribuyentes](https://facturas-sdk.dev/guides/taxpayers.md): condición de IVA, domicilio fiscal y actividades de un CUIT en el Padrón de ARCA.
