@@ -117,7 +117,7 @@ export function createStyles(theme: ResolvedTheme) {
       justifyContent: "center",
     },
     letter: { ...bold, fontSize: 24, lineHeight: 1, color: theme.accentColor },
-    code: { fontSize: 7, color: theme.textColor },
+    code: { fontSize: 7.5, color: theme.textColor },
     letterLegend: { ...bold, fontSize: 6.5, textAlign: "center" },
     issuerName: {
       ...bold,
@@ -126,13 +126,13 @@ export function createStyles(theme: ResolvedTheme) {
       marginBottom: 2,
     },
     details: { marginTop: 4, gap: 1, color: theme.textColor },
-    conditionLegend: { fontSize: 7.5, color: theme.textColor, marginTop: 2 },
+    conditionLegend: { color: theme.textColor, marginTop: 2 },
     title: { ...bold, fontSize: 18, lineHeight: 1.1, color: theme.accentColor },
     number: { ...bold, fontSize: 10, marginBottom: 6 },
     section: { marginTop: 18 },
     sectionTitle: {
       ...bold,
-      fontSize: 8.5,
+      fontSize: 9,
       color: theme.textColor,
       marginBottom: 3,
     },
@@ -144,7 +144,7 @@ export function createStyles(theme: ResolvedTheme) {
       paddingLeft: BOX_PADDING,
       gap: 1,
     },
-    table: { ...leading, fontSize: 8.5, marginTop: 6 },
+    table: { ...leading, marginTop: 6 },
     // Fixed, so on later sheets its top padding separates it from the box.
     tableHead: {
       flexDirection: "row",
@@ -224,7 +224,7 @@ export function createStyles(theme: ResolvedTheme) {
       position: "absolute",
       bottom: 20,
       right: 40,
-      fontSize: 7,
+      fontSize: 7.5,
       color: theme.textColor,
     },
   });
