@@ -62,6 +62,10 @@ const RIGHT_COLUMN_WIDTH =
 
 export function createStyles(theme: ResolvedTheme) {
   const bold = { fontFamily: theme.boldFontFamily };
+  // Leading for wrapped text, set per block: on the page it would reach the
+  // sheet number, and react-pdf drops a `render` text that sets one. A block
+  // resolves it against its own font size, so the size goes with it.
+  const leading = { fontSize: 9, lineHeight: 1.35 };
   const hairline = {
     borderColor: theme.borderColor,
     borderStyle: "solid",
@@ -86,11 +90,12 @@ export function createStyles(theme: ResolvedTheme) {
       borderWidth: 0.75,
       borderRadius: 12,
     },
-    headerSide: { flex: 1, padding: BOX_PADDING, gap: 2.5 },
+    headerSide: { ...leading, flex: 1, padding: BOX_PADDING, gap: 1 },
     headerRight: {
+      ...leading,
       flex: 1,
       padding: BOX_PADDING,
-      gap: 2.5,
+      gap: 1,
       alignItems: "flex-start",
     },
     headerCenter: {
@@ -118,7 +123,7 @@ export function createStyles(theme: ResolvedTheme) {
       color: theme.accentColor,
       marginBottom: 2,
     },
-    details: { marginTop: 4, gap: 2.5, color: theme.mutedColor },
+    details: { marginTop: 4, gap: 1, color: theme.mutedColor },
     conditionLegend: { fontSize: 7.5, color: theme.mutedColor, marginTop: 2 },
     title: { ...bold, fontSize: 18, lineHeight: 1.1, color: theme.accentColor },
     number: { ...bold, fontSize: 10, marginBottom: 6 },
@@ -130,13 +135,14 @@ export function createStyles(theme: ResolvedTheme) {
       marginBottom: 3,
     },
     row: { flexDirection: "row" },
-    columnLeft: { flex: 1, gap: 2.5, paddingRight: BOX_PADDING },
+    columnLeft: { ...leading, flex: 1, gap: 1, paddingRight: BOX_PADDING },
     columnRight: {
+      ...leading,
       width: RIGHT_COLUMN_WIDTH,
       paddingLeft: BOX_PADDING,
-      gap: 2.5,
+      gap: 1,
     },
-    table: { marginTop: 6 },
+    table: { ...leading, marginTop: 6 },
     // Fixed, so on later sheets its top padding separates it from the box.
     tableHead: {
       flexDirection: "row",
@@ -150,7 +156,7 @@ export function createStyles(theme: ResolvedTheme) {
     },
     tableRow: {
       flexDirection: "row",
-      paddingVertical: 6,
+      paddingVertical: 4.5,
       borderBottomWidth: 0.5,
       borderBottomColor: theme.borderColor,
       borderBottomStyle: "solid",
@@ -163,7 +169,7 @@ export function createStyles(theme: ResolvedTheme) {
     closing: { flexGrow: 1 },
     totalsRow: { flexDirection: "row", marginTop: 14, gap: 32 },
     aside: { flex: 1, paddingTop: 5 },
-    totals: { width: 260 },
+    totals: { ...leading, width: 260 },
     totalRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -186,7 +192,7 @@ export function createStyles(theme: ResolvedTheme) {
       lineHeight: 1.4,
       color: theme.mutedColor,
     },
-    notes: { marginTop: 20, color: theme.mutedColor },
+    notes: { ...leading, marginTop: 20, color: theme.mutedColor },
     footer: {
       marginTop: "auto",
       paddingTop: 16,
@@ -196,7 +202,7 @@ export function createStyles(theme: ResolvedTheme) {
       flexDirection: "row",
       gap: 16,
     },
-    footerLeft: { flex: 1, gap: 2, justifyContent: "flex-end" },
+    footerLeft: { ...leading, flex: 1, gap: 1, justifyContent: "flex-end" },
     footerRight: {
       flex: 1,
       flexDirection: "row",
