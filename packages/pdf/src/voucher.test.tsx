@@ -58,7 +58,7 @@ function expectApartadoB(page: PdfPage, doc: VoucherDocument) {
     "Fecha de emisión:",
     "CUIT: 20-12345678-9",
     `Ingresos Brutos: ${doc.issuer.grossIncome}`,
-    ...(doc.issuer.activitiesStartDate ? ["INICIO DE ACTIVIDADES:"] : []),
+    ...(doc.issuer.activitiesStartDate ? ["Inicio de actividades:"] : []),
   ]) {
     const text = find(page, fragment);
     expect(text.x).toBeGreaterThan(middle + 30);
@@ -161,7 +161,7 @@ describe("<Voucher>", () => {
     expectFiscalFooter(page, doc);
     expect(hasText(page, "RESPONSABLE MONOTRIBUTO")).toBe(true);
     expect(hasText(page, "DNI: 30111222")).toBe(true);
-    expect(hasText(page, "INICIO DE ACTIVIDADES")).toBe(false);
+    expect(hasText(page, "Inicio de actividades")).toBe(false);
     expect(hasText(page, "IVA ")).toBe(false);
     expect(hasText(page, "Régimen de Transparencia Fiscal")).toBe(false);
   });

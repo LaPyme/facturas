@@ -198,6 +198,7 @@ voucher, which the SDK does not render.
 | D6 | `ORIGINAL` and `DUPLICADO` are not required. A copy label is optional and off by default. |
 | D7 | No ARCA logo and no "Comprobante Autorizado" mark. No norm requires them, and they would present a third-party document as rendered by ARCA. |
 | D8 | On an electronic voucher, the due date of C9 and L9 is read as the CAE due date. A payment due date is a separate, optional field. |
+| D9 | The norms write the expressions that precede a datum in capitals, such as `INICIO DE ACTIVIDADES`. `@facturas/pdf` keeps their words and prints the labels in the case of the rest of the page, as ARCA's own Comprobantes en línea does with "Fecha de Inicio de Actividades". `PRINTED_VOUCHER_TEXT` keeps the norms' spelling. |
 
 ## Resolved questions
 

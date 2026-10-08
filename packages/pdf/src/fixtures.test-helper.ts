@@ -19,7 +19,7 @@ const ISSUER = {
   activitiesStartDate: "2019-10-01",
 } as const satisfies VoucherDocumentInput["issuer"];
 
-function voucher(
+export function voucher(
   overrides: Pick<IssuedVoucher, "voucherType" | "voucherClass" | "totals"> & {
     header?: Partial<IssuedVoucher["header"]>;
   }

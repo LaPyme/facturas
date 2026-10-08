@@ -29,7 +29,7 @@ export type VoucherProps = {
 /** Top left, above the issuer's name: a logo or a brand mark. */
 export function VoucherBrand({ children }: { children?: ReactNode }) {
   useVoucher("VoucherBrand");
-  return <View style={{ marginBottom: 4 }}>{children}</View>;
+  return <View style={{ marginBottom: 10 }}>{children}</View>;
 }
 
 /**

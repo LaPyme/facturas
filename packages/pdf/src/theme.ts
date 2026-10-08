@@ -133,7 +133,7 @@ export function createStyles(theme: ResolvedTheme) {
       borderBottomColor: theme.borderColor,
       borderBottomStyle: "solid",
     },
-    cellCode: { width: 56, paddingRight: 6 },
+    cellCode: { width: 72, paddingRight: 8 },
     cellDescription: { flex: 1, paddingRight: 6 },
     cellNumber: { width: 64, textAlign: "right" },
     cellNarrow: { width: 40, textAlign: "right" },

@@ -56,7 +56,8 @@ export function IssuerHeader({ brand }: { brand?: ReactNode }) {
         <Labeled label="CUIT:">{formatTaxId(issuer.taxId)}</Labeled>
         <Labeled label="Ingresos Brutos:">{issuer.grossIncome}</Labeled>
         {issuer.activitiesStartDate ? (
-          <Labeled label={`${PRINTED_VOUCHER_TEXT.activitiesStart}:`}>
+          // D9: the norm's INICIO DE ACTIVIDADES, in the case of the other labels.
+          <Labeled label="Inicio de actividades:">
             {formatDate(issuer.activitiesStartDate)}
           </Labeled>
         ) : null}
