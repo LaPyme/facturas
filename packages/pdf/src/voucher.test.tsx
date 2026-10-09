@@ -350,6 +350,45 @@ describe("<Voucher>", () => {
     expect(hasText(page as PdfPage, "Aires")).toBe(true);
   });
 
+  it("lets a long tax breakdown continue, with the total kept by the CAE", async () => {
+    const doc = classADocument();
+    const [tax] = doc.totals.otherTaxes;
+    if (tax === undefined) {
+      throw new Error("no tax");
+    }
+    const otherTaxes = Array.from({ length: 15 }, (_, index) => ({
+      ...tax,
+      id: 100 + index,
+      description: `Percepción de Ingresos Brutos Provincia de Buenos Aires Impuesto y contribución municipal por servicios generales ${index + 1}`,
+    }));
+    const pages = await readPdf(
+      await renderVoucherPdf({ ...doc, totals: { ...doc.totals, otherTaxes } })
+    );
+    expect(pages.length).toBeGreaterThan(1);
+    const names = pages.flatMap((page) =>
+      page.texts.filter((text) =>
+        text.text.startsWith("Percepción de Ingresos")
+      )
+    );
+    expect(names).toHaveLength(15);
+    // No sheet squeezes its lines: react-pdf compresses an unbreakable block
+    // that outgrows the sheet, down to about 3.6 pt between baselines.
+    for (const page of pages) {
+      const tops = [
+        ...new Set(
+          page.texts
+            .filter((text) => text.x > page.width / 2)
+            .map((text) => Math.round(text.top * 10) / 10)
+        ),
+      ].sort((a, b) => a - b);
+      const gaps = tops.slice(1).map((top, index) => top - (tops[index] ?? 0));
+      expect(Math.min(...gaps)).toBeGreaterThan(8);
+    }
+    const last = pages.at(-1) as PdfPage;
+    expect(hasText(last, "Importe total")).toBe(true);
+    expectFiscalFooter(last, doc);
+  });
+
   it("lets a row taller than a sheet continue on the next one", async () => {
     const doc = classADocument();
     const paragraph = `${"texto de la descripción ".repeat(30)}\n`;

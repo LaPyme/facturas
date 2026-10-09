@@ -183,6 +183,7 @@ export function createStyles(theme: ResolvedTheme) {
     // A long tax name wraps in its own column; the amount keeps its width.
     totalLabel: { flex: 1, paddingRight: 8 },
     totalAmount: { flexShrink: 0, textAlign: "right" },
+    grandTotalAlone: { width: 240, marginLeft: "auto" },
     grandTotal: {
       ...bold,
       color: theme.accentColor,

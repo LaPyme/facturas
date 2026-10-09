@@ -8,11 +8,13 @@ import {
 } from "react";
 import {
   FiscalFooter,
+  GrandTotal,
   IssuerHeader,
   LegendsBlock,
   LinesTable,
   ReceiverBlock,
   TotalsBlock,
+  totalsBreak,
 } from "./blocks";
 import { useVoucher, VoucherContext } from "./context";
 import { formatTitle } from "./format";
@@ -137,6 +139,7 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
   const slots = collectSlots(children);
   const resolved = resolveTheme(theme);
   const styles = createStyles(resolved);
+  const breakTotals = totalsBreak(doc);
   return (
     <VoucherContext.Provider value={{ doc, theme: resolved, styles }}>
       <Document
@@ -152,12 +155,19 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
           {slots.notes}
           <LinesTable />
           {/*
-           * Totals, legends and the fiscal footer stay together: when they do not
-           * fit, they move to the next sheet as one, so the CAE is never alone.
-           * The block holds no free text, so it always fits a sheet.
+           * The total, legends and fiscal footer stay together: when they do
+           * not fit, they move to the next sheet as one, so the CAE is never
+           * alone. A long tax breakdown flows before them; see totalsBreak.
            */}
+          {breakTotals ? <TotalsBlock aside={slots.aside} breakable /> : null}
           <View style={styles.closing} wrap={false}>
-            <TotalsBlock aside={slots.aside} />
+            {breakTotals ? (
+              <View style={styles.grandTotalAlone}>
+                <GrandTotal />
+              </View>
+            ) : (
+              <TotalsBlock aside={slots.aside} breakable={false} />
+            )}
             <LegendsBlock />
             <ClosingFooter />
           </View>

@@ -211,7 +211,9 @@ const pdf = await renderVoucherPdf(
 ```
 
 Los totales, las leyendas y el pie con el CAE van siempre juntos: si no entran
-en la hoja, pasan juntos a la siguiente, así que el CAE nunca queda solo. Las
+en la hoja, pasan juntos a la siguiente, así que el CAE nunca queda solo. Si el
+desglose de impuestos es muy largo, sus renglones siguen en la hoja siguiente y
+solo el importe total queda con el CAE. Las
 líneas y las notas, en cambio, siguen en la hoja siguiente cuando no entran,
 aunque una sola descripción sea más larga que una hoja.
 
