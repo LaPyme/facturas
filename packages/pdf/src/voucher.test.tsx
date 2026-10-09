@@ -389,6 +389,39 @@ describe("<Voucher>", () => {
     expectFiscalFooter(last, doc);
   });
 
+  it("keeps a short aside with the total when the tax breakdown breaks", async () => {
+    const doc = classADocument();
+    const [tax] = doc.totals.otherTaxes;
+    if (tax === undefined) {
+      throw new Error("no tax");
+    }
+    const otherTaxes = Array.from({ length: 15 }, (_, index) => ({
+      ...tax,
+      id: 100 + index,
+      description: `Percepción de Ingresos Brutos Provincia de Buenos Aires Impuesto y contribución municipal por servicios generales ${index + 1}`,
+    }));
+    const pages = await readPdf(
+      await renderVoucherPdf(
+        <Voucher doc={{ ...doc, totals: { ...doc.totals, otherTaxes } }}>
+          <VoucherAside>
+            <Text>Pagado: $ 100,00</Text>
+            <Text>Saldo actual: $ 68,20</Text>
+          </VoucherAside>
+        </Voucher>
+      )
+    );
+    expect(pages.length).toBeGreaterThan(1);
+    const last = pages.at(-1) as PdfPage;
+    expect(hasText(last, "Importe total")).toBe(true);
+    expect(hasText(last, "Pagado: $ 100,00")).toBe(true);
+    expect(hasText(last, "Saldo actual: $ 68,20")).toBe(true);
+    expectFiscalFooter(last, doc);
+    const aside = find(last, "Pagado: $ 100,00");
+    const total = find(last, "Importe total");
+    expect(aside.x).toBeLessThan(total.x);
+    expect(Math.abs(aside.top - total.top)).toBeLessThan(15);
+  });
+
   it("lets a row taller than a sheet continue on the next one", async () => {
     const doc = classADocument();
     const paragraph = `${"texto de la descripción ".repeat(30)}\n`;

@@ -313,8 +313,8 @@ export function GrandTotal() {
 
 /**
  * The totals, with the aside slot on their left. With `breakable`, the rows
- * may continue on the next sheet and the total is left out: `<Voucher>` puts
- * it with the CAE.
+ * may continue on the next sheet, and the total and the aside are left out:
+ * `<Voucher>` puts them with the CAE.
  */
 export function TotalsBlock({
   aside,

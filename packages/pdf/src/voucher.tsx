@@ -159,11 +159,15 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
            * not fit, they move to the next sheet as one, so the CAE is never
            * alone. A long tax breakdown flows before them; see totalsBreak.
            */}
-          {breakTotals ? <TotalsBlock aside={slots.aside} breakable /> : null}
+          {breakTotals ? <TotalsBlock breakable /> : null}
           <View style={styles.closing} wrap={false}>
             {breakTotals ? (
-              <View style={styles.grandTotalAlone}>
-                <GrandTotal />
+              // The aside stays beside the total, with the CAE.
+              <View style={styles.grandTotalRow}>
+                {slots.aside ?? <View style={styles.aside} />}
+                <View style={styles.totals}>
+                  <GrandTotal />
+                </View>
               </View>
             ) : (
               <TotalsBlock aside={slots.aside} breakable={false} />
