@@ -46,9 +46,13 @@ export function formatAmount(minor: number): string {
   return `${negative ? "-" : ""}${units},${digits.slice(-2)}`;
 }
 
-/** Minor units with the voucher currency: `$ 1.234,56` or `USD 1.234,56`. */
+/**
+ * Minor units with the voucher currency: `$ 1.234,56` or `USD 1.234,56`, and
+ * a negative amount signed before the currency, `-$ 12,00`.
+ */
 export function formatMoney(minor: number, currencyId: string): string {
-  return `${CURRENCY_PREFIX[currencyId] ?? currencyId} ${formatAmount(minor)}`;
+  const prefix = CURRENCY_PREFIX[currencyId] ?? currencyId;
+  return `${minor < 0 ? "-" : ""}${prefix} ${formatAmount(Math.abs(minor))}`;
 }
 
 /** A major-unit decimal string such as `605.5` as `605,50`, keeping extra decimals. */

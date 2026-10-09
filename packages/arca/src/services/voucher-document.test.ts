@@ -90,7 +90,7 @@ function expectBalanced(doc: VoucherDocument) {
     const net = doc.lines
       .filter((line) => typeof line.vatRate === "number")
       .reduce((sum, line) => sum + line.amount, 0);
-    expect(net).toBe(totals.subtotal);
+    expect(net - totals.globalDiscount).toBe(totals.subtotal);
     expect(
       totals.subtotal +
         totals.exempt +
@@ -100,7 +100,7 @@ function expectBalanced(doc: VoucherDocument) {
         taxes
     ).toBe(totals.total);
   } else {
-    expect(lines).toBe(totals.subtotal);
+    expect(lines - totals.globalDiscount).toBe(totals.subtotal);
     expect(totals.subtotal + totals.adjustment + taxes).toBe(totals.total);
   }
 }
@@ -420,6 +420,201 @@ describe("buildVoucherDocument", () => {
     ] as const) {
       expect(document({ ...voucher, voucherType }, items).title).toBe(title);
     }
+  });
+
+  describe("a global discount", () => {
+    const company = {
+      issuer: "responsable_inscripto",
+      salesPoint: 3,
+      to: { condition: "responsable_inscripto", cuit: "20111111112" },
+    } as const;
+    const receiver = { name: "Cliente SA", address: "Calle 2" };
+
+    it("prints class A lines before it and checks each rate against its authorized base", async () => {
+      // The issuer took 10% off and split it its own way: 333, 333 and 334.
+      const before = [
+        { description: "Tornillos", net: 3333, vat: 21 },
+        { description: "Tuercas", net: 3333, vat: 21 },
+        { description: "Arandelas", net: 3334, vat: 21 },
+        { description: "Manual", net: 2000, vat: 10.5 },
+        { description: "Libro", net: 500, vat: "exempt" },
+      ] as const;
+      const voucher = await issued({
+        ...company,
+        items: [
+          { net: 3000, vat: 21 },
+          { net: 3000, vat: 21 },
+          { net: 3000, vat: 21 },
+          { net: 1800, vat: 10.5 },
+          { net: 500, vat: "exempt" },
+        ],
+      });
+      const doc = document(voucher, before, {
+        receiver,
+        globalDiscount: { 5: 1000, 4: 200 },
+      });
+      expect(doc.lines.map((line) => line.amount)).toEqual([
+        3333, 3333, 3334, 2000, 500,
+      ]);
+      expect(doc.totals).toMatchObject({
+        globalDiscount: 1200,
+        subtotal: 10_800,
+        exempt: 500,
+        vatRates: [
+          { id: 5, base: 9000, amount: 1890 },
+          { id: 4, base: 1800, amount: 189 },
+        ],
+        adjustment: 0,
+        total: 13_379,
+      });
+      expectBalanced(doc);
+      // One cent moved to another rate is not what ARCA authorized.
+      expect(() =>
+        document(voucher, before, {
+          receiver,
+          globalDiscount: { 5: 999, 4: 201 },
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field: "globalDiscount[5]",
+        })
+      );
+    });
+
+    it("prints class B lines and the discount with VAT", async () => {
+      const before = [
+        { description: "Remera", gross: 3333, vat: 21 },
+        { description: "Remera", gross: 3333, vat: 21 },
+        { description: "Remera", gross: 3333, vat: 21 },
+      ] as const;
+      const voucher = await issued({
+        issuer: "responsable_inscripto",
+        salesPoint: 3,
+        to: { condition: "consumidor_final" },
+        items: [{ gross: 8999, vat: 21 }],
+        taxes: [{ id: 4, base: 7437, rate: 8, amount: 595 }],
+      });
+      const doc = document(voucher, before, { globalDiscount: { 5: 1000 } });
+      expect(doc.lines.map((line) => line.amount)).toEqual([3333, 3333, 3333]);
+      expect(doc.totals).toMatchObject({
+        globalDiscount: 1000,
+        subtotal: 8999,
+        adjustment: 0,
+        total: 9594,
+      });
+      expect(doc.transparency).toEqual({
+        vatContained: 1562,
+        otherNationalIndirectTaxes: 595,
+      });
+      expectBalanced(doc);
+    });
+
+    it("prints a class C discount as one amount", async () => {
+      const before = [
+        { description: "Consulta", amount: 50_000 },
+        { description: "Informe", amount: 20_000 },
+      ] as const;
+      const voucher = await issued({
+        issuer: "monotributo",
+        salesPoint: 3,
+        to: { condition: "consumidor_final" },
+        items: [{ amount: 63_000 }],
+      });
+      const monotributo = {
+        issuer: { ...registered, condition: "monotributo" },
+      } as const;
+      const doc = document(voucher, before, {
+        ...monotributo,
+        globalDiscount: 7000,
+      });
+      expect(doc.totals).toMatchObject({
+        globalDiscount: 7000,
+        subtotal: 63_000,
+        total: 63_000,
+      });
+      expectBalanced(doc);
+      expect(() =>
+        document(voucher, before, { ...monotributo, globalDiscount: 6999 })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field: "globalDiscount",
+        })
+      );
+      expect(() =>
+        document(voucher, before, {
+          ...monotributo,
+          globalDiscount: { 5: 7000 },
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "globalDiscount",
+        })
+      );
+    });
+
+    it("takes none off exempt lines, and reads a zero discount as none", async () => {
+      const items = [
+        { description: "Servicio", net: 10_000, vat: 21 },
+        { description: "Libro", net: 500, vat: "exempt" },
+      ] as const;
+      const voucher = await issued({
+        ...company,
+        items: [
+          { net: 9000, vat: 21 },
+          { net: 450, vat: "exempt" },
+        ],
+      });
+      expect(() =>
+        document(voucher, items, { receiver, globalDiscount: { 5: 1000 } })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field: "items (exempt)",
+        })
+      );
+      const plain = await issued({ ...company, items });
+      expect(
+        document(plain, items, { receiver, globalDiscount: { 5: 0 } }).totals
+          .globalDiscount
+      ).toBe(0);
+    });
+
+    it.each([
+      ["one amount on class A", 1000, "globalDiscount", "INVALID_VALUE"],
+      [
+        "a key that is no VAT rate id",
+        { 21: 1000 },
+        "globalDiscount[21]",
+        "INVALID_VALUE",
+      ],
+      [
+        "a rate the items do not carry",
+        { 4: 0, 6: 1000 },
+        "globalDiscount[6]",
+        "INVALID_VALUE",
+      ],
+      ["a negative amount", { 5: -1000 }, "globalDiscount[5]", "INVALID_VALUE"],
+      [
+        "a fractional amount",
+        { 5: 10.5 },
+        "globalDiscount[5]",
+        "INVALID_VALUE",
+      ],
+    ] as const)("refuses %s", async (_, globalDiscount, field, code) => {
+      const items = [
+        { description: "Servicio", net: 10_000, vat: 21 },
+      ] as const;
+      const voucher = await issued({
+        ...company,
+        items: [{ net: 9000, vat: 21 }],
+      });
+      expect(() =>
+        document(voucher, items, { receiver, globalDiscount })
+      ).toThrow(expect.objectContaining({ code: `ARCA_INPUT_${code}`, field }));
+    });
   });
 
   describe("refuses what it cannot print correctly", () => {

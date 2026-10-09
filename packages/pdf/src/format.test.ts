@@ -21,6 +21,7 @@ describe("es-AR formatting", () => {
     expect(formatMoney(123_420, "PES")).toBe("$ 1.234,20");
     expect(formatMoney(100, "DOL")).toBe("USD 1,00");
     expect(formatMoney(100, "060")).toBe("060 1,00");
+    expect(formatMoney(-1200, "PES")).toBe("-$ 12,00");
   });
 
   it("formats unit prices, quantities, dates, CUITs and rates", () => {

@@ -8,6 +8,8 @@ import {
   settleVatItems,
   type VatItem,
   type VatRate,
+  vatRateId,
+  vatRatePercent,
 } from "./wsfe-amounts";
 
 /**
@@ -47,8 +49,19 @@ export type PrintedIssuerCondition =
 export type VoucherDocumentInput = {
   /** The voucher `issue()`, a note method or `recover()` answered authorized. */
   voucher: IssuedVoucher;
-  /** The same items the voucher was issued from, each with its description. */
+  /**
+   * The same items the voucher was issued from, each with its description.
+   * With a `globalDiscount`, the items before it.
+   */
   items: readonly (VatItem | AmountItem)[];
+  /**
+   * A discount on the whole voucher, in minor units, that the issuer took off
+   * the items it issued. Class A and B take it by ARCA VAT rate id, as the
+   * authorized VAT rows: net on class A, with VAT on class B, as the lines.
+   * Class C takes one amount. The SDK does not split it: each rate's lines,
+   * less its discount, must add up to the authorized base of that rate.
+   */
+  globalDiscount?: number | Readonly<Record<number, number>>;
   issuer: {
     /** C1. */
     legalName: string;
@@ -143,7 +156,15 @@ export type VoucherDocument = {
   currency: { id: string; exchangeRate?: string };
   lines: VoucherDocumentLine[];
   totals: {
-    /** Class A: net taxed. Class B: the lines with VAT. Class C: the lines. */
+    /**
+     * The sum of the input's `globalDiscount`, 0 without one: net on class A,
+     * with VAT on class B. The lines are before it and the subtotal after it.
+     */
+    globalDiscount: number;
+    /**
+     * Class A: net taxed. Class B: the lines with VAT. Class C: the lines.
+     * Classes B and C take the global discount off the lines.
+     */
     subtotal: number;
     exempt: number;
     untaxed: number;
@@ -320,6 +341,7 @@ export function buildVoucherDocument(
     },
     lines: lines.lines,
     totals: {
+      globalDiscount: lines.globalDiscount,
       subtotal: lines.subtotal,
       exempt: voucher.totals.exempt,
       untaxed: voucher.totals.untaxed,
@@ -462,23 +484,32 @@ function documentReceiver(
 /**
  * The items must describe the authorized money: the same net, exempt and
  * untaxed amounts and the same VAT bases. The printed lines then use the
- * per-item Half Even split, so they add up to the authorized header.
+ * per-item Half Even split, so they add up to the authorized header. With a
+ * global discount the items are the lines before it, and each rate's lines
+ * less its discount must give the authorized base of that rate.
  */
 function documentLines(
   input: VoucherDocumentInput,
   voucherClass: "A" | "B" | "C"
-): { lines: VoucherDocumentLine[]; subtotal: number; adjustment: number } {
+): {
+  lines: VoucherDocumentLine[];
+  globalDiscount: number;
+  subtotal: number;
+  adjustment: number;
+} {
   const { items } = input;
   const totals = input.voucher.totals;
   if (!Array.isArray(items) || items.length === 0) {
     invalid("items", "the items the voucher was issued from");
   }
+  const discount = globalDiscount(input.globalDiscount, voucherClass);
   let computed: ReturnType<typeof calculateWsfeAmounts>;
   try {
     computed = calculateWsfeAmounts({
       voucherClass,
       items,
-      total: totals.total - totals.otherTaxes,
+      // Items before a global discount add up to more than the authorized total.
+      ...(discount ? {} : { total: totals.total - totals.otherTaxes }),
     });
   } catch (error) {
     if (
@@ -489,11 +520,17 @@ function documentLines(
     }
     throw error;
   }
-  assertItemsMatchTotals(computed.data, totals, voucherClass);
+  if (!discount) {
+    assertItemsMatchTotals(computed.data, totals, voucherClass);
+  }
   const settled =
     voucherClass === "C"
       ? undefined
-      : settleVatItems({ voucherClass, items }, computed.amounts.vatAdjustment);
+      : settleVatItems(
+          { voucherClass, items },
+          // The header's VAT adjustment belongs to the discounted money.
+          discount ? 0 : computed.amounts.vatAdjustment
+        );
   const lines = items.map((item, index): VoucherDocumentLine => {
     const path = `items[${index}]`;
     const money = settled?.items[index];
@@ -516,16 +553,167 @@ function documentLines(
     };
   });
   const sum = lines.reduce((total, line) => total + line.amount, 0);
-  if (voucherClass === "A") {
-    // The rows keep their computed VAT; an asserted total moves only the header.
-    const rows = totals.vatRates.reduce((total, row) => total + row.amount, 0);
+  const rows = totals.vatRates.reduce((total, row) => total + row.amount, 0);
+  if (discount) {
+    assertDiscountedLinesMatchTotals(
+      voucherClass,
+      lines,
+      settled?.items,
+      computed.data,
+      totals,
+      discount.byRate
+    );
     return {
       lines,
+      globalDiscount: discount.total,
+      subtotal: voucherClass === "A" ? totals.netTaxed : sum - discount.total,
+      adjustment: voucherClass === "C" ? 0 : totals.vat - rows,
+    };
+  }
+  if (voucherClass === "A") {
+    // The rows keep their computed VAT; an asserted total moves only the header.
+    return {
+      lines,
+      globalDiscount: 0,
       subtotal: totals.netTaxed,
       adjustment: totals.vat - rows,
     };
   }
-  return { lines, subtotal: sum, adjustment: settled?.unabsorbed ?? 0 };
+  return {
+    lines,
+    globalDiscount: 0,
+    subtotal: sum,
+    adjustment: settled?.unabsorbed ?? 0,
+  };
+}
+
+type GlobalDiscount = {
+  total: number;
+  /** By ARCA VAT rate id; class C keys its one amount by 0. */
+  byRate: ReadonlyMap<number, number>;
+};
+
+/** Undefined when there is no discount, or every amount is zero. */
+function globalDiscount(
+  value: VoucherDocumentInput["globalDiscount"],
+  voucherClass: "A" | "B" | "C"
+): GlobalDiscount | undefined {
+  if (value === undefined) {
+    return;
+  }
+  const byRate = new Map<number, number>();
+  if (voucherClass === "C") {
+    if (typeof value !== "number") {
+      invalid(
+        "globalDiscount",
+        "one amount in minor units on a class C voucher"
+      );
+    }
+    byRate.set(0, discountAmount(value, "globalDiscount"));
+  } else {
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      invalid(
+        "globalDiscount",
+        "amounts by ARCA VAT rate id on a class A or B voucher, as the authorized VAT rows"
+      );
+    }
+    for (const [key, amount] of Object.entries(value)) {
+      const id = Number(key);
+      if (!/^\d+$/.test(key) || vatRatePercent(id) === undefined) {
+        invalid(`globalDiscount[${key}]`, "keyed by an ARCA VAT rate id");
+      }
+      const checked = discountAmount(amount, `globalDiscount[${key}]`);
+      if (checked > 0) {
+        byRate.set(id, checked);
+      }
+    }
+  }
+  const total = [...byRate.values()].reduce((sum, amount) => sum + amount, 0);
+  return total === 0 ? undefined : { total, byRate };
+}
+
+function discountAmount(value: unknown, field: string): number {
+  if (!(Number.isSafeInteger(value) && (value as number) >= 0)) {
+    invalid(field, "a non-negative safe integer in minor units");
+  }
+  return value as number;
+}
+
+/**
+ * Class A compares net lines with the authorized base of each rate, class B
+ * lines with VAT with that base plus its VAT, and class C the lines with the
+ * net. Exempt and untaxed lines take no discount.
+ */
+function assertDiscountedLinesMatchTotals(
+  voucherClass: "A" | "B" | "C",
+  lines: readonly VoucherDocumentLine[],
+  settled: readonly { rate: VatRate }[] | undefined,
+  data: ReturnType<typeof calculateWsfeAmounts>["data"],
+  totals: VoucherTotals,
+  discount: ReadonlyMap<number, number>
+): void {
+  const minor = (value: number) =>
+    Number(normalizeArcaAmountToMinorUnits(value, "items"));
+  if (minor(data.exemptAmount) !== totals.exempt) {
+    mismatch("exempt");
+  }
+  if (minor(data.nonTaxableAmount) !== totals.untaxed) {
+    mismatch("untaxed");
+  }
+  const { byLines, authorized } =
+    voucherClass === "C" || settled === undefined
+      ? {
+          byLines: new Map([
+            [0, lines.reduce((sum, line) => sum + line.amount, 0)],
+          ]),
+          authorized: new Map([[0, totals.netTaxed]]),
+        }
+      : discountedRates(voucherClass, lines, settled, totals);
+  for (const id of discount.keys()) {
+    if (!byLines.has(id)) {
+      invalid(
+        `globalDiscount[${id}]`,
+        "keyed by a VAT rate id the items carry"
+      );
+    }
+  }
+  for (const id of new Set([...byLines.keys(), ...authorized.keys()])) {
+    const expected = authorized.get(id) ?? 0;
+    if ((byLines.get(id) ?? 0) - (discount.get(id) ?? 0) !== expected) {
+      throw new ArcaInputError(
+        "items less the global discount do not add up to the authorized voucher.",
+        {
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field:
+            voucherClass === "C" ? "globalDiscount" : `globalDiscount[${id}]`,
+          expected: `${expected} minor units of lines less discount`,
+        }
+      );
+    }
+  }
+}
+
+/** The taxed lines and the authorized money of each VAT rate id. */
+function discountedRates(
+  voucherClass: "A" | "B",
+  lines: readonly VoucherDocumentLine[],
+  settled: readonly { rate: VatRate }[],
+  totals: VoucherTotals
+): { byLines: Map<number, number>; authorized: Map<number, number> } {
+  const byLines = new Map<number, number>();
+  for (const [index, line] of lines.entries()) {
+    const rate = settled[index]?.rate;
+    if (typeof rate === "number") {
+      const id = vatRateId(rate);
+      byLines.set(id, (byLines.get(id) ?? 0) + line.amount);
+    }
+  }
+  const authorized = new Map<number, number>();
+  for (const row of totals.vatRates) {
+    const amount = voucherClass === "A" ? row.base : row.base + row.amount;
+    authorized.set(row.id, (authorized.get(row.id) ?? 0) + amount);
+  }
+  return { byLines, authorized };
 }
 
 function assertItemsMatchTotals(

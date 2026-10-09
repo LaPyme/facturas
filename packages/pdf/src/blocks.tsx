@@ -247,6 +247,16 @@ function totalsRows(doc: VoucherDocument): TotalsRowData[] {
   const { totals } = doc;
   const classA = doc.voucherClass === "A";
   return [
+    // The lines are before the discount and the subtotal after it.
+    ...(totals.globalDiscount > 0
+      ? [
+          {
+            key: "global-discount",
+            label: "Descuento global",
+            amount: -totals.globalDiscount,
+          },
+        ]
+      : []),
     {
       key: "subtotal",
       label: classA ? "Importe neto gravado" : "Subtotal",
