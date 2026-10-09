@@ -14,6 +14,7 @@ import {
   formatVatRate,
 } from "./format";
 import { ArcaQr } from "./qr";
+import type { VoucherStyles } from "./theme";
 
 /**
  * The fiscal blocks. They are internal on purpose: `<Voucher>` places each
@@ -147,10 +148,23 @@ export function ReceiverBlock({ details }: { details?: ReactNode }) {
   );
 }
 
-/** Descriptions wrap between words, never as "Col-or". */
-function wholeWord(word: string): string[] {
-  return [word];
+/** Longer than a description column holds: such a token may break anywhere. */
+const LONG_TOKEN = 20;
+
+/**
+ * Descriptions wrap between words, never as "Col-or". Only a token too long
+ * for the column, such as a URL, breaks inside so it cannot overrun the
+ * quantity and price columns.
+ */
+function wrapDescription(word: string): string[] {
+  return word.length > LONG_TOKEN ? [...word] : [word];
 }
+
+/**
+ * A row stays on one sheet unless its description could outgrow one: an
+ * unbreakable row taller than the sheet would be clipped.
+ */
+const UNBREAKABLE_DESCRIPTION = 600;
 
 /** C19 to C21: the lines, without VAT on class A and with VAT on class B. */
 export function LinesTable() {
@@ -177,12 +191,15 @@ export function LinesTable() {
         <View
           key={`${index}-${line.description}`}
           style={styles.tableRow}
-          wrap={false}
+          wrap={line.description.length > UNBREAKABLE_DESCRIPTION}
         >
           {showCode ? (
             <Text style={styles.cellCode}>{line.code ?? ""}</Text>
           ) : null}
-          <Text hyphenationCallback={wholeWord} style={styles.cellDescription}>
+          <Text
+            hyphenationCallback={wrapDescription}
+            style={styles.cellDescription}
+          >
             {line.description}
           </Text>
           <Text style={styles.cellNarrow}>{formatQuantity(line.quantity)}</Text>
@@ -207,57 +224,114 @@ export function LinesTable() {
 function TotalRow({ label, amount }: { label: string; amount: number }) {
   const { doc, styles } = useVoucher("TotalRow");
   return (
-    <View style={styles.totalRow}>
-      <Text style={styles.muted}>{label}</Text>
-      <Text>{formatMoney(amount, doc.currency.id)}</Text>
+    <View style={styles.totalRow} wrap={false}>
+      <Text style={[styles.totalLabel, styles.muted]}>{label}</Text>
+      <Text style={styles.totalAmount}>
+        {formatMoney(amount, doc.currency.id)}
+      </Text>
+    </View>
+  );
+}
+
+/** Totals rows taller than this may break across sheets; see `TotalsBlock`. */
+const UNBREAKABLE_TOTALS_HEIGHT = 250;
+/** A conservative fit for a totals label beside its amount, at 9 pt. */
+const TOTALS_LABEL_CHARS_PER_LINE = 28;
+const TOTALS_LINE_HEIGHT = 12.15;
+const TOTALS_ROW_CHROME = 2.5;
+
+type TotalsRowData = { key: string; label: string; amount: number };
+
+/** C23, C25, L7: the rows above the total, VAT by rate right after the lines on class A. */
+function totalsRows(doc: VoucherDocument): TotalsRowData[] {
+  const { totals } = doc;
+  const classA = doc.voucherClass === "A";
+  return [
+    {
+      key: "subtotal",
+      label: classA ? "Importe neto gravado" : "Subtotal",
+      amount: totals.subtotal,
+    },
+    ...(classA && totals.exempt > 0
+      ? [{ key: "exempt", label: "Importe exento", amount: totals.exempt }]
+      : []),
+    ...(classA && totals.untaxed > 0
+      ? [
+          {
+            key: "untaxed",
+            label: "Importe no gravado",
+            amount: totals.untaxed,
+          },
+        ]
+      : []),
+    ...totals.vatRates.map((row) => ({
+      key: `vat-${row.id}`,
+      label: `IVA ${row.rate === undefined ? `(${row.id})` : formatVatRate(row.rate)}`,
+      amount: row.amount,
+    })),
+    // Two provinces' IIBB perceptions share the tribute id.
+    ...totals.otherTaxes.map((tax, index) => ({
+      key: `tax-${index}-${tax.id}`,
+      label: tax.description,
+      amount: tax.amount,
+    })),
+    ...(totals.adjustment === 0
+      ? []
+      : [{ key: "adjustment", label: "Ajuste", amount: totals.adjustment }]),
+  ];
+}
+
+/**
+ * Whether the rows above the total may break across sheets. A usual breakdown
+ * stays in one block with the total and the CAE. A long one, many wrapped tax
+ * names, would not fit a sheet that way, so its rows flow and only the total
+ * stays with the CAE.
+ */
+export function totalsBreak(doc: VoucherDocument): boolean {
+  const height = totalsRows(doc).reduce(
+    (sum, row) =>
+      sum +
+      Math.ceil(row.label.length / TOTALS_LABEL_CHARS_PER_LINE) *
+        TOTALS_LINE_HEIGHT +
+      TOTALS_ROW_CHROME,
+    0
+  );
+  return height > UNBREAKABLE_TOTALS_HEIGHT;
+}
+
+export function GrandTotal() {
+  const { doc, styles } = useVoucher("GrandTotal");
+  return (
+    <View style={[styles.totalRow, styles.grandTotal]}>
+      <Text style={styles.totalLabel}>Importe total</Text>
+      <Text style={styles.totalAmount}>
+        {formatMoney(doc.totals.total, doc.currency.id)}
+      </Text>
     </View>
   );
 }
 
 /**
- * C23, C25, L7: totals, with one VAT row per rate right after the lines on
- * class A. The aside slot takes the room on their left.
+ * The totals, with the aside slot on their left. With `breakable`, the rows
+ * may continue on the next sheet, and the total and the aside are left out:
+ * `<Voucher>` puts them with the CAE.
  */
-export function TotalsBlock({ aside }: { aside?: ReactNode }) {
+export function TotalsBlock({
+  aside,
+  breakable,
+}: {
+  aside?: ReactNode;
+  breakable: boolean;
+}) {
   const { doc, styles } = useVoucher("TotalsBlock");
-  const { totals } = doc;
-  const classA = doc.voucherClass === "A";
   return (
-    <View style={styles.totalsRow} wrap={false}>
+    <View style={styles.totalsRow} wrap={breakable}>
       {aside ?? <View style={styles.aside} />}
       <View style={styles.totals}>
-        <TotalRow
-          amount={totals.subtotal}
-          label={classA ? "Importe neto gravado" : "Subtotal"}
-        />
-        {classA && totals.exempt > 0 ? (
-          <TotalRow amount={totals.exempt} label="Importe exento" />
-        ) : null}
-        {classA && totals.untaxed > 0 ? (
-          <TotalRow amount={totals.untaxed} label="Importe no gravado" />
-        ) : null}
-        {totals.vatRates.map((row) => (
-          <TotalRow
-            amount={row.amount}
-            key={row.id}
-            label={`IVA ${row.rate === undefined ? `(${row.id})` : formatVatRate(row.rate)}`}
-          />
+        {totalsRows(doc).map((row) => (
+          <TotalRow amount={row.amount} key={row.key} label={row.label} />
         ))}
-        {totals.otherTaxes.map((tax, index) => (
-          <TotalRow
-            amount={tax.amount}
-            // Two provinces' IIBB perceptions share the tribute id.
-            key={`${index}-${tax.id}`}
-            label={tax.description}
-          />
-        ))}
-        {totals.adjustment === 0 ? null : (
-          <TotalRow amount={totals.adjustment} label="Ajuste" />
-        )}
-        <View style={[styles.totalRow, styles.grandTotal]}>
-          <Text>Importe total</Text>
-          <Text>{formatMoney(totals.total, doc.currency.id)}</Text>
-        </View>
+        {breakable ? null : <GrandTotal />}
       </View>
     </View>
   );
@@ -279,12 +353,17 @@ export function LegendsBlock() {
 }
 
 /** L8, G2 and Ley 27.743: bottom left. L9, Q1: CAE, its due date and QR, bottom right. */
-export function FiscalFooter() {
-  const { doc, styles } = useVoucher("FiscalFooter");
+export function FiscalFooter({
+  doc,
+  styles,
+}: {
+  doc: VoucherDocument;
+  styles: VoucherStyles;
+}) {
   return (
-    <View style={styles.footer} wrap={false}>
+    <View style={styles.footer}>
       <View style={styles.footerLeft}>
-        {doc.transparency ? <Transparency doc={doc} /> : null}
+        {doc.transparency ? <Transparency doc={doc} styles={styles} /> : null}
       </View>
       <View style={styles.footerRight}>
         <ArcaQr url={doc.qr} />
@@ -302,8 +381,13 @@ export function FiscalFooter() {
   );
 }
 
-function Transparency({ doc }: { doc: VoucherDocument }) {
-  const { styles } = useVoucher("Transparency");
+function Transparency({
+  doc,
+  styles,
+}: {
+  doc: VoucherDocument;
+  styles: VoucherStyles;
+}) {
   const transparency = doc.transparency;
   if (transparency === undefined) {
     return null;

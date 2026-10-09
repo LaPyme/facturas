@@ -8,11 +8,13 @@ import {
 } from "react";
 import {
   FiscalFooter,
+  GrandTotal,
   IssuerHeader,
   LegendsBlock,
   LinesTable,
   ReceiverBlock,
   TotalsBlock,
+  totalsBreak,
 } from "./blocks";
 import { useVoucher, VoucherContext } from "./context";
 import { formatTitle } from "./format";
@@ -48,7 +50,8 @@ export function VoucherReceiverDetails({ children }: { children?: ReactNode }) {
 
 /**
  * Beside the totals, on their left: payments received or the account
- * balance. It never takes the totals' column.
+ * balance. It never takes the totals' column. It moves with the totals and
+ * the CAE as one block, so keep it short.
  */
 export function VoucherAside({ children }: { children?: ReactNode }) {
   const { styles } = useVoucher("VoucherAside");
@@ -56,8 +59,9 @@ export function VoucherAside({ children }: { children?: ReactNode }) {
 }
 
 /**
- * After the totals and legends: anything else the voucher should say, such as
- * warranty, returns or contact. It cannot sit in a fiscal zone.
+ * After the receiver, before the lines, as Stripe's memo: anything else the
+ * voucher should say, such as warranty, returns, a CBU or terms. It cannot sit
+ * in a fiscal zone, and it may run long: it breaks across sheets.
  */
 export function VoucherNotes({ children }: { children?: ReactNode }) {
   const { styles } = useVoucher("VoucherNotes");
@@ -110,6 +114,11 @@ export function collectSlots(children: ReactNode): Slots {
   return slots;
 }
 
+function ClosingFooter() {
+  const { doc, styles } = useVoucher("FiscalFooter");
+  return <FiscalFooter doc={doc} styles={styles} />;
+}
+
 /** "Hoja n de m" on every sheet of a voucher that takes more than one. */
 function sheetNumber({
   pageNumber,
@@ -130,6 +139,7 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
   const slots = collectSlots(children);
   const resolved = resolveTheme(theme);
   const styles = createStyles(resolved);
+  const breakTotals = totalsBreak(doc);
   return (
     <VoucherContext.Provider value={{ doc, theme: resolved, styles }}>
       <Document
@@ -141,13 +151,29 @@ export function Voucher({ doc, theme, children }: VoucherProps) {
         <Page size="A4" style={styles.page}>
           <IssuerHeader brand={slots.brand} details={slots.issuerDetails} />
           <ReceiverBlock details={slots.receiverDetails} />
+          {/* Free text goes before the lines, as Stripe's memo: it may run long and break across sheets. */}
+          {slots.notes}
           <LinesTable />
-          {/* One block: when it does not fit, the totals move to the next sheet with the CAE. */}
+          {/*
+           * The total, legends and fiscal footer stay together: when they do
+           * not fit, they move to the next sheet as one, so the CAE is never
+           * alone. A long tax breakdown flows before them; see totalsBreak.
+           */}
+          {breakTotals ? <TotalsBlock breakable /> : null}
           <View style={styles.closing} wrap={false}>
-            <TotalsBlock aside={slots.aside} />
+            {breakTotals ? (
+              // The aside stays beside the total, with the CAE.
+              <View style={styles.grandTotalRow}>
+                {slots.aside ?? <View style={styles.aside} />}
+                <View style={styles.totals}>
+                  <GrandTotal />
+                </View>
+              </View>
+            ) : (
+              <TotalsBlock aside={slots.aside} breakable={false} />
+            )}
             <LegendsBlock />
-            {slots.notes}
-            <FiscalFooter />
+            <ClosingFooter />
           </View>
           <Text fixed render={sheetNumber} style={styles.pageNumber} />
         </Page>

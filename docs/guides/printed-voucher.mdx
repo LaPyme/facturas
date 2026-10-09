@@ -165,8 +165,9 @@ Lo que podés cambiar:
 
 - `theme`: tipografía y colores. Los tamaños no, porque la norma fija algunos.
 - `logo`: va arriba a la izquierda, sobre la razón social.
-- `notes`: garantía, cambios, contacto o lo que quieras decir, después de los
-  totales y fuera de las zonas fiscales.
+- `notes`: garantía, cambios, CBU, condiciones o lo que quieras decir. Va
+  después del receptor y antes de las líneas, fuera de las zonas fiscales, y
+  puede ser tan largo como haga falta: sigue en la hoja siguiente.
 
 Con JSX tenés más espacios. Cada uno va en un lugar fijo, fuera de las zonas
 fiscales:
@@ -176,8 +177,8 @@ fiscales:
 | `<VoucherBrand>` | En el recuadro del emisor, sobre la razón social | El logo |
 | `<VoucherIssuerDetails>` | En el recuadro, después de los datos fiscales del emisor | Teléfono, email, sitio web |
 | `<VoucherReceiverDetails>` | Después de los datos del receptor | Teléfono, email, número de cliente |
-| `<VoucherAside>` | A la izquierda de los totales | Pagos recibidos, saldo de cuenta corriente |
-| `<VoucherNotes>` | Después de los totales y las leyendas | Garantía, CBU, observaciones |
+| `<VoucherAside>` | A la izquierda de los totales | Pagos recibidos, saldo de cuenta corriente. Tiene que ser breve: va con los totales |
+| `<VoucherNotes>` | Después del receptor, antes de las líneas | Garantía, CBU, observaciones, condiciones. Puede ocupar varias hojas |
 
 ```tsx
 import { Image, Text } from "@react-pdf/renderer";
@@ -209,8 +210,12 @@ const pdf = await renderVoucherPdf(
 );
 ```
 
-Si los totales, las notas y el pie no entran en la hoja, pasan juntos a la
-siguiente: el CAE nunca queda solo en una hoja.
+Los totales, las leyendas y el pie con el CAE van siempre juntos: si no entran
+en la hoja, pasan juntos a la siguiente, así que el CAE nunca queda solo. Si el
+desglose de impuestos es muy largo, sus renglones siguen en la hoja siguiente y
+el importe total, con `<VoucherAside>` a su izquierda, queda con el CAE. Las
+líneas y las notas, en cambio, siguen en la hoja siguiente cuando no entran,
+aunque una sola descripción sea más larga que una hoja.
 
 Los bloques fiscales no se exportan: `<Voucher>` los ubica solo. Cualquier
 otro hijo de `<Voucher>`, o un espacio repetido, hace que `renderVoucherPdf()`

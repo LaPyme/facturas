@@ -1,4 +1,4 @@
-import { renderToBuffer, Text, View } from "@react-pdf/renderer";
+import { renderToBuffer, Text } from "@react-pdf/renderer";
 import { MONOTRIBUTO_CREDIT_LEGEND, type VoucherDocument } from "facturas";
 import { describe, expect, it } from "vitest";
 import {
@@ -268,31 +268,175 @@ describe("<Voucher>", () => {
     expect(aside.x + 150).toBeLessThan(total.x);
     expect(aside.top).toBeGreaterThan(find(page, "Mechas para metal").top);
     expect(aside.top).toBeLessThan(total.top);
-    // Notes: after the totals, before the CAE.
+    // Notes: after the receiver, before the lines, as Stripe's memo.
     const notes = find(page, "Cambios dentro de los 10 días.");
-    expect(notes.top).toBeGreaterThan(find(page, "Importe total").top);
-    expect(notes.top).toBeLessThan(find(page, "C.A.E.").top);
+    expect(notes.top).toBeGreaterThan(find(page, "A Consumidor Final").top);
+    expect(notes.top).toBeLessThan(find(page, "Descripción").top);
   });
 
-  it("moves the totals to the CAE's sheet rather than leave the CAE alone", async () => {
+  it("keeps the totals with the CAE wherever the sheet breaks", async () => {
+    const doc = longDocument();
+    // Line counts around the first sheet's edge: the closing block fits, then
+    // must move, then the lines themselves overflow.
+    for (const count of [20, 22, 24, 26, 28, 30, 32]) {
+      const pages = await readPdf(
+        await renderVoucherPdf({ ...doc, lines: doc.lines.slice(0, count) })
+      );
+      const last = pages.at(-1) as PdfPage;
+      expect(hasText(last, "Importe total"), `${count} lines`).toBe(true);
+      expectFiscalFooter(last, doc);
+      for (const page of pages.slice(0, -1)) {
+        expect(hasText(page, "C.A.E."), `${count} lines`).toBe(false);
+      }
+    }
+  });
+
+  it("lets long notes break across sheets, all of them, clear of the CAE", async () => {
     const doc = classBDocument();
+    const clauses = Array.from(
+      { length: 70 },
+      (_, index) => `Cláusula ${index + 1}: condiciones generales de venta.`
+    );
+    const pages = await readPdf(
+      await renderVoucherPdf(doc, { notes: clauses.join("\n") })
+    );
+    expect(pages.length).toBeGreaterThan(1);
+    const printed = pages.flatMap((page) =>
+      page.texts.filter((text) => text.text.startsWith("Cláusula "))
+    );
+    expect(printed).toHaveLength(70);
+    const last = pages.at(-1) as PdfPage;
+    expectFiscalFooter(last, doc);
+    for (const text of last.texts.filter((t) =>
+      t.text.startsWith("Cláusula ")
+    )) {
+      expect(text.top).toBeLessThan(find(last, "Importe total").top);
+    }
+  });
+
+  it("breaks a token wider than the description column", async () => {
+    const doc = classBDocument();
+    const token = `https://example.com/${"x".repeat(78)}`;
+    const [page] = await render({
+      ...doc,
+      lines: doc.lines.map((line, index) =>
+        index === 0 ? { ...line, description: token } : line
+      ),
+    });
+    const runs = (page as PdfPage).texts.filter((text) =>
+      text.text.includes("xxxx")
+    );
+    expect(new Set(runs.map((run) => run.top)).size).toBeGreaterThan(1);
+  });
+
+  it("wraps a long tax name instead of running it into its amount", async () => {
+    const doc = classADocument();
+    const name = "Percepción de Ingresos Brutos Provincia de Buenos Aires";
+    const [page] = await render({
+      ...doc,
+      totals: {
+        ...doc.totals,
+        otherTaxes: doc.totals.otherTaxes.map((tax) => ({
+          ...tax,
+          description: name,
+        })),
+      },
+    });
+    // The name breaks before it reaches the amount's column: its first line
+    // does not hold the whole name.
+    const first = find(page as PdfPage, "Percepción de Ingresos");
+    expect(first.text).not.toContain("Aires");
+    expect(first.top).toBe(find(page as PdfPage, "$ 3,00").top);
+    expect(hasText(page as PdfPage, "Aires")).toBe(true);
+  });
+
+  it("lets a long tax breakdown continue, with the total kept by the CAE", async () => {
+    const doc = classADocument();
+    const [tax] = doc.totals.otherTaxes;
+    if (tax === undefined) {
+      throw new Error("no tax");
+    }
+    const otherTaxes = Array.from({ length: 15 }, (_, index) => ({
+      ...tax,
+      id: 100 + index,
+      description: `Percepción de Ingresos Brutos Provincia de Buenos Aires Impuesto y contribución municipal por servicios generales ${index + 1}`,
+    }));
+    const pages = await readPdf(
+      await renderVoucherPdf({ ...doc, totals: { ...doc.totals, otherTaxes } })
+    );
+    expect(pages.length).toBeGreaterThan(1);
+    const names = pages.flatMap((page) =>
+      page.texts.filter((text) =>
+        text.text.startsWith("Percepción de Ingresos")
+      )
+    );
+    expect(names).toHaveLength(15);
+    // No sheet squeezes its lines: react-pdf compresses an unbreakable block
+    // that outgrows the sheet, down to about 3.6 pt between baselines.
+    for (const page of pages) {
+      const tops = [
+        ...new Set(
+          page.texts
+            .filter((text) => text.x > page.width / 2)
+            .map((text) => Math.round(text.top * 10) / 10)
+        ),
+      ].sort((a, b) => a - b);
+      const gaps = tops.slice(1).map((top, index) => top - (tops[index] ?? 0));
+      expect(Math.min(...gaps)).toBeGreaterThan(8);
+    }
+    const last = pages.at(-1) as PdfPage;
+    expect(hasText(last, "Importe total")).toBe(true);
+    expectFiscalFooter(last, doc);
+  });
+
+  it("keeps a short aside with the total when the tax breakdown breaks", async () => {
+    const doc = classADocument();
+    const [tax] = doc.totals.otherTaxes;
+    if (tax === undefined) {
+      throw new Error("no tax");
+    }
+    const otherTaxes = Array.from({ length: 15 }, (_, index) => ({
+      ...tax,
+      id: 100 + index,
+      description: `Percepción de Ingresos Brutos Provincia de Buenos Aires Impuesto y contribución municipal por servicios generales ${index + 1}`,
+    }));
     const pages = await readPdf(
       await renderVoucherPdf(
-        <Voucher doc={doc}>
-          <VoucherNotes>
-            <View style={{ height: 380 }}>
-              <Text>Condiciones generales de venta.</Text>
-            </View>
-          </VoucherNotes>
+        <Voucher doc={{ ...doc, totals: { ...doc.totals, otherTaxes } }}>
+          <VoucherAside>
+            <Text>Pagado: $ 100,00</Text>
+            <Text>Saldo actual: $ 68,20</Text>
+          </VoucherAside>
         </Voucher>
       )
     );
-    expect(pages).toHaveLength(2);
-    const [first, last] = pages as [PdfPage, PdfPage];
-    expect(hasText(first, "Taladro percutor 13 mm")).toBe(true);
-    expect(hasText(first, "Importe total")).toBe(false);
+    expect(pages.length).toBeGreaterThan(1);
+    const last = pages.at(-1) as PdfPage;
     expect(hasText(last, "Importe total")).toBe(true);
+    expect(hasText(last, "Pagado: $ 100,00")).toBe(true);
+    expect(hasText(last, "Saldo actual: $ 68,20")).toBe(true);
     expectFiscalFooter(last, doc);
+    const aside = find(last, "Pagado: $ 100,00");
+    const total = find(last, "Importe total");
+    expect(aside.x).toBeLessThan(total.x);
+    expect(Math.abs(aside.top - total.top)).toBeLessThan(15);
+  });
+
+  it("lets a row taller than a sheet continue on the next one", async () => {
+    const doc = classADocument();
+    const paragraph = `${"texto de la descripción ".repeat(30)}\n`;
+    const description = `${paragraph.repeat(6)}FIN DE LA DESCRIPCIÓN`;
+    const pages = await readPdf(
+      await renderVoucherPdf({
+        ...doc,
+        lines: doc.lines.map((line, index) =>
+          index === 0 ? { ...line, description } : line
+        ),
+      })
+    );
+    expect(pages.some((page) => hasText(page, "FIN DE LA DESCRIPCIÓN"))).toBe(
+      true
+    );
   });
 
   describe("refuses a wrong composition", () => {
