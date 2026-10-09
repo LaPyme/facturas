@@ -87,6 +87,11 @@ export function vatRatePercent(id: number): SupportedVatRate | undefined {
   return undefined;
 }
 
+/** The ARCA VAT rate id of a percentage. */
+export function vatRateId(rate: SupportedVatRate): number {
+  return RATES[rate].id;
+}
+
 export function calculateWsfeAmounts(input: WsfeAmountsInput): {
   data: ExactAmounts;
   amounts: IssueAmounts;

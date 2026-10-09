@@ -186,7 +186,7 @@ Types 51 to 53 were class M until 2025-11-30. RG 5762 article 28 keeps their
 numbering, so a voucher of those types dated before 2025-12-01 is a class M
 voucher, which the SDK does not render.
 
-## Decisions for the first release
+## Decisions
 
 | Id | Decision |
 | --- | --- |
@@ -199,6 +199,7 @@ voucher, which the SDK does not render.
 | D7 | No ARCA logo and no "Comprobante Autorizado" mark. No norm requires them, and they would present a third-party document as rendered by ARCA. |
 | D8 | On an electronic voucher, the due date of C9 and L9 is read as the CAE due date. A payment due date is a separate, optional field. |
 | D9 | The norms write the expressions that precede a datum, and the VAT condition legends, in capitals, such as `INICIO DE ACTIVIDADES` and `IVA RESPONSABLE INSCRIPTO`. `@facturas/pdf` keeps their words and prints them in the case of the rest of the page, as ARCA's own Comprobantes en línea does with "Fecha de Inicio de Actividades" and "IVA Responsable Inscripto". `PRINTED_VOUCHER_TEXT` and the model's legends keep the norms' spelling. |
+| D10 | A discount on the whole voucher is a concept that changes the total (C23). WSFE has no field for it: ARCA authorizes the items after it. `buildVoucherDocument()` takes the items before it and the discount as the issuer split it, by VAT rate id on classes A and B and as one amount on class C, and never splits it itself. It checks each rate's lines less its discount against the authorized base, net on class A and with VAT on class B. `@facturas/pdf` prints one "Descuento global" row with the sum, before the net taxed amount on class A and before the subtotal on classes B and C. |
 
 ## Resolved questions
 

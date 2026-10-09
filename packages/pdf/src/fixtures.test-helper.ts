@@ -146,6 +146,66 @@ export function classADocument(): VoucherDocument {
   });
 }
 
+/** Lines before a global discount the issuer split by rate when it issued. */
+export function globalDiscountDocument(
+  voucherClass: "A" | "B"
+): VoucherDocument {
+  if (voucherClass === "A") {
+    return buildVoucherDocument({
+      voucher: voucher({
+        voucherType: 1,
+        voucherClass: "A",
+        header: {
+          documentType: 80,
+          documentNumber: "20111111112",
+          receiverVatConditionId: 1,
+        },
+        totals: {
+          total: 15_089,
+          netTaxed: 12_800,
+          untaxed: 0,
+          exempt: 0,
+          vat: 2289,
+          otherTaxes: 0,
+          vatRates: [
+            { id: 5, rate: 21, base: 9000, amount: 1890 },
+            { id: 4, rate: 10.5, base: 3800, amount: 399 },
+          ],
+          taxes: [],
+        },
+      }),
+      items: [
+        { description: "Servicio de instalación", net: 10_000, vat: 21 },
+        { description: "Repuestos", net: 4000, vat: 10.5 },
+      ],
+      globalDiscount: { 5: 1000, 4: 200 },
+      issuer: ISSUER,
+      receiver: { name: "Cliente SA", address: "Calle 2, CABA" },
+      saleConditions: "Contado",
+    });
+  }
+  return buildVoucherDocument({
+    voucher: voucher({
+      voucherType: 6,
+      voucherClass: "B",
+      totals: {
+        total: 10_890,
+        netTaxed: 9000,
+        untaxed: 0,
+        exempt: 0,
+        vat: 1890,
+        otherTaxes: 0,
+        vatRates: [{ id: 5, rate: 21, base: 9000, amount: 1890 }],
+        taxes: [],
+      },
+    }),
+    items: [{ description: "Taladro percutor 13 mm", gross: 12_100, vat: 21 }],
+    globalDiscount: { 5: 1210 },
+    issuer: ISSUER,
+    saleConditions: "Contado",
+  });
+}
+
 /** Class C from a monotributo issuer, without start of activities. */
 export function classCDocument(): VoucherDocument {
   const items = [{ description: "Consulta", amount: 50_000 }] as const;

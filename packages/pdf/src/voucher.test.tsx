@@ -5,6 +5,7 @@ import {
   classADocument,
   classBDocument,
   classCDocument,
+  globalDiscountDocument,
   longDocument,
 } from "./fixtures.test-helper";
 import { formatConditionLegend } from "./format";
@@ -176,6 +177,34 @@ describe("<Voucher>", () => {
     expect(page.texts.some((text) => text.text.trim() === "IVA")).toBe(false);
     const [mixed] = await render(doc);
     expect(mixed?.texts.some((text) => text.text.trim() === "IVA")).toBe(true);
+  });
+
+  it("prints a global discount as one row before the net, net on class A and with VAT on class B", async () => {
+    for (const [voucherClass, line, discount, after, net] of [
+      ["A", "100,00", "-$ 12,00", "Importe neto gravado", "$ 128,00"],
+      ["B", "121,00", "-$ 12,10", "Subtotal", "$ 108,90"],
+    ] as const) {
+      const [page] = await render(globalDiscountDocument(voucherClass));
+      if (page === undefined) {
+        throw new Error("no page");
+      }
+      // The lines keep their amounts before the discount.
+      expect(hasText(page, line)).toBe(true);
+      const label = find(page, "Descuento global");
+      expect(Math.abs(find(page, discount).top - label.top)).toBeLessThan(2);
+      // The next row is the net, or the subtotal, after the discount.
+      const amount = find(page, net);
+      expect(amount.top).toBeGreaterThan(label.top);
+      expect(amount.top - label.top).toBeLessThan(20);
+      expect(
+        page.texts.some(
+          (text) =>
+            text.text.trim() === after && Math.abs(text.top - amount.top) < 2
+        )
+      ).toBe(true);
+    }
+    const [plain] = await render(classBDocument());
+    expect(plain && hasText(plain, "Descuento global")).toBe(false);
   });
 
   it("renders class C without VAT, transparency block or an exempt start of activities", async () => {

@@ -66,7 +66,8 @@ más tarde, el modelo sale igual.
 | Campo | Qué es |
 | --- | --- |
 | `voucher` | El `IssuedVoucher` de un resultado `authorized`. |
-| `items` | Los mismos ítems de la emisión, cada uno con `description`. Si un ítem trae `quantity`, también trae `unitPrice`: sin IVA en la clase A y con IVA en la clase B. Sin cantidad, la línea sale como una unidad por su importe. |
+| `items` | Los mismos ítems de la emisión, cada uno con `description`. Si un ítem trae `quantity`, también trae `unitPrice`: sin IVA en la clase A y con IVA en la clase B. Sin cantidad, la línea sale como una unidad por su importe. Con `globalDiscount`, los ítems antes del descuento. |
+| `globalDiscount` | Un descuento sobre todo el comprobante, en centavos, que ya restaste de los ítems al emitir. En las clases A y B va por id de alícuota de ARCA, como las filas de IVA autorizadas: sin IVA en la A y con IVA en la B, igual que las líneas. En la clase C es un solo importe. Ver [Descuento global](#descuento-global). |
 | `issuer.legalName`, `issuer.address` | La razón social y el domicilio comercial del lugar donde se emite. |
 | `issuer.tradeName` | El nombre de fantasía, solo si tenés uno. |
 | `issuer.taxId` | Tu CUIT. Se controla contra el QR del comprobante. |
@@ -93,8 +94,8 @@ Si falta un dato obligatorio, tira `ArcaInputError` con
   receptor cuando está identificado.
 - Las líneas. En la clase A van sin IVA y con su alícuota, en la clase B con
   IVA. Suman exactamente lo que autorizó ARCA.
-- Los totales: el subtotal, el exento, el no gravado, el IVA por alícuota en la
-  clase A, los tributos y el total. Si un ajuste de IVA de la cabecera no entra
+- Los totales: el descuento global, el subtotal, el exento, el no gravado, el
+  IVA por alícuota en la clase A, los tributos y el total. Si un ajuste de IVA de la cabecera no entra
   en ninguna línea, aparece en `totals.adjustment` para que lo muestres.
 - En la clase B, el bloque del Régimen de Transparencia Fiscal al Consumidor
   con el IVA contenido y los otros impuestos nacionales indirectos.
@@ -223,11 +224,48 @@ tire un error que nombra el problema antes de dibujar nada. Usá
 `renderVoucherPdf()` también con JSX: si llamás directo a `renderToBuffer` de
 react-pdf, ese error llega como un `TypeError` sin el mensaje.
 
+## Descuento global
+
+En las clases A, B y C, ARCA no tiene un campo para un descuento sobre todo el
+comprobante: lo autoriza ya restado de los ítems. Para imprimir las líneas antes
+del descuento y un renglón "Descuento global", pasá los ítems sin descontar y el
+descuento como lo repartiste al emitir:
+
+```ts
+const comprobante = buildVoucherDocument({
+  voucher: result.voucher,
+  // Los ítems antes del descuento: 100,00 al 21% y 40,00 al 10,5%.
+  items: [
+    { description: "Servicio de instalación", net: 10_000, vat: 21 },
+    { description: "Repuestos", net: 4000, vat: 10.5 },
+  ],
+  // Se emitió con 90,00 al 21% y 38,00 al 10,5%. 5 es el id del 21% y 4 el del 10,5%.
+  globalDiscount: { 5: 1000, 4: 200 },
+  // ...
+});
+```
+
+El SDK no reparte el descuento: lo decidiste vos al emitir, y si lo recalculara
+con su redondeo podría quedar a un centavo de lo autorizado. Lo que hace es
+comprobar, alícuota por alícuota, que las líneas menos su descuento den la base
+que autorizó ARCA: sin IVA en la clase A y con IVA en la B. En la clase C,
+`globalDiscount` es un número y se compara con el neto. El exento y el no
+gravado no llevan descuento.
+
+El PDF imprime un solo renglón "Descuento global" con la suma, antes del
+importe neto gravado en la clase A y antes del subtotal en las clases B y C. Las
+líneas conservan su importe y su bonificación propia, si la tienen.
+
 ## Qué rechaza
 
 `buildVoucherDocument()` prefiere fallar a imprimir algo incorrecto:
 
-- Ítems que no suman lo autorizado: `ARCA_INPUT_AMOUNT_MISMATCH`.
+- Ítems que no suman lo autorizado: `ARCA_INPUT_AMOUNT_MISMATCH`. Con
+  `globalDiscount`, el `field` nombra la alícuota que no cierra, como
+  `globalDiscount[5]`.
+- Un `globalDiscount` con la forma de otra clase, una clave que no es un id de
+  alícuota o que ningún ítem lleva, o un importe negativo o con decimales:
+  `ARCA_INPUT_INVALID_VALUE`.
 - Un receptor sin documento que no sea consumidor final:
   `ARCA_INPUT_MISSING_FIELD`.
 - Una cantidad por precio unitario que no da el importe de la línea:
