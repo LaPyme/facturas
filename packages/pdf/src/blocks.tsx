@@ -225,8 +225,10 @@ function TotalRow({ label, amount }: { label: string; amount: number }) {
   const { doc, styles } = useVoucher("TotalRow");
   return (
     <View style={styles.totalRow}>
-      <Text style={styles.muted}>{label}</Text>
-      <Text>{formatMoney(amount, doc.currency.id)}</Text>
+      <Text style={[styles.totalLabel, styles.muted]}>{label}</Text>
+      <Text style={styles.totalAmount}>
+        {formatMoney(amount, doc.currency.id)}
+      </Text>
     </View>
   );
 }
@@ -272,8 +274,10 @@ export function TotalsBlock({ aside }: { aside?: ReactNode }) {
           <TotalRow amount={totals.adjustment} label="Ajuste" />
         )}
         <View style={[styles.totalRow, styles.grandTotal]}>
-          <Text>Importe total</Text>
-          <Text>{formatMoney(totals.total, doc.currency.id)}</Text>
+          <Text style={styles.totalLabel}>Importe total</Text>
+          <Text style={styles.totalAmount}>
+            {formatMoney(totals.total, doc.currency.id)}
+          </Text>
         </View>
       </View>
     </View>

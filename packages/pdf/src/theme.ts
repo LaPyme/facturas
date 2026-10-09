@@ -180,6 +180,9 @@ export function createStyles(theme: ResolvedTheme) {
       borderBottomColor: theme.borderColor,
       borderBottomStyle: "solid",
     },
+    // A long tax name wraps in its own column; the amount keeps its width.
+    totalLabel: { flex: 1, paddingRight: 8 },
+    totalAmount: { flexShrink: 0, textAlign: "right" },
     grandTotal: {
       ...bold,
       color: theme.accentColor,

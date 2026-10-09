@@ -329,6 +329,27 @@ describe("<Voucher>", () => {
     expect(new Set(runs.map((run) => run.top)).size).toBeGreaterThan(1);
   });
 
+  it("wraps a long tax name instead of running it into its amount", async () => {
+    const doc = classADocument();
+    const name = "Percepción de Ingresos Brutos Provincia de Buenos Aires";
+    const [page] = await render({
+      ...doc,
+      totals: {
+        ...doc.totals,
+        otherTaxes: doc.totals.otherTaxes.map((tax) => ({
+          ...tax,
+          description: name,
+        })),
+      },
+    });
+    // The name breaks before it reaches the amount's column: its first line
+    // does not hold the whole name.
+    const first = find(page as PdfPage, "Percepción de Ingresos");
+    expect(first.text).not.toContain("Aires");
+    expect(first.top).toBe(find(page as PdfPage, "$ 3,00").top);
+    expect(hasText(page as PdfPage, "Aires")).toBe(true);
+  });
+
   it("lets a row taller than a sheet continue on the next one", async () => {
     const doc = classADocument();
     const paragraph = `${"texto de la descripción ".repeat(30)}\n`;
