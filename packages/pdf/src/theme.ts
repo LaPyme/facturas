@@ -116,7 +116,9 @@ export function createStyles(theme: ResolvedTheme) {
       alignItems: "center",
       justifyContent: "center",
     },
-    letter: { ...bold, fontSize: 24, lineHeight: 1, color: theme.accentColor },
+    // No lineHeight: the font's own line box centres the capital in the box.
+    // A fixed one sinks it by the font's ascent, 3.6 pt with Geist.
+    letter: { ...bold, fontSize: 24, color: theme.accentColor },
     code: { fontSize: 7.5, color: theme.textColor },
     letterLegend: { ...bold, fontSize: 6.5, textAlign: "center" },
     issuerName: {
