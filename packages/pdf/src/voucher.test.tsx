@@ -164,6 +164,26 @@ describe("<Voucher>", () => {
     expect(hasText(page, "Régimen de Transparencia Fiscal")).toBe(false);
   });
 
+  it("centres the letter in its box whatever the bold font", async () => {
+    // The box starts below the page and column padding and its 0.6 pt outline.
+    const boxCentre = 32 + 14 + 0.6 + 20;
+    // Cap heights of the standard fonts, in thousandths of the size.
+    for (const [boldFontFamily, capHeight] of [
+      ["Helvetica-Bold", 718],
+      ["Times-Bold", 676],
+    ] as const) {
+      const [page] = await readPdf(
+        await renderVoucherPdf(classBDocument(), { theme: { boldFontFamily } })
+      );
+      if (page === undefined) {
+        throw new Error("no page");
+      }
+      const letter = findExact(page, "B");
+      const capCentre = letter.top - (letter.fontSize * capHeight) / 2000;
+      expect(Math.abs(capCentre - boxCentre)).toBeLessThan(0.5);
+    }
+  });
+
   it("drops the line rate column on class A when every line has the same rate", async () => {
     const doc = classADocument();
     const single = {
