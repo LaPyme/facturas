@@ -1,5 +1,13 @@
 # @facturas/pdf
 
+## 0.25.1
+
+### Patch Changes
+
+- cdec00f: `@facturas/pdf` centra la letra del comprobante en su recuadro con cualquier fuente del tema. Con una altura de línea fija, una fuente de ascendente alto como Geist la bajaba 3,6 puntos.
+- Updated dependencies [cdec00f]
+  - facturas@0.25.1
+
 ## 0.25.0
 
 ### Minor Changes
