@@ -584,6 +584,80 @@ describe("notes against several originals", () => {
   });
 });
 
+describe("debit notes against credit note originals", () => {
+  const input: CreditNoteInput = {
+    for: [
+      { salesPoint: 1, voucherType: 3, number: 1 },
+      { salesPoint: 1, voucherType: 2, number: 2 },
+    ],
+    date: "20260905",
+    items: [{ net: 20_000, vat: 21 }],
+  };
+  it("validates and derives mixed invoice, debit and credit originals of one family", () => {
+    const targets = [
+      ...(input.for as readonly (typeof target)[]),
+      { salesPoint: 1, voucherType: 1, number: 3 },
+    ];
+    const noteInput = { ...input, for: targets };
+    const checked = assertCreditNoteInput(noteInput, "debitNote");
+    expect(checked.for).toEqual(targets);
+    const originals = targets.map((coordinates) => ({
+      ...classA,
+      voucherType: coordinates.voucherType,
+      voucherNumber: coordinates.number,
+    }));
+    const derived = deriveWsfePartialCreditNote(
+      originals,
+      checked,
+      new Date(),
+      "debitNote"
+    );
+    expect(derived.data.voucherType).toBe(2);
+    expect(derived.data.associatedVouchers).toEqual(
+      targets.map((coordinates) => ({
+        type: coordinates.voucherType,
+        salesPoint: coordinates.salesPoint,
+        number: coordinates.number,
+        voucherDate: "20260904",
+      }))
+    );
+  });
+  it("rejects originals of different ordinary classes during debit derivation", () => {
+    expect(() =>
+      deriveWsfePartialCreditNote(
+        [
+          { ...classA, voucherType: 3 },
+          { ...classC, voucherType: 13 },
+        ],
+        input,
+        new Date(),
+        "debitNote"
+      )
+    ).toThrow("disagree on voucherType");
+  });
+  it.each([3, 8, 13, 53, 203, 208, 213])(
+    "keeps credit-note derivation against credit original %i unsupported",
+    (voucherType) => {
+      expect(() =>
+        deriveWsfePartialCreditNote([{ ...classA, voucherType }], input)
+      ).toThrow("original must be an invoice or debit note");
+    }
+  );
+  it.each([53, 203, 208, 213])(
+    "keeps debit-note derivation against nonordinary credit original %i unsupported",
+    (voucherType) => {
+      expect(() =>
+        deriveWsfePartialCreditNote(
+          [{ ...classA, voucherType }],
+          input,
+          new Date(),
+          "debitNote"
+        )
+      ).toThrow("original must be an invoice or debit note");
+    }
+  );
+});
+
 describe("credit note input with several originals", () => {
   const targets = [
     { salesPoint: 1, voucherType: 11, number: 1 },

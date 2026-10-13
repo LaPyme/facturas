@@ -206,8 +206,15 @@ venta opera a través de WSMTXCA, revisá el
 ## Notas de débito
 
 `issueDebitNote({ for, items | amounts })` emite una nota de débito contra los
-mismos originales. No admite `all: true`: una nota de débito agrega al saldo,
-así que sus líneas son siempre explícitas.
+mismos originales. En WSFE también acepta una nota de crédito ordinaria
+autorizada de clase A, B o C (3, 8 o 13). Deriva una nota de débito de la misma
+familia y clase (2, 7 o 12), y asocia las coordenadas de esa nota de crédito.
+`previewDebitNote()` acepta los mismos inputs y consulta el original sin emitir.
+
+No admite `all: true`: una nota de débito agrega al saldo, así que sus líneas
+o importes son siempre explícitos. Este soporte de notas de crédito originales
+es para WSFE y la familia ordinaria. Las notas de crédito FCE, A con leyenda y
+los originales WSMTXCA mantienen sus restricciones.
 
 ```ts
 const debito = await arca.issueDebitNote(

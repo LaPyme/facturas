@@ -117,6 +117,7 @@ export type PeriodNoteInput = IssueInput & {
   };
   for?: never;
 };
+/** WSFE linked notes also accept authorized ordinary credit notes in `for`. */
 export type DebitNoteInput =
   | (CreditNoteInput & { all?: never })
   | PeriodNoteInput;
@@ -2005,7 +2006,7 @@ async function issueCreditNote(
   const note =
     "associatedPeriod" in input && !("for" in input)
       ? structuredClone(input)
-      : assertCreditNoteInput(input as CreditNoteInput);
+      : assertCreditNoteInput(input as CreditNoteInput, kind);
   if (kind === "debitNote" && "all" in note && note.all) {
     throw new ArcaInputError("Debit notes require explicit items", {
       code: "ARCA_INPUT_INVALID_VALUE",
@@ -2059,7 +2060,7 @@ async function prepareNote(
   if ("associatedPeriod" in input && !("for" in input)) {
     return preparePeriodNote(input, options, kind);
   }
-  const note = assertCreditNoteInput(input as CreditNoteInput);
+  const note = assertCreditNoteInput(input as CreditNoteInput, kind);
   if (kind === "debitNote" && note.all) {
     throw new ArcaInputError("Debit notes require explicit items", {
       code: "ARCA_INPUT_INVALID_VALUE",
@@ -2112,6 +2113,16 @@ function validateNoteService(
     return;
   }
   for (const target of targets) {
+    if ([3, 8, 13].includes(target.voucherType)) {
+      throw new ArcaInputError(
+        "WSMTXCA notes require an invoice or debit note original.",
+        {
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "input.for.voucherType",
+          expected: "a supported invoice or debit note",
+        }
+      );
+    }
     assertWsmtxcaVoucherType(target.voucherType);
   }
 }

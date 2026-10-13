@@ -46,6 +46,14 @@ This note is a focused extraction, not a replacement for the complete manual.
 
 ## Credit and debit notes
 
+Re-downloaded 2026-10-13; the v4.7 checksum above is unchanged. Rule 10040
+on physical page 47 permits ordinary debit notes 2, 7 and 12 to associate
+credit notes 3, 8 and 13 respectively. The high-level WSFE debit-note methods
+now accept those authorized originals, preserving their family and class.
+This correction does not expand credit-note-to-credit-note support, FCE,
+retention-legend, WSMTXCA or export associations. No live fiscal document
+was issued to validate it.
+
 Re-downloaded 2026-09-04; the v4.7 checksum above is unchanged. Rules 10040
 and 10197 were re-read against the same pinned file on 2026-09-06.
 
