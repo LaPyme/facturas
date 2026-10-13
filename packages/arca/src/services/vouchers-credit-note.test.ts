@@ -205,6 +205,235 @@ function fake({ coordinated = true } = {}) {
 }
 
 describe("credit note orchestration", () => {
+  describe.each([
+    { voucherClass: "A", creditType: 3, debitType: 2, invoiceType: 1 },
+    { voucherClass: "B", creditType: 8, debitType: 7, invoiceType: 6 },
+    { voucherClass: "C", creditType: 13, debitType: 12, invoiceType: 11 },
+  ])("ordinary $voucherClass debit note against a credit note", (family) => {
+    const original = {
+      ...deriveWsfeInvoice({
+        ...(family.voucherClass === "C"
+          ? { issuer: "monotributo", items: [{ amount: 12_100 }] }
+          : {
+              issuer: "responsable_inscripto",
+              items: [{ net: 10_000, vat: 21 }],
+            }),
+        salesPoint: 3,
+        date: "20260904",
+        to: {
+          condition:
+            family.voucherClass === "B" ? "exento" : "responsable_inscripto",
+          cuit: "20123456789",
+        },
+        currency: "USD",
+        exchangeRate: "1200.5",
+        paidInForeignCurrency: true,
+        service: {
+          from: "20260901",
+          to: "20260904",
+          dueDate: "20260904",
+        },
+      }).data,
+      voucherType: family.creditType,
+      associatedVouchers: [
+        { type: family.invoiceType, salesPoint: 1, number: 42 },
+      ],
+    };
+    const linked = {
+      for: { salesPoint: 3, voucherType: family.creditType, number: 17 },
+      salesPoint: 4,
+      date: "20260905" as const,
+    };
+    const modes = [
+      {
+        mode: "items",
+        input: {
+          ...linked,
+          items:
+            family.voucherClass === "C"
+              ? [{ amount: 24_200 }]
+              : [{ net: 20_000, vat: 21 as const }],
+        },
+      },
+      {
+        mode: "amounts",
+        input: {
+          ...linked,
+          amounts:
+            family.voucherClass === "C"
+              ? { net: 24_200, vat: 0 }
+              : {
+                  net: 20_000,
+                  vat: 4200,
+                  vatRates: [{ id: 5, base: 20_000, amount: 4200 }],
+                },
+        },
+      },
+    ];
+    it.each(modes)("previews, issues and replays $mode", async ({ input }) => {
+      const { service, wsfe } = fake();
+      wsfe.lookupVoucher.mockImplementation(({ voucherType, number }) =>
+        Promise.resolve(
+          voucherType === family.creditType
+            ? found(original, number)
+            : found(wsfe.issue.mock.calls[0][0].data, number)
+        )
+      );
+      const preview = await service.previewDebitNote(input);
+      expect(wsfe.lookupVoucher).toHaveBeenCalledExactlyOnceWith({
+        ...linked.for,
+        representedTaxId: undefined,
+        forceRefresh: undefined,
+      });
+      expect(wsfe.issue).not.toHaveBeenCalled();
+      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+      expect(preview.request).toMatchObject({
+        salesPoint: 4,
+        voucherType: family.debitType,
+        concept: 2,
+        documentType: 80,
+        documentNumber: 20_123_456_789,
+        receiverVatConditionId: original.receiverVatConditionId,
+        currencyId: "DOL",
+        exchangeRate: 1200.5,
+        sameCurrencyForeignCancellation: "S",
+        totalAmount: 242,
+        serviceStartDate: "20260901",
+        serviceEndDate: "20260904",
+        paymentDueDate: "20260905",
+      });
+      expect(preview.request.associatedVouchers).toEqual([
+        {
+          type: family.creditType,
+          salesPoint: 3,
+          number: 17,
+          voucherDate: "20260904",
+        },
+      ]);
+      expect(preview.originals?.[0]).toMatchObject({
+        voucherType: family.creditType,
+        number: 17,
+        salesPoint: 3,
+        cae: "74123456789012",
+        caeExpiry: "2026-09-15",
+        totalAmount: 12_100,
+      });
+      expect(await service.issueDebitNote(input, options)).toMatchObject({
+        kind: "authorized",
+        voucher: {
+          voucherType: family.debitType,
+          voucherClass: family.voucherClass,
+          header: preview.header,
+        },
+      });
+      expect(wsfe.issue).toHaveBeenCalledExactlyOnceWith({
+        data: preview.request,
+        voucherNumber: 9,
+        representedTaxId: undefined,
+      });
+      expect(await service.issueDebitNote(input, options)).toMatchObject({
+        kind: "authorized",
+        recoveredByMatch: true,
+        voucher: { voucherType: family.debitType },
+      });
+      expect(wsfe.issue).toHaveBeenCalledOnce();
+      expect(wsfe.getNextVoucherNumber).toHaveBeenCalledOnce();
+    });
+    it.each([{ result: "R" }, { cae: "" }, { caeExpiry: "" }])(
+      "rejects missing authorization evidence %j",
+      async (evidence) => {
+        const { service, wsfe } = fake();
+        const lookup = found(original, 17);
+        if (lookup.kind === "found") {
+          Object.assign(lookup.voucher, evidence);
+        }
+        wsfe.lookupVoucher.mockResolvedValue(lookup);
+        for (const method of ["previewDebitNote", "issueDebitNote"] as const) {
+          const invoke = service[method] as (
+            input: CreditNoteInput
+          ) => Promise<unknown>;
+          await expect(invoke(modes[0].input)).rejects.toMatchObject({
+            code: "ARCA_INPUT_INVALID_VALUE",
+            message: expect.stringContaining("not authorized"),
+          });
+        }
+        expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+        expect(wsfe.issue).not.toHaveBeenCalled();
+      }
+    );
+  });
+  it.each([53, 203, 208, 213])(
+    "keeps unsupported debit-note original %i out before lookup",
+    async (voucherType) => {
+      const { service, wsfe } = fake();
+      const input = {
+        for: { ...target, voucherType },
+        items: [{ amount: 40 }],
+      };
+      for (const method of ["previewDebitNote", "issueDebitNote"] as const) {
+        const invoke = service[method] as (
+          input: CreditNoteInput
+        ) => Promise<unknown>;
+        await expect(invoke(input)).rejects.toMatchObject({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "input.for.voucherType",
+        });
+      }
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+      expect(wsfe.issue).not.toHaveBeenCalled();
+    }
+  );
+  it.each([3, 8, 13])(
+    "keeps WSMTXCA credit-note original %i out before lookup",
+    async (voucherType) => {
+      const { wsfe } = fake();
+      const service = createVouchersService(
+        wsfe,
+        undefined,
+        {} as WsmtxcaService
+      );
+      const input = {
+        for: { ...target, voucherType },
+        items: [{ amount: 40 }],
+      };
+      for (const method of ["previewDebitNote", "issueDebitNote"] as const) {
+        const invoke = service[method] as (
+          input: CreditNoteInput,
+          options?: IssueOptions
+        ) => Promise<unknown>;
+        await expect(
+          invoke(input, { service: "wsmtxca" })
+        ).rejects.toMatchObject({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "input.for.voucherType",
+        });
+      }
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+      expect(wsfe.issue).not.toHaveBeenCalled();
+    }
+  );
+  it.each(["previewDebitNote", "issueDebitNote"] as const)(
+    "%s requires explicit items or amounts against a credit note",
+    async (method) => {
+      const { service, wsfe } = fake();
+      const input = { for: { ...target, voucherType: 13 } };
+      const invoke = service[method] as (
+        input: CreditNoteInput
+      ) => Promise<unknown>;
+      for (const mode of [{}, { all: true }]) {
+        await expect(
+          invoke({ ...input, ...mode } as CreditNoteInput)
+        ).rejects.toMatchObject({
+          code: "ARCA_INPUT_INVALID_VALUE",
+        });
+      }
+      expect(wsfe.lookupVoucher).not.toHaveBeenCalled();
+      expect(wsfe.getNextVoucherNumber).not.toHaveBeenCalled();
+      expect(wsfe.issue).not.toHaveBeenCalled();
+    }
+  );
   describe.each(["N", "S"] as const)("peso original echo %s", (flag) => {
     const original = deriveWsfeInvoice({
       issuer: "responsable_inscripto",

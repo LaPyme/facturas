@@ -56,7 +56,8 @@ export type CreditNoteInput = Pick<
 > & {
   /**
    * The authorized invoice or debit note the note corrects, or a non-empty
-   * list of them. Every original is consulted and every one is associated to
+   * list of them. WSFE debit notes also accept ordinary credit notes (3, 8,
+   * 13). Every original is consulted and every one is associated to
    * the note; they must agree on everything the note inherits.
    */
   for: VoucherCoordinates | readonly VoucherCoordinates[];
@@ -363,7 +364,10 @@ function prepareOneCreditNote(
 ): { note: CreditNote; header: CreditNoteHeader } {
   assertOriginalExtensions(original);
   const family = voucherFamily(original.voucherType ?? 0);
-  if (family.types[2] === original.voucherType) {
+  if (
+    family.types[2] === original.voucherType &&
+    !acceptsCreditNoteOriginal(original.voucherType, kind)
+  ) {
     invalid("original must be an invoice or debit note");
   }
   const note = {
@@ -488,7 +492,10 @@ function assertNoteReceiver(to: CreditNoteInput["to"]): void {
 }
 
 /** Zero I/O: rejects an ambiguous mode and copies the lines the caller owns. */
-export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
+export function assertCreditNoteInput(
+  input: CreditNoteInput,
+  kind: "creditNote" | "debitNote" = "creditNote"
+): CreditNoteInput {
   assertIssueObject(input, "input");
   validateIssuanceFields(input);
   if ("associatedPeriod" in input) {
@@ -502,7 +509,7 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
     );
   }
   assertIssueKeys(input, CREDIT_NOTE_KEYS, "input", "issueCreditNote()");
-  const target = assertCreditNoteTargets(input.for);
+  const target = assertCreditNoteTargets(input.for, kind);
   if (input.salesPoint !== undefined) {
     assertCreditNoteBound(input.salesPoint, 99_999, "salesPoint");
   }
@@ -563,7 +570,8 @@ export function assertCreditNoteInput(input: CreditNoteInput): CreditNoteInput {
 
 /** One object stays one object; a list stays a list, so the input hash does. */
 function assertCreditNoteTargets(
-  value: CreditNoteInput["for"]
+  value: CreditNoteInput["for"],
+  kind: "creditNote" | "debitNote"
 ): VoucherCoordinates | VoucherCoordinates[] {
   if (Array.isArray(value)) {
     if (value.length === 0) {
@@ -577,7 +585,7 @@ function assertCreditNoteTargets(
       );
     }
     const targets = value.map((target, index) =>
-      assertCreditNoteTarget(target, `for[${index}]`)
+      assertCreditNoteTarget(target, `for[${index}]`, kind)
     );
     const seen = new Set<string>();
     for (const [index, target] of targets.entries()) {
@@ -596,12 +604,21 @@ function assertCreditNoteTargets(
     }
     return targets;
   }
-  return assertCreditNoteTarget(value as VoucherCoordinates, "for");
+  return assertCreditNoteTarget(value as VoucherCoordinates, "for", kind);
+}
+
+/** WSFE rule 10040, page 47: ordinary debit notes may associate credit notes. */
+function acceptsCreditNoteOriginal(
+  voucherType: number,
+  kind: "creditNote" | "debitNote"
+): boolean {
+  return kind === "debitNote" && [3, 8, 13].includes(voucherType);
 }
 
 function assertCreditNoteTarget(
   value: VoucherCoordinates,
-  path: string
+  path: string,
+  kind: "creditNote" | "debitNote"
 ): VoucherCoordinates {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new ArcaInputError(
@@ -623,16 +640,21 @@ function assertCreditNoteTarget(
     assertCreditNoteBound(value[field], max, `${path}.${field}`);
   }
   if (
-    ![1, 2, 6, 7, 11, 12, 51, 52, 201, 202, 206, 207, 211, 212].includes(
-      value.voucherType
+    !(
+      [1, 2, 6, 7, 11, 12, 51, 52, 201, 202, 206, 207, 211, 212].includes(
+        value.voucherType
+      ) || acceptsCreditNoteOriginal(value.voucherType, kind)
     )
   ) {
     throw new ArcaInputError(
-      "issueCreditNote requires an authorized invoice or debit note in a supported family in for.voucherType.",
+      `${kind === "debitNote" ? "issueDebitNote" : "issueCreditNote"} requires an authorized original in a supported family in for.voucherType.`,
       {
         code: "ARCA_INPUT_INVALID_VALUE",
         field: `input.${path}.voucherType`,
-        expected: "1, 6 or 11",
+        expected:
+          kind === "debitNote"
+            ? "a supported invoice or debit note, or an ordinary credit note (3, 8, 13)"
+            : "a supported invoice or debit note",
       }
     );
   }

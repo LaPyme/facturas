@@ -99,7 +99,9 @@ issueDebitNote(input: DebitNoteInput, options?: IssueOptions): Promise<IssueOutc
 ```
 
 El mismo contrato que `issueCreditNote()`, sin `all: true`: una nota de débito
-suma a la cuenta, así que sus líneas siempre son explícitas.
+suma a la cuenta, así que sus líneas o importes siempre son explícitos. En WSFE
+también acepta notas de crédito ordinarias autorizadas (3, 8 y 13) en `for` y
+deriva la nota de débito de la misma clase (2, 7 y 12).
 
 ## `previewCreditNote()` y `previewDebitNote()`
 
