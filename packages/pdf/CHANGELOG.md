@@ -1,5 +1,12 @@
 # @facturas/pdf
 
+## 0.25.2
+
+### Patch Changes
+
+- Updated dependencies [7e5f6bb]
+  - facturas@0.25.2
+
 ## 0.25.1
 
 ### Patch Changes
