@@ -1,5 +1,11 @@
 # facturas
 
+## 0.25.2
+
+### Patch Changes
+
+- 7e5f6bb: Permití que `previewDebitNote()` e `issueDebitNote()` de WSFE asocien notas de crédito ordinarias autorizadas de clase A, B o C, conservando la clase, el receptor, la moneda y las coordenadas del original.
+
 ## 0.25.1
 
 ### Patch Changes
