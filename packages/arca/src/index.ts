@@ -97,6 +97,7 @@ export { ARCA_QR_URL, arcaQrPayload, arcaQrUrl } from "./services/qr";
 export type {
   PrintedIssuerCondition,
   VoucherDocument,
+  VoucherDocumentAdjustment,
   VoucherDocumentInput,
   VoucherDocumentLine,
 } from "./services/voucher-document";

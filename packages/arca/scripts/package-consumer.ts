@@ -2,10 +2,14 @@ import {
   ArcaAuthenticationError,
   ArcaInputError,
   type ArcaInputErrorCode,
+  buildVoucherDocument,
   createArcaClient,
+  type IssuedVoucher,
   type IssuePreview,
   isArcaAuthenticationError,
   type NotePreview,
+  type VoucherDocumentAdjustment,
+  type VoucherDocumentInput,
   type VouchersService,
   type WsfeAuthorizationOutcome,
   type WsfeIssueInput,
@@ -20,6 +24,24 @@ import type {
   WsfeIssueInput as SubpathIssueInput,
   WsfeVoucherInput as SubpathVoucherInput,
 } from "facturas/wsfe";
+
+export function printedAdjustmentsConsumerContract(
+  voucher: IssuedVoucher,
+  issuer: VoucherDocumentInput["issuer"]
+) {
+  const adjustments = [
+    { label: "Ajuste por redondeo", amount: { 5: -55, 4: 5 } },
+  ] as const satisfies readonly VoucherDocumentAdjustment[];
+  const doc = buildVoucherDocument({
+    voucher,
+    issuer,
+    saleConditions: "Contado",
+    items: [{ description: "Artículo", gross: 12_100, vat: 21 }],
+    adjustments,
+  });
+  doc.totals.adjustments?.[0]?.amount satisfies number | undefined;
+  doc.totals.adjustment satisfies number;
+}
 
 // The transport modules take the provider request as it goes on the wire.
 const transportInput: WsfeVoucherInput = {

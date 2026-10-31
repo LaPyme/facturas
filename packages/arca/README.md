@@ -118,6 +118,11 @@ una reserva sin emitir.
 
 ## Documentación
 
+- [Comprobante impreso](https://facturas-sdk.dev/guides/printed-voucher): `buildVoucherDocument()`
+  y `@facturas/pdf` conservan los precios de los ítems y muestran descuentos
+  globales y ajustes con etiqueta propia. `adjustments: [{ label: "Ajuste por redondeo", amount: { 5: 5000 } }]`
+  imprime un ajuste de +$50,00 al 21% en clase B. Los ajustes aceptan centavos
+  positivos o negativos por id de alícuota en A/B, o un solo importe en C.
 - [Inicio rápido](https://facturas-sdk.dev/getting-started/quickstart): de cero a la primera factura y su
   nota de crédito.
 - [Habilitación en ARCA](https://facturas-sdk.dev/getting-started/arca-setup): CUIT, certificado, punto

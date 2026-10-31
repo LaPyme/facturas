@@ -231,6 +231,70 @@ export function classCDocument(): VoucherDocument {
   });
 }
 
+/** One authorized base after a discount and a signed rounding, for each class. */
+export function adjustmentDocument(
+  voucherClass: "A" | "B" | "C",
+  amount: number,
+  noteOffset = 0
+): VoucherDocument {
+  const subtotal = 10_000 - 1000 + amount;
+  // A is net, B is gross. Both examples use 21%, rounded Half Even.
+  const net = voucherClass === "B" ? Math.round(subtotal / 1.21) : subtotal;
+  const vat =
+    voucherClass === "C"
+      ? 0
+      : voucherClass === "A"
+        ? Math.round(net * 0.21)
+        : subtotal - net;
+  return buildVoucherDocument({
+    voucher: voucher({
+      voucherClass,
+      voucherType:
+        (voucherClass === "A" ? 1 : voucherClass === "B" ? 6 : 11) + noteOffset,
+      header:
+        voucherClass === "A"
+          ? {
+              documentType: 80,
+              documentNumber: "20111111112",
+              receiverVatConditionId: 1,
+            }
+          : {},
+      totals: {
+        total: net + vat,
+        netTaxed: net,
+        exempt: 0,
+        untaxed: 0,
+        vat,
+        otherTaxes: 0,
+        vatRates:
+          voucherClass === "C"
+            ? []
+            : [{ id: 5, rate: 21, base: net, amount: vat }],
+        taxes: [],
+      },
+    }),
+    items:
+      voucherClass === "C"
+        ? [{ description: "Consulta", amount: 10_000 }]
+        : voucherClass === "A"
+          ? [{ description: "Servicio", net: 10_000, vat: 21 }]
+          : [{ description: "Servicio", gross: 10_000, vat: 21 }],
+    globalDiscount: voucherClass === "C" ? 1000 : { 5: 1000 },
+    adjustments: [
+      {
+        label: "Ajuste por redondeo",
+        amount: voucherClass === "C" ? amount : { 5: amount },
+      },
+    ],
+    issuer: {
+      ...ISSUER,
+      condition: voucherClass === "C" ? "monotributo" : "responsable_inscripto",
+    },
+    receiver: { name: "Cliente SA", address: "Calle 2, CABA" },
+    saleConditions: "Contado",
+  });
+}
+
 /** A long class B voucher that spills onto a second page. */
 export function longDocument(): VoucherDocument {
   const items = Array.from({ length: 60 }, (_, index) => ({
