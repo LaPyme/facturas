@@ -2,6 +2,7 @@ import { renderToBuffer, Text } from "@react-pdf/renderer";
 import { MONOTRIBUTO_CREDIT_LEGEND, type VoucherDocument } from "facturas";
 import { describe, expect, it } from "vitest";
 import {
+  adjustmentDocument,
   classADocument,
   classBDocument,
   classCDocument,
@@ -225,6 +226,77 @@ describe("<Voucher>", () => {
     }
     const [plain] = await render(classBDocument());
     expect(plain && hasText(plain, "Descuento global")).toBe(false);
+  });
+
+  it.each(["A", "B", "C"] as const)(
+    "prints signed labeled adjustments between the discount and subtotal on %s invoices and notes",
+    async (voucherClass) => {
+      for (const amount of [41, -4959]) {
+        for (const offset of [0, 1, 2]) {
+          const doc = adjustmentDocument(voucherClass, amount, offset);
+          const [page] = await render(doc);
+          if (page === undefined) {
+            throw new Error("no page");
+          }
+          const label = findExact(page, "Ajuste por redondeo");
+          const signed = findExact(page, amount > 0 ? "+$ 0,41" : "-$ 49,59");
+          expect(Math.abs(signed.top - label.top)).toBeLessThan(2);
+          expect(label.top).toBeGreaterThan(
+            findExact(page, "Descuento global").top
+          );
+          const subtotal = page.texts.find(
+            (text) =>
+              text.text ===
+                (voucherClass === "A" ? "Importe neto gravado" : "Subtotal") &&
+              text.top > label.top
+          );
+          expect(subtotal?.top).toBeGreaterThan(label.top);
+          expect((subtotal?.top ?? 0) - label.top).toBeLessThan(20);
+          expect(hasText(page, "100,00")).toBe(true);
+          expectApartadoB(page, doc);
+          expectFiscalFooter(page, doc);
+        }
+      }
+    }
+  );
+
+  it("keeps multiple labeled rows in order, even with identical labels", async () => {
+    const doc = adjustmentDocument("B", 41);
+    const [page] = await render({
+      ...doc,
+      totals: {
+        ...doc.totals,
+        adjustments: [
+          { label: "Ajuste por redondeo", amount: 100 },
+          { label: "Ajuste por redondeo", amount: -59 },
+          { label: "Redistribución", amount: 0 },
+        ],
+      },
+    });
+    if (page === undefined) {
+      throw new Error("no page");
+    }
+    const labels = page.texts.filter(
+      (text) => text.text === "Ajuste por redondeo"
+    );
+    expect(labels).toHaveLength(2);
+    expect(findExact(page, "+$ 1,00").top).toBeCloseTo(labels[0]?.top ?? 0);
+    expect(findExact(page, "-$ 0,59").top).toBeCloseTo(labels[1]?.top ?? 0);
+    expect(findExact(page, "Redistribución").top).toBeGreaterThan(
+      labels[1]?.top ?? 0
+    );
+  });
+
+  it("preserves every text run and position when there are no labeled adjustments", async () => {
+    for (const doc of [classADocument(), classBDocument(), classCDocument()]) {
+      const plain = await render(doc);
+      expect(
+        await render({ ...doc, totals: { ...doc.totals, adjustments: [] } })
+      ).toEqual(plain);
+      expect(plain.some((page) => hasText(page, "Ajuste por redondeo"))).toBe(
+        false
+      );
+    }
   });
 
   it("renders class C without VAT, transparency block or an exempt start of activities", async () => {

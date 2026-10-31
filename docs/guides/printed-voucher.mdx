@@ -66,8 +66,9 @@ más tarde, el modelo sale igual.
 | Campo | Qué es |
 | --- | --- |
 | `voucher` | El `IssuedVoucher` de un resultado `authorized`. |
-| `items` | Los mismos ítems de la emisión, cada uno con `description`. Si un ítem trae `quantity`, también trae `unitPrice`: sin IVA en la clase A y con IVA en la clase B. Sin cantidad, la línea sale como una unidad por su importe. Con `globalDiscount`, los ítems antes del descuento. |
+| `items` | Los mismos ítems de la emisión, cada uno con `description`. Si un ítem trae `quantity`, también trae `unitPrice`: sin IVA en la clase A y con IVA en la clase B. Sin cantidad, la línea sale como una unidad por su importe. Con `globalDiscount` o `adjustments`, los ítems antes de esos cambios. |
 | `globalDiscount` | Un descuento sobre todo el comprobante, en centavos, que ya restaste de los ítems al emitir. En las clases A y B va por id de alícuota de ARCA, como las filas de IVA autorizadas: sin IVA en la A y con IVA en la B, igual que las líneas. En la clase C es un solo importe. Ver [Descuento global](#descuento-global). |
+| `adjustments` | Una lista opcional de `{ label, amount }`, en orden de impresión. `amount` acepta centavos con signo, por id de alícuota de ARCA en A/B y como un número en C. Ver [Ajustes con etiqueta](#ajustes-con-etiqueta). |
 | `issuer.legalName`, `issuer.address` | La razón social y el domicilio comercial del lugar donde se emite. |
 | `issuer.tradeName` | El nombre de fantasía, solo si tenés uno. |
 | `issuer.taxId` | Tu CUIT. Se controla contra el QR del comprobante. |
@@ -256,6 +257,53 @@ El PDF imprime un solo renglón "Descuento global" con la suma, antes del
 importe neto gravado en la clase A y antes del subtotal en las clases B y C. Las
 líneas conservan su importe y su bonificación propia, si la tienen.
 
+## Ajustes con etiqueta
+
+Para conservar el precio de góndola cuando redondeás el total, pasá los ítems
+antes del redondeo y una o más filas en `adjustments`. Cada fila tiene una
+`label` no vacía y un `amount` con signo, en centavos enteros. En las clases A
+y B va por id de alícuota de ARCA: sin IVA en la A y con IVA en la B. En la
+clase C es un solo número.
+
+Por ejemplo, una factura B de $450,00 y $54.600,00 al 21%, con $50,00 de
+redondeo hacia arriba:
+
+```ts
+const comprobante = buildVoucherDocument({
+  voucher: result.voucher, // Ya autorizado por $55.100,00.
+  items: [
+    { description: "Artículo chico", gross: 45_000, vat: 21 },
+    { description: "Artículo grande", gross: 5_460_000, vat: 21 },
+  ],
+  adjustments: [
+    { label: "Ajuste por redondeo", amount: { 5: 5000 } },
+  ],
+  // issuer, saleConditions, ...
+});
+```
+
+Un redondeo hacia abajo de $55,00 usa `{ 5: -5500 }`. Una nota de crédito
+parcial del artículo chico puede conservar la línea de $450,00 y su parte del
+redondeo con `{ 5: 41 }`, para un total de $450,41. El otro artículo lleva
+`{ 5: 4959 }`. En clase A pasá la parte neta autorizada de cada alícuota, no
+la parte con IVA. Para una clase C, usá `amount: 5000`.
+
+El SDK no reparte ni recalcula esos importes. En cada alícuota verifica que
+las líneas menos `globalDiscount` más la suma de los ajustes coincidan con lo
+autorizado. Podés combinar varias filas positivas y negativas con el descuento
+global. El exento y el no gravado conservan sus importes y no llevan ajustes.
+
+El modelo trae `totals.adjustments` con `{ label, amount }` por fila. El importe
+es la suma de sus alícuotas. El PDF imprime las etiquetas en el orden de
+entrada, después de "Descuento global" y antes de "Importe neto gravado" o
+"Subtotal", con signo explícito para importes positivos y negativos. Los
+subtotales ya incluyen esos cambios. El campo singular `totals.adjustment`
+sigue reservado al residuo de IVA de cabecera.
+
+Una lista vacía o una fila con todos sus importes en cero no agrega renglones.
+Una fila que suma cero entre distintas alícuotas se controla y se imprime como
+cero. Sin ajustes, el modelo y el PDF conservan el comportamiento anterior.
+
 ## Qué rechaza
 
 `buildVoucherDocument()` prefiere fallar a imprimir algo incorrecto:
@@ -266,6 +314,13 @@ líneas conservan su importe y su bonificación propia, si la tienen.
 - Un `globalDiscount` con la forma de otra clase, una clave que no es un id de
   alícuota o que ningún ítem lleva, o un importe negativo o con decimales:
   `ARCA_INPUT_INVALID_VALUE`.
+- Ajustes que no cierran por alícuota: `ARCA_INPUT_AMOUNT_MISMATCH`, con
+  `field: "adjustments (VAT rate 5)"`, por ejemplo. En C el campo es
+  `adjustments`. Se controla cada alícuota aunque la suma total coincida.
+- Un ajuste sin etiqueta: `ARCA_INPUT_MISSING_FIELD`. Una forma de otra clase,
+  una alícuota inválida o ausente de los ítems, o centavos fraccionarios o fuera
+  del rango de enteros seguros: `ARCA_INPUT_INVALID_VALUE`, con el campo de
+  entrada que falla, como `adjustments[0].amount[5]`.
 - Un receptor sin documento que no sea consumidor final:
   `ARCA_INPUT_MISSING_FIELD`.
 - Una cantidad por precio unitario que no da el importe de la línea:

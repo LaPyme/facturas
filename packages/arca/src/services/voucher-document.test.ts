@@ -86,11 +86,15 @@ function expectBalanced(doc: VoucherDocument) {
   const vat = totals.vatRates.reduce((sum, row) => sum + row.amount, 0);
   const taxes = totals.otherTaxes.reduce((sum, tax) => sum + tax.amount, 0);
   const lines = doc.lines.reduce((sum, line) => sum + line.amount, 0);
+  const adjustments = (totals.adjustments ?? []).reduce(
+    (sum, row) => sum + row.amount,
+    0
+  );
   if (doc.voucherClass === "A") {
     const net = doc.lines
       .filter((line) => typeof line.vatRate === "number")
       .reduce((sum, line) => sum + line.amount, 0);
-    expect(net - totals.globalDiscount).toBe(totals.subtotal);
+    expect(net - totals.globalDiscount + adjustments).toBe(totals.subtotal);
     expect(
       totals.subtotal +
         totals.exempt +
@@ -100,7 +104,7 @@ function expectBalanced(doc: VoucherDocument) {
         taxes
     ).toBe(totals.total);
   } else {
-    expect(lines - totals.globalDiscount).toBe(totals.subtotal);
+    expect(lines - totals.globalDiscount + adjustments).toBe(totals.subtotal);
     expect(totals.subtotal + totals.adjustment + taxes).toBe(totals.total);
   }
 }
@@ -614,6 +618,349 @@ describe("buildVoucherDocument", () => {
       expect(() =>
         document(voucher, items, { receiver, globalDiscount })
       ).toThrow(expect.objectContaining({ code: `ARCA_INPUT_${code}`, field }));
+    });
+  });
+
+  describe("labeled adjustments", () => {
+    const receiver = { name: "Cliente SA", address: "Calle 2" };
+
+    it.each(["A", "B", "C"] as const)(
+      "keeps class %s prices and signed rows on invoices, credit and debit notes",
+      async (voucherClass) => {
+        for (const amount of [50, -55]) {
+          const items =
+            voucherClass === "C"
+              ? [{ description: "Consulta", amount: 10_000 }]
+              : voucherClass === "A"
+                ? [{ description: "Servicio", net: 10_000, vat: 21 as const }]
+                : [
+                    {
+                      description: "Servicio",
+                      gross: 10_000,
+                      vat: 21 as const,
+                    },
+                  ];
+          const voucher = await issued(
+            voucherClass === "C"
+              ? {
+                  issuer: "monotributo",
+                  salesPoint: 3,
+                  to: { condition: "consumidor_final" },
+                  items: [{ amount: 10_000 + amount }],
+                }
+              : {
+                  issuer: "responsable_inscripto",
+                  salesPoint: 3,
+                  to:
+                    voucherClass === "A"
+                      ? {
+                          condition: "responsable_inscripto",
+                          cuit: "20111111112",
+                        }
+                      : { condition: "consumidor_final" },
+                  items:
+                    voucherClass === "A"
+                      ? [{ net: 10_000 + amount, vat: 21 }]
+                      : [{ gross: 10_000 + amount, vat: 21 }],
+                }
+          );
+          for (const offset of [0, 1, 2]) {
+            const doc = document(
+              { ...voucher, voucherType: voucher.voucherType + offset },
+              items,
+              {
+                issuer: {
+                  ...registered,
+                  condition:
+                    voucherClass === "C"
+                      ? "monotributo"
+                      : "responsable_inscripto",
+                },
+                receiver,
+                adjustments: [
+                  {
+                    label: " Ajuste por redondeo ",
+                    amount: voucherClass === "C" ? amount : { 5: amount },
+                  },
+                ],
+              }
+            );
+            expect(doc.lines[0]).toMatchObject({
+              amount: 10_000,
+              unitPrice: "100.00",
+            });
+            expect(doc.totals.adjustments).toEqual([
+              { label: "Ajuste por redondeo", amount },
+            ]);
+            expect(doc.totals.subtotal).toBe(10_000 + amount);
+            expect(doc.totals.adjustment).toBe(0);
+            expectBalanced(doc);
+          }
+        }
+      }
+    );
+
+    it.each(["A", "B"] as const)(
+      "reconciles multiple signed changes with a global discount per rate on %s",
+      async (voucherClass) => {
+        const money = (
+          amount: number,
+          vat: 21 | 10.5 | "exempt" | "untaxed"
+        ) =>
+          voucherClass === "A" ? { net: amount, vat } : { gross: amount, vat };
+        const items = [
+          { description: "Servicio", ...money(10_000, 21) },
+          { description: "Repuesto", ...money(4000, 10.5) },
+          { description: "Libro", ...money(500, "exempt") },
+          { description: "No gravado", ...money(200, "untaxed") },
+        ];
+        const voucher = await issued({
+          issuer: "responsable_inscripto",
+          salesPoint: 3,
+          to:
+            voucherClass === "A"
+              ? { condition: "responsable_inscripto", cuit: "20111111112" }
+              : { condition: "consumidor_final" },
+          items: [
+            money(9100, 21),
+            money(3750, 10.5),
+            money(500, "exempt"),
+            money(200, "untaxed"),
+          ],
+          taxes: [{ id: 2, base: 10_000, rate: 3, amount: 300 }],
+        });
+        const options = {
+          receiver,
+          globalDiscount: { 5: 1000, 4: 200 },
+          adjustments: [
+            { label: "Ajuste por redondeo", amount: { 5: 200, 4: -100 } },
+            { label: "Corrección", amount: { 5: -100, 4: 50 } },
+          ],
+        };
+        const doc = document(voucher, items, options);
+        expect(doc.lines.map((line) => line.amount)).toEqual([
+          10_000, 4000, 500, 200,
+        ]);
+        expect(doc.totals.adjustments).toEqual([
+          { label: "Ajuste por redondeo", amount: 100 },
+          { label: "Corrección", amount: -50 },
+        ]);
+        expectBalanced(doc);
+        // The aggregate is unchanged, but one cent belongs to the wrong rate.
+        expect(() =>
+          document(voucher, items, {
+            ...options,
+            adjustments: [{ label: "Ajuste", amount: { 5: 101, 4: -51 } }],
+          })
+        ).toThrow(
+          expect.objectContaining({
+            code: "ARCA_INPUT_AMOUNT_MISMATCH",
+            field: "adjustments (VAT rate 5)",
+          })
+        );
+        if (voucherClass === "B") {
+          expect(doc.transparency?.vatContained).toBe(voucher.totals.vat);
+        }
+      }
+    );
+
+    it("combines a class C discount and positive and negative adjustments", async () => {
+      const voucher = await issued({
+        issuer: "monotributo",
+        salesPoint: 3,
+        to: { condition: "consumidor_final" },
+        items: [{ amount: 9150 }],
+      });
+      const items = [{ description: "Consulta", amount: 10_000 }];
+      const options = {
+        issuer: { ...registered, condition: "monotributo" as const },
+        globalDiscount: 1000,
+        adjustments: [
+          { label: "Ajuste", amount: 200 },
+          { label: "Corrección", amount: -50 },
+        ],
+      };
+      expectBalanced(document(voucher, items, options));
+      expect(() =>
+        document(voucher, items, {
+          ...options,
+          adjustments: [{ label: "Ajuste", amount: 151 }],
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_AMOUNT_MISMATCH",
+          field: "adjustments",
+        })
+      );
+      expect(() =>
+        document(voucher, items, {
+          ...options,
+          adjustments: [{ label: "Ajuste", amount: { 5: 150 } }],
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "adjustments[0].amount",
+        })
+      );
+    });
+
+    it("prints the test sale's shelf prices and each partial credit's rounding share", async () => {
+      for (const [amounts, rounding] of [
+        [[45_000, 5_460_000], 5000],
+        [[45_000], 41],
+        [[5_460_000], 4959],
+      ] as const) {
+        const items = amounts.map((gross) => ({
+          description: "Artículo",
+          gross,
+          vat: 21 as const,
+        }));
+        const voucher = await issued({
+          issuer: "responsable_inscripto",
+          salesPoint: 3,
+          to: { condition: "consumidor_final" },
+          items: [
+            {
+              gross: amounts.reduce((sum, gross) => sum + gross, 0) + rounding,
+              vat: 21,
+            },
+          ],
+        });
+        const doc = document(
+          { ...voucher, voucherType: amounts.length === 1 ? 8 : 6 },
+          items,
+          {
+            adjustments: [
+              { label: "Ajuste por redondeo", amount: { 5: rounding } },
+            ],
+          }
+        );
+        expect(doc.lines.map((line) => line.amount)).toEqual(amounts);
+        expect(doc.totals.adjustments).toEqual([
+          { label: "Ajuste por redondeo", amount: rounding },
+        ]);
+        expectBalanced(doc);
+      }
+    });
+
+    it("keeps a zero-sum change between rates and rejects cancellation on an absent rate", async () => {
+      const items = [
+        { description: "Servicio", gross: 10_000, vat: 21 },
+        { description: "Repuesto", gross: 4000, vat: 10.5 },
+      ] as const;
+      const voucher = await issued({
+        issuer: "responsable_inscripto",
+        salesPoint: 3,
+        to: { condition: "consumidor_final" },
+        items: [
+          { gross: 10_100, vat: 21 },
+          { gross: 3900, vat: 10.5 },
+        ],
+      });
+      const doc = document(voucher, items, {
+        adjustments: [{ label: "Redistribución", amount: { 5: 100, 4: -100 } }],
+      });
+      expect(doc.totals.adjustments).toEqual([
+        { label: "Redistribución", amount: 0 },
+      ]);
+      expectBalanced(doc);
+      expect(() =>
+        document(voucher, items, {
+          adjustments: [
+            { label: "Ajuste", amount: { 5: 100, 4: -100, 6: 1 } },
+            { label: "Reversión", amount: { 6: -1 } },
+          ],
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_INVALID_VALUE",
+          field: "adjustments[0].amount[6]",
+        })
+      );
+    });
+
+    it("preserves documents with no adjustments, an empty array or all-zero amounts", async () => {
+      const items = [
+        { description: "Servicio", gross: 12_100, vat: 21 },
+      ] as const;
+      const voucher = await issued({
+        issuer: "responsable_inscripto",
+        salesPoint: 3,
+        to: { condition: "consumidor_final" },
+        items,
+        total: 12_101,
+      });
+      const plain = document(voucher, items);
+      expect(plain.totals).not.toHaveProperty("adjustments");
+      expect(document(voucher, items, { adjustments: [] })).toEqual(plain);
+      expect(
+        document(voucher, items, {
+          adjustments: [{ label: "Ajuste", amount: { 5: 0 } }],
+        })
+      ).toEqual(plain);
+    });
+
+    it.each([
+      [
+        "a scalar on B",
+        [{ label: "Ajuste", amount: 10 }],
+        "adjustments[0].amount",
+      ],
+      [
+        "a percentage as key",
+        [{ label: "Ajuste", amount: { 21: 10 } }],
+        "adjustments[0].amount[21]",
+      ],
+      [
+        "a fractional amount",
+        [{ label: "Ajuste", amount: { 5: -0.5 } }],
+        "adjustments[0].amount[5]",
+      ],
+      [
+        "an unsafe amount",
+        [{ label: "Ajuste", amount: { 5: Number.MAX_SAFE_INTEGER + 1 } }],
+        "adjustments[0].amount[5]",
+      ],
+      [
+        "an unsafe sum",
+        [{ label: "Ajuste", amount: { 5: Number.MAX_SAFE_INTEGER, 4: 1 } }],
+        "adjustments[0].amount",
+      ],
+      [
+        "a null amount",
+        [{ label: "Ajuste", amount: null }],
+        "adjustments[0].amount",
+      ],
+      ["a null row", [null], "adjustments[0]"],
+      ["a non-array", {}, "adjustments"],
+    ])("refuses %s", async (_, adjustments, field) => {
+      const items = [
+        { description: "Servicio", gross: 12_100, vat: 21 },
+      ] as const;
+      const voucher = await issued({
+        issuer: "responsable_inscripto",
+        salesPoint: 3,
+        to: { condition: "consumidor_final" },
+        items,
+      });
+      expect(() =>
+        document(voucher, items, {
+          adjustments: adjustments as VoucherDocumentInput["adjustments"],
+        })
+      ).toThrow(
+        expect.objectContaining({ code: "ARCA_INPUT_INVALID_VALUE", field })
+      );
+      expect(() =>
+        document(voucher, items, {
+          adjustments: [{ label: " ", amount: { 5: 1 } }],
+        })
+      ).toThrow(
+        expect.objectContaining({
+          code: "ARCA_INPUT_MISSING_FIELD",
+          field: "adjustments[0].label",
+        })
+      );
     });
   });
 

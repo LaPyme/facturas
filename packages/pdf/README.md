@@ -30,3 +30,9 @@ const pdf = await renderVoucherPdf(comprobante, {
 
 La guía completa está en
 [Comprobante impreso](https://facturas-sdk.dev/guides/printed-voucher).
+
+Si el modelo trae `totals.adjustments`, el PDF imprime cada etiqueta con su
+importe y signo, como "Ajuste por redondeo" y "+$ 50,00" o "-$ 55,00". Los
+renglones van después del descuento global y antes del subtotal o del importe
+neto gravado. Pasá `adjustments` a `buildVoucherDocument()` para que controle
+los importes por alícuota contra el comprobante autorizado.

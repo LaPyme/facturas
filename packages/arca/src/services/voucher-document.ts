@@ -46,12 +46,19 @@ export type PrintedIssuerCondition =
   | "monotributo_social"
   | "monotributo_trabajador_independiente_promovido";
 
+/** A labeled change already included in the authorized voucher's money. */
+export type VoucherDocumentAdjustment = {
+  label: string;
+  /** Signed minor units: net by VAT rate id on A, gross by id on B, one amount on C. */
+  amount: number | Readonly<Record<number, number>>;
+};
+
 export type VoucherDocumentInput = {
   /** The voucher `issue()`, a note method or `recover()` answered authorized. */
   voucher: IssuedVoucher;
   /**
    * The same items the voucher was issued from, each with its description.
-   * With a `globalDiscount`, the items before it.
+   * With a `globalDiscount` or `adjustments`, the items before those changes.
    */
   items: readonly (VatItem | AmountItem)[];
   /**
@@ -62,6 +69,13 @@ export type VoucherDocumentInput = {
    * less its discount, must add up to the authorized base of that rate.
    */
   globalDiscount?: number | Readonly<Record<number, number>>;
+  /**
+   * Signed, labeled totals rows, already included when issuing. Like the
+   * global discount, amounts are net by ARCA VAT rate id on A, with VAT by id
+   * on B, and one amount on C. Each rate's lines less its global discount
+   * plus its adjustments must equal its authorized base. No automatic split.
+   */
+  adjustments?: readonly VoucherDocumentAdjustment[];
   issuer: {
     /** C1. */
     legalName: string;
@@ -161,9 +175,11 @@ export type VoucherDocument = {
      * with VAT on class B. The lines are before it and the subtotal after it.
      */
     globalDiscount: number;
+    /** Signed issuer-labeled rows, in input order. Absent without adjustments. */
+    adjustments?: { label: string; amount: number }[];
     /**
      * Class A: net taxed. Class B: the lines with VAT. Class C: the lines.
-     * Classes B and C take the global discount off the lines.
+     * Includes the global discount and the labeled adjustments.
      */
     subtotal: number;
     exempt: number;
@@ -342,6 +358,9 @@ export function buildVoucherDocument(
     lines: lines.lines,
     totals: {
       globalDiscount: lines.globalDiscount,
+      ...(lines.adjustments.length > 0
+        ? { adjustments: lines.adjustments }
+        : {}),
       subtotal: lines.subtotal,
       exempt: voucher.totals.exempt,
       untaxed: voucher.totals.untaxed,
@@ -485,8 +504,8 @@ function documentReceiver(
  * The items must describe the authorized money: the same net, exempt and
  * untaxed amounts and the same VAT bases. The printed lines then use the
  * per-item Half Even split, so they add up to the authorized header. With a
- * global discount the items are the lines before it, and each rate's lines
- * less its discount must give the authorized base of that rate.
+ * global discount or labeled adjustments the items are the lines before
+ * those changes, which must reconcile with each authorized rate.
  */
 function documentLines(
   input: VoucherDocumentInput,
@@ -494,6 +513,7 @@ function documentLines(
 ): {
   lines: VoucherDocumentLine[];
   globalDiscount: number;
+  adjustments: { label: string; amount: number }[];
   subtotal: number;
   adjustment: number;
 } {
@@ -503,24 +523,10 @@ function documentLines(
     invalid("items", "the items the voucher was issued from");
   }
   const discount = globalDiscount(input.globalDiscount, voucherClass);
-  let computed: ReturnType<typeof calculateWsfeAmounts>;
-  try {
-    computed = calculateWsfeAmounts({
-      voucherClass,
-      items,
-      // Items before a global discount add up to more than the authorized total.
-      ...(discount ? {} : { total: totals.total - totals.otherTaxes }),
-    });
-  } catch (error) {
-    if (
-      error instanceof ArcaInputError &&
-      error.code === "ARCA_INPUT_AMOUNT_MISMATCH"
-    ) {
-      mismatch("total");
-    }
-    throw error;
-  }
-  if (!discount) {
+  const adjustments = documentAdjustments(input.adjustments, voucherClass);
+  const modified = discount !== undefined || adjustments.length > 0;
+  const computed = documentAmounts(input, voucherClass, modified);
+  if (!modified) {
     assertItemsMatchTotals(computed.data, totals, voucherClass);
   }
   const settled =
@@ -528,8 +534,8 @@ function documentLines(
       ? undefined
       : settleVatItems(
           { voucherClass, items },
-          // The header's VAT adjustment belongs to the discounted money.
-          discount ? 0 : computed.amounts.vatAdjustment
+          // The header's VAT residual belongs to the money after changes.
+          modified ? 0 : computed.amounts.vatAdjustment
         );
   const lines = items.map((item, index): VoucherDocumentLine => {
     const path = `items[${index}]`;
@@ -554,19 +560,35 @@ function documentLines(
   });
   const sum = lines.reduce((total, line) => total + line.amount, 0);
   const rows = totals.vatRates.reduce((total, row) => total + row.amount, 0);
-  if (discount) {
-    assertDiscountedLinesMatchTotals(
+  const adjustmentRows = adjustments.map(({ label, total }) => ({
+    label,
+    amount: total,
+  }));
+  if (modified) {
+    assertModifiedLinesMatchTotals(
       voucherClass,
       lines,
       settled?.items,
       computed.data,
       totals,
-      discount.byRate
+      discount?.byRate ?? new Map(),
+      adjustments
     );
     return {
       lines,
-      globalDiscount: discount.total,
-      subtotal: voucherClass === "A" ? totals.netTaxed : sum - discount.total,
+      globalDiscount: discount?.total ?? 0,
+      adjustments: adjustmentRows,
+      subtotal:
+        voucherClass === "A"
+          ? totals.netTaxed
+          : sumMinorUnits(
+              [
+                sum,
+                -(discount?.total ?? 0),
+                ...adjustmentRows.map((row) => row.amount),
+              ],
+              "adjustments"
+            ),
       adjustment: voucherClass === "C" ? 0 : totals.vat - rows,
     };
   }
@@ -575,6 +597,7 @@ function documentLines(
     return {
       lines,
       globalDiscount: 0,
+      adjustments: [],
       subtotal: totals.netTaxed,
       adjustment: totals.vat - rows,
     };
@@ -582,9 +605,37 @@ function documentLines(
   return {
     lines,
     globalDiscount: 0,
+    adjustments: [],
     subtotal: sum,
     adjustment: settled?.unabsorbed ?? 0,
   };
+}
+
+function documentAmounts(
+  input: VoucherDocumentInput,
+  voucherClass: "A" | "B" | "C",
+  modified: boolean
+): ReturnType<typeof calculateWsfeAmounts> {
+  try {
+    return calculateWsfeAmounts({
+      voucherClass,
+      items: input.items,
+      // The printed items precede changes already in the authorized total.
+      ...(modified
+        ? {}
+        : {
+            total: input.voucher.totals.total - input.voucher.totals.otherTaxes,
+          }),
+    });
+  } catch (error) {
+    if (
+      error instanceof ArcaInputError &&
+      error.code === "ARCA_INPUT_AMOUNT_MISMATCH"
+    ) {
+      mismatch("total");
+    }
+    throw error;
+  }
 }
 
 type GlobalDiscount = {
@@ -592,6 +643,82 @@ type GlobalDiscount = {
   /** By ARCA VAT rate id; class C keys its one amount by 0. */
   byRate: ReadonlyMap<number, number>;
 };
+
+type DocumentAdjustment = GlobalDiscount & { label: string; field: string };
+
+function documentAdjustments(
+  value: VoucherDocumentInput["adjustments"],
+  voucherClass: "A" | "B" | "C"
+): DocumentAdjustment[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    invalid("adjustments", "an array of labeled signed adjustments");
+  }
+  return value.flatMap((entry: VoucherDocumentAdjustment, index: number) => {
+    const field = `adjustments[${index}].amount`;
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      invalid(`adjustments[${index}]`, "a labeled signed adjustment");
+    }
+    const label = required(entry.label, `adjustments[${index}].label`);
+    const byRate = adjustmentByRate(entry.amount, field, voucherClass);
+    // A zero sum across different rates is still a change to reconcile and print.
+    return byRate.size === 0
+      ? []
+      : [
+          {
+            label,
+            field,
+            byRate,
+            total: sumMinorUnits([...byRate.values()], field),
+          },
+        ];
+  });
+}
+
+function adjustmentByRate(
+  amount: VoucherDocumentAdjustment["amount"],
+  field: string,
+  voucherClass: "A" | "B" | "C"
+): Map<number, number> {
+  if (voucherClass === "C") {
+    const money = signedAmount(amount, field);
+    return money === 0 ? new Map() : new Map([[0, money]]);
+  }
+  if (amount === null || typeof amount !== "object" || Array.isArray(amount)) {
+    invalid(field, "signed amounts by ARCA VAT rate id on class A or B");
+  }
+  const byRate = new Map<number, number>();
+  for (const [key, money] of Object.entries(amount)) {
+    const id = Number(key);
+    if (String(id) !== key || vatRatePercent(id) === undefined) {
+      invalid(`${field}[${key}]`, "keyed by an ARCA VAT rate id");
+    }
+    const checked = signedAmount(money, `${field}[${key}]`);
+    if (checked !== 0) {
+      byRate.set(id, checked);
+    }
+  }
+  return byRate;
+}
+
+function signedAmount(value: unknown, field: string): number {
+  if (!Number.isSafeInteger(value)) {
+    invalid(field, "a signed safe integer in minor units");
+  }
+  return value as number;
+}
+
+function sumMinorUnits(values: readonly number[], field: string): number {
+  const sum = Number(
+    values.reduce((total, amount) => total + BigInt(amount), 0n)
+  );
+  if (!Number.isSafeInteger(sum)) {
+    invalid(field, "a sum within the safe integer range in minor units");
+  }
+  return sum;
+}
 
 /** Undefined when there is no discount, or every amount is zero. */
 function globalDiscount(
@@ -642,15 +769,16 @@ function discountAmount(value: unknown, field: string): number {
 /**
  * Class A compares net lines with the authorized base of each rate, class B
  * lines with VAT with that base plus its VAT, and class C the lines with the
- * net. Exempt and untaxed lines take no discount.
+ * net. Exempt and untaxed lines take no discount or adjustment.
  */
-function assertDiscountedLinesMatchTotals(
+function assertModifiedLinesMatchTotals(
   voucherClass: "A" | "B" | "C",
   lines: readonly VoucherDocumentLine[],
   settled: readonly { rate: VatRate }[] | undefined,
   data: ReturnType<typeof calculateWsfeAmounts>["data"],
   totals: VoucherTotals,
-  discount: ReadonlyMap<number, number>
+  discount: ReadonlyMap<number, number>,
+  adjustments: readonly DocumentAdjustment[]
 ): void {
   const minor = (value: number) =>
     Number(normalizeArcaAmountToMinorUnits(value, "items"));
@@ -668,33 +796,60 @@ function assertDiscountedLinesMatchTotals(
           ]),
           authorized: new Map([[0, totals.netTaxed]]),
         }
-      : discountedRates(voucherClass, lines, settled, totals);
-  for (const id of discount.keys()) {
-    if (!byLines.has(id)) {
-      invalid(
-        `globalDiscount[${id}]`,
-        "keyed by a VAT rate id the items carry"
-      );
-    }
+      : modifiedRates(voucherClass, lines, settled, totals);
+  assertRatesPresent(byLines, discount, "globalDiscount");
+  for (const adjustment of adjustments) {
+    assertRatesPresent(byLines, adjustment.byRate, adjustment.field);
   }
   for (const id of new Set([...byLines.keys(), ...authorized.keys()])) {
     const expected = authorized.get(id) ?? 0;
-    if ((byLines.get(id) ?? 0) - (discount.get(id) ?? 0) !== expected) {
+    const actual =
+      BigInt(byLines.get(id) ?? 0) -
+      BigInt(discount.get(id) ?? 0) +
+      adjustments.reduce(
+        (sum, adjustment) => sum + BigInt(adjustment.byRate.get(id) ?? 0),
+        0n
+      );
+    if (actual !== BigInt(expected)) {
       throw new ArcaInputError(
-        "items less the global discount do not add up to the authorized voucher.",
+        "items less the global discount plus adjustments do not add up to the authorized voucher.",
         {
           code: "ARCA_INPUT_AMOUNT_MISMATCH",
-          field:
-            voucherClass === "C" ? "globalDiscount" : `globalDiscount[${id}]`,
-          expected: `${expected} minor units of lines less discount`,
+          field: modificationField(voucherClass, id, adjustments.length > 0),
+          expected: `${expected} minor units of lines less discount plus adjustments`,
         }
       );
     }
   }
 }
 
+function assertRatesPresent(
+  byLines: ReadonlyMap<number, number>,
+  byRate: ReadonlyMap<number, number>,
+  field: string
+): void {
+  for (const id of byRate.keys()) {
+    if (!byLines.has(id)) {
+      invalid(`${field}[${id}]`, "keyed by a VAT rate id the items carry");
+    }
+  }
+}
+
+function modificationField(
+  voucherClass: "A" | "B" | "C",
+  id: number,
+  adjusted: boolean
+): string {
+  if (adjusted) {
+    return voucherClass === "C"
+      ? "adjustments"
+      : `adjustments (VAT rate ${id})`;
+  }
+  return voucherClass === "C" ? "globalDiscount" : `globalDiscount[${id}]`;
+}
+
 /** The taxed lines and the authorized money of each VAT rate id. */
-function discountedRates(
+function modifiedRates(
   voucherClass: "A" | "B",
   lines: readonly VoucherDocumentLine[],
   settled: readonly { rate: VatRate }[],

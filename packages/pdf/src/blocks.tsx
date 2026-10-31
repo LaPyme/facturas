@@ -221,12 +221,21 @@ export function LinesTable() {
   );
 }
 
-function TotalRow({ label, amount }: { label: string; amount: number }) {
+function TotalRow({
+  label,
+  amount,
+  signed,
+}: {
+  label: string;
+  amount: number;
+  signed?: boolean;
+}) {
   const { doc, styles } = useVoucher("TotalRow");
   return (
     <View style={styles.totalRow} wrap={false}>
       <Text style={[styles.totalLabel, styles.muted]}>{label}</Text>
       <Text style={styles.totalAmount}>
+        {signed && amount > 0 ? "+" : ""}
         {formatMoney(amount, doc.currency.id)}
       </Text>
     </View>
@@ -240,7 +249,12 @@ const TOTALS_LABEL_CHARS_PER_LINE = 28;
 const TOTALS_LINE_HEIGHT = 12.15;
 const TOTALS_ROW_CHROME = 2.5;
 
-type TotalsRowData = { key: string; label: string; amount: number };
+type TotalsRowData = {
+  key: string;
+  label: string;
+  amount: number;
+  signed?: boolean;
+};
 
 /** C23, C25, L7: the rows above the total, VAT by rate right after the lines on class A. */
 function totalsRows(doc: VoucherDocument): TotalsRowData[] {
@@ -257,6 +271,12 @@ function totalsRows(doc: VoucherDocument): TotalsRowData[] {
           },
         ]
       : []),
+    ...(totals.adjustments ?? []).map((row, index) => ({
+      key: `labeled-adjustment-${index}`,
+      label: row.label,
+      amount: row.amount,
+      signed: true,
+    })),
     {
       key: "subtotal",
       label: classA ? "Importe neto gravado" : "Subtotal",
@@ -339,7 +359,12 @@ export function TotalsBlock({
       {aside ?? <View style={styles.aside} />}
       <View style={styles.totals}>
         {totalsRows(doc).map((row) => (
-          <TotalRow amount={row.amount} key={row.key} label={row.label} />
+          <TotalRow
+            amount={row.amount}
+            key={row.key}
+            label={row.label}
+            signed={row.signed}
+          />
         ))}
         {breakable ? null : <GrandTotal />}
       </View>
