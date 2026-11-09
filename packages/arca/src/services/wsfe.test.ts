@@ -491,6 +491,44 @@ describe("createWsfeService", () => {
     );
   });
 
+  it("omits Iva and Tributos when the voucher has no VAT rates or taxes", async () => {
+    const options = createBaseOptions();
+    options.soap.execute.mockResolvedValueOnce({
+      result: {
+        FECAESolicitarResponse: {
+          FECAESolicitarResult: {
+            FeDetResp: {
+              FECAEDetResponse: {
+                Resultado: "A",
+                CAE: "123456789",
+                CAEFchVto: "20260501",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await createWsfeService(options).issue({
+      data: createBaseVoucherInput({
+        totalAmount: 100,
+        netAmount: 0,
+        exemptAmount: 100,
+        vatAmount: 0,
+        vatRates: [],
+        taxes: [],
+      }),
+      voucherNumber: 42,
+    });
+
+    const detail =
+      options.soap.execute.mock.calls[0]?.[0].body.FeCAEReq.FeDetReq
+        .FECAEDetRequest;
+    expect(detail).toMatchObject({ ImpOpEx: "100.00", ImpIVA: "0.00" });
+    expect(detail).not.toHaveProperty("Iva");
+    expect(detail).not.toHaveProperty("Tributos");
+  });
+
   it.each([
     {
       overrides: { totalAmount: 259.2576 },

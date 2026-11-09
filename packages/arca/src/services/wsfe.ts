@@ -845,7 +845,7 @@ function mapWsfeVoucherInput(
     };
   }
 
-  if (input.taxes) {
+  if (input.taxes && input.taxes.length > 0) {
     data.Tributos = {
       Tributo: input.taxes.map((t) => ({
         Id: t.id,
@@ -857,7 +857,7 @@ function mapWsfeVoucherInput(
     };
   }
 
-  if (input.vatRates) {
+  if (input.vatRates && input.vatRates.length > 0) {
     data.Iva = {
       AlicIva: input.vatRates.map((v) => ({
         Id: v.id,
