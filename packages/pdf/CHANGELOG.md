@@ -1,5 +1,12 @@
 # @facturas/pdf
 
+## 0.26.1
+
+### Patch Changes
+
+- Updated dependencies [00b23b9]
+  - facturas@0.26.1
+
 ## 0.26.0
 
 ### Minor Changes

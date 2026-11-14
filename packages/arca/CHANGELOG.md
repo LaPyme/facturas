@@ -1,5 +1,11 @@
 # facturas
 
+## 0.26.1
+
+### Patch Changes
+
+- 00b23b9: Corregí la emisión de comprobantes exentos o no gravados: `Iva` y `Tributos` ya no se envían vacíos a `FECAESolicitar`, que ARCA rechazaba con el error 10018.
+
 ## 0.26.0
 
 ### Minor Changes
