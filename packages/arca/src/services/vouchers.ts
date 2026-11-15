@@ -1153,7 +1153,9 @@ async function consultKey(
       options,
       taxId,
       (owner, other) =>
-        storeCall(() => store.get(settledKey(environment, owner, other)))
+        storeCall(() => store.get(settledKey(environment, owner, other))),
+      (owner, other) =>
+        storeCall(() => store.get(attemptKey(environment, owner, other)))
     );
   };
   if (locked || !store.withLock) {
@@ -1227,11 +1229,14 @@ function readSettledRecord(json: string): ArcaSettledRecord {
 
 /**
  * Answers a key whose outcome is already recorded. A conflict repeats with no
- * provider call. A superseded key consults its number once and never resends:
- * an empty number means this key will never write, and a voucher there
- * belongs to the key that took the sequence, unless that key, or one that took
- * it from it in turn, met a stranger at the number. Only then does the voucher
- * stay a conflict for a person to attribute.
+ * provider call. A superseded key consults its number once and never resends.
+ * An empty number is blocked, not superseded: a request this key sent before
+ * it lost the number may still land there, so the key waits for the number to
+ * fill. A voucher with this key's data and not the successor's is this key's
+ * own late write, and this key keeps it. Any other voucher belongs to the key
+ * that took the sequence, unless that key, or one that took it from it in
+ * turn, met a stranger at the number. Only then does the voucher stay a
+ * conflict for a person to attribute.
  */
 async function settledOutcome(
   select: SelectService,
@@ -1239,24 +1244,48 @@ async function settledOutcome(
   settled: ArcaSettledRecord,
   options: RecoveryOptions,
   taxId: string,
-  settledFor: (taxId: string, key: string) => Promise<string | null>
+  settledFor: (taxId: string, key: string) => Promise<string | null>,
+  reservedFor: (taxId: string, key: string) => Promise<string | null>
 ): Promise<IssueOutcome<IssueOptions>> {
   if (settled.kind === "conflict") {
     return settledConflict(settled, reservation, options);
   }
+  const once = lookupOnce(select);
   const outcome = await consultReservation(
-    select,
+    once,
     reservation,
     options,
     taxId,
     true
   );
-  const empty =
-    outcome.kind === "indeterminate" && outcome.lookup.kind === "not_found";
+  if (outcome.kind === "indeterminate") {
+    return outcome.lookup.kind === "not_found"
+      ? withheld(
+          reservation,
+          {
+            kind: "blocked",
+            by: settled.by,
+            byTaxId: settled.byTaxId ?? taxId,
+          },
+          options,
+          settled.number
+        )
+      : outcome;
+  }
+  const own = await ownLateWrite(
+    once,
+    reservation,
+    settled,
+    options,
+    taxId,
+    reservedFor
+  );
+  if (own !== undefined) {
+    return own;
+  }
   if (
-    !empty &&
-    (outcome.kind !== "conflict" ||
-      (await successionDisputed(settled, taxId, settledFor)))
+    outcome.kind !== "conflict" ||
+    (await successionDisputed(settled, taxId, settledFor))
   ) {
     return outcome;
   }
@@ -1301,6 +1330,71 @@ function reservationEvidence(
     reservation.number,
     { ...options, service: reservation.service ?? "wsfe" }
   );
+}
+
+/**
+ * The voucher at a superseded key's number, when it is this key's own late
+ * write: it matches this key's request and not the request of the key that
+ * took the number. A voucher that matches both, or a successor whose
+ * reservation is gone, stays with the successor.
+ */
+async function ownLateWrite(
+  select: SelectService,
+  reservation: ArcaAttemptRecord,
+  settled: Extract<ArcaSettledRecord, { kind: "superseded" }>,
+  options: RecoveryOptions,
+  taxId: string,
+  reservedFor: (taxId: string, key: string) => Promise<string | null>
+): Promise<IssueOutcome<IssueOptions> | undefined> {
+  const own = await consultReservation(select, reservation, options, taxId);
+  if (own.kind !== "authorized") {
+    return;
+  }
+  const successorTaxId = settled.byTaxId ?? taxId;
+  const json = await reservedFor(successorTaxId, settled.by);
+  if (json === null) {
+    return;
+  }
+  const successor = await consultReservation(
+    select,
+    { ...readRecord(json), number: settled.number },
+    options,
+    successorTaxId
+  );
+  return successor.kind === "conflict" ? own : undefined;
+}
+
+/**
+ * Reads each voucher from ARCA once, however many reservations are matched
+ * against it.
+ */
+function lookupOnce(select: SelectService): SelectService {
+  const lookups = new Map<
+    string,
+    ReturnType<IssueWsfeService["lookupVoucher"]>
+  >();
+  return (options) => {
+    const wsfe = select(options);
+    return {
+      getNextVoucherNumber: (input) => wsfe.getNextVoucherNumber(input),
+      issue: (input) => wsfe.issue(input),
+      lookupVoucher: (input) => {
+        const key = JSON.stringify([
+          options.service ?? "wsfe",
+          options.representedTaxId,
+          input.salesPoint,
+          input.voucherType,
+          input.number,
+        ]);
+        let lookup = lookups.get(key);
+        if (lookup === undefined) {
+          lookup = wsfe.lookupVoucher(input);
+          lookups.set(key, lookup);
+        }
+        return lookup;
+      },
+    };
+  };
 }
 
 /**
@@ -1624,8 +1718,11 @@ async function runAuthorization(
  * A rejection with a key checks the reserved number once. On a reservation
  * this call created, or one whose last write ARCA rejected, any voucher there
  * is a stranger and the answer is a conflict; identity matching is left to a
- * true retry. A failed or empty lookup keeps the provider rejection as the
- * answer.
+ * true retry. An empty lookup keeps the provider rejection as the answer, and
+ * so does a failed one on a number this key never wrote. A resend whose
+ * lookup fails or is aborted answers indeterminate instead: 10016 means the
+ * number is taken, and the earlier unanswered request of this key may be what
+ * took it.
  */
 async function resolveRejection(
   authorization: Extract<ArcaAuthorizationOutcome, { kind: "rejected" }>,
@@ -1651,7 +1748,14 @@ async function resolveRejection(
       ),
       strangerAtNumber,
     });
-    if (recovered.kind === "authorized" || recovered.kind === "conflict") {
+    if (
+      recovered.kind === "authorized" ||
+      recovered.kind === "conflict" ||
+      (!strangerAtNumber &&
+        recovered.kind === "indeterminate" &&
+        (recovered.lookup.kind === "failed" ||
+          recovered.lookup.kind === "aborted"))
+    ) {
       return recovered;
     }
   }

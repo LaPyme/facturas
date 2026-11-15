@@ -225,7 +225,7 @@ resultados fiscales se devuelven, no se lanzan, y `kind` los distingue:
 | `incomplete` | ARCA tiene un comprobante en el número reservado, pero la consulta no trae los datos para probar que es este. `reason` dice por qué |
 | `failed` | La consulta falló. `error` trae el mensaje seguro y el código |
 | `aborted` | Venció tu `abortSignal`. La reserva queda para `recover()` |
-| `blocked` | Otra reserva sin resolver frena la secuencia. Conciliá la clave `by`, reservada por el emisor `byTaxId`, y repetí |
+| `blocked` | Otra reserva sin resolver frena la secuencia. Conciliá la clave `by`, reservada por el emisor `byTaxId`, y repetí. Si `by` se llevó el número de esta clave, ese número sigue vacío y un envío anterior todavía puede llegar: repetí más tarde |
 | `superseded` | La secuencia siguió sin esta clave, que ya no va a escribir. `by` tomó el número desde el emisor `byTaxId`. Emití con una clave nueva |
 
 Qué hacer con cada uno está en
