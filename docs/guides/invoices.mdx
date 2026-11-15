@@ -264,7 +264,10 @@ del original solo cuando crea una reserva nueva.
 
 Un 10016 sobre un número que esta misma llamada reservó no se resuelve por
 coincidencia de campos: si la consulta encuentra un comprobante el resultado es
-`conflict`, y si no encuentra nada sigue siendo `rejected`. Dos ventas con
+`conflict`, y si no encuentra nada sigue siendo `rejected`. En una repetición,
+si esa consulta falla o se aborta, el resultado es `indeterminate` y no
+`rejected`: el 10016 dice que el número está ocupado, y puede estarlo por un
+envío anterior de esta misma clave. En WSMTXCA vale para cualquier rechazo. Dos ventas con
 datos fiscales idénticos, por ejemplo dos ventas a consumidor final por el
 mismo importe el mismo día, coinciden en todos los campos. Por eso, la
 coincidencia probaría
@@ -320,8 +323,9 @@ solo cuando la respuesta no trae CAE, resultado ni número. Con
 Un `indeterminate` informa en `lookup` por qué quedó abierto: `not_found`,
 `incomplete`, `failed`, `aborted` cuando venció tu `abortSignal`, `blocked` cuando
 otra reserva sin resolver todavía frena la secuencia y `superseded` cuando la
-secuencia siguió sin esta clave. En `blocked` no se reservó ningún número:
-`by` nombra la clave a conciliar con `recover()`. En `superseded` la clave
+secuencia siguió sin esta clave. En `blocked` esta llamada no escribió nada:
+`by` nombra la clave a conciliar con `recover()` o, si esta clave perdió su
+número, la que se lo llevó mientras ese número sigue vacío. En `superseded` la clave
 `by` se llevó el número: esta clave nunca va a escribir, así que emití bajo una
 clave nueva.
 

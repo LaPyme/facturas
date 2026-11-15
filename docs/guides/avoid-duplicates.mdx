@@ -174,12 +174,21 @@ mismo `conflict` sin consultar al proveedor. Con
 probó que el número estaba vacío y se lo dio a la clave `by`, reservada bajo el
 CUIT emisor `byTaxId`. Un registro sin `byTaxId` es de una versión anterior y
 nombra una clave del mismo emisor. La clave vieja consulta el
-número una vez y nunca reenvía. Devuelve `indeterminate` con
-`lookup: { kind: "superseded", by, byTaxId }` si el número sigue vacío o si el
-comprobante que hay ahí es de `by` o de una clave que a su vez se lo quitó a
-`by`. Emití bajo una clave nueva. Devuelve `conflict` solo si alguna clave de
-esa cadena anotó un conflicto en ese número, porque entonces un desconocido
-llegó al número y el comprobante se atribuye a mano. Las autorizaciones no se
+número una vez y nunca reenvía. Si el número sigue vacío, devuelve
+`indeterminate` con `lookup: { kind: "blocked", by, byTaxId }`: un envío suyo
+que quedó sin respuesta todavía puede llegar ahí, así que repetí más tarde. Si
+el comprobante que hay ahí tiene los datos fiscales de esta clave y no los de
+`by` ni los de las claves que a su vez se lo quitaron, es un envío propio que
+llegó tarde: devuelve `authorized` con ese CAE, y `by` termina en `conflict`
+para conciliar a mano. Si ARCA rechazó todos los envíos de alguna de esas
+claves, el número quedó libre para cualquier otra que pudo mandar los mismos
+datos, así que devuelve `conflict`. En cualquier otro caso el
+comprobante es de `by` o de una clave que a su vez se lo quitó a `by`, también
+cuando los datos de las dos claves son idénticos. Devuelve `indeterminate` con
+`lookup: { kind: "superseded", by, byTaxId }` y emití bajo una clave nueva.
+Devuelve `conflict` solo si alguna clave de esa cadena anotó un conflicto en
+ese número, porque entonces un desconocido llegó al número y el comprobante se
+atribuye a mano. Las autorizaciones no se
 anotan porque ARCA es la fuente de verdad y cada repetición la consulta. Un
 rechazo se marca en la reserva con `rejectedAt` solo si ARCA rechazó todos los
 envíos de esa clave. Entonces esa clave nunca escribió el número, así que una
