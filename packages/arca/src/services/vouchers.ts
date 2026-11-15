@@ -1232,11 +1232,11 @@ function readSettledRecord(json: string): ArcaSettledRecord {
  * provider call. A superseded key consults its number once and never resends.
  * An empty number is blocked, not superseded: a request this key sent before
  * it lost the number may still land there, so the key waits for the number to
- * fill. A voucher with this key's data and not the successor's is this key's
- * own late write, and this key keeps it. Any other voucher belongs to the key
- * that took the sequence, unless that key, or one that took it from it in
- * turn, met a stranger at the number. Only then does the voucher stay a
- * conflict for a person to attribute.
+ * fill. A voucher with this key's data and none of its successors' is this
+ * key's own late write, and this key keeps it (see ownLateWrite). Any other
+ * voucher belongs to the key that took the sequence, unless that key, or one
+ * that took it from it in turn, met a stranger at the number. Only then does
+ * the voucher stay a conflict for a person to attribute.
  */
 async function settledOutcome(
   select: SelectService,
@@ -1276,8 +1276,10 @@ async function settledOutcome(
     once,
     reservation,
     settled,
+    outcome,
     options,
     taxId,
+    settledFor,
     reservedFor
   );
   if (own !== undefined) {
@@ -1334,34 +1336,58 @@ function reservationEvidence(
 
 /**
  * The voucher at a superseded key's number, when it is this key's own late
- * write: it matches this key's request and not the request of the key that
- * took the number. A voucher that matches both, or a successor whose
- * reservation is gone, stays with the successor.
+ * write: it matches this key's request and the request of no key along the
+ * succession that took the number. A voucher that matches one of them, or a
+ * succession too broken to compare, stays with the successors. When a key of
+ * the succession had every write rejected, the number was free for any later
+ * claim, which may have sent this key's data too: the voucher stays a
+ * conflict for a person to attribute. A successor whose comparison cannot
+ * answer leaves this key indeterminate.
  */
 async function ownLateWrite(
   select: SelectService,
   reservation: ArcaAttemptRecord,
   settled: Extract<ArcaSettledRecord, { kind: "superseded" }>,
+  found: IssueOutcome<IssueOptions>,
   options: RecoveryOptions,
   taxId: string,
+  settledFor: (taxId: string, key: string) => Promise<string | null>,
   reservedFor: (taxId: string, key: string) => Promise<string | null>
 ): Promise<IssueOutcome<IssueOptions> | undefined> {
   const own = await consultReservation(select, reservation, options, taxId);
   if (own.kind !== "authorized") {
     return;
   }
-  const successorTaxId = settled.byTaxId ?? taxId;
-  const json = await reservedFor(successorTaxId, settled.by);
-  if (json === null) {
-    return;
+  let owner = settled.byTaxId ?? taxId;
+  let next = settled.by;
+  let released = false;
+  for (let hop = 0; hop < 16; hop += 1) {
+    const json = await reservedFor(owner, next);
+    if (json === null) {
+      return;
+    }
+    const record = readRecord(json);
+    const theirs = await consultReservation(
+      select,
+      { ...record, number: settled.number },
+      options,
+      owner
+    );
+    if (theirs.kind === "authorized") {
+      return;
+    }
+    if (theirs.kind === "indeterminate") {
+      return theirs;
+    }
+    released ||= record.rejectedAt !== undefined;
+    const after = await settledFor(owner, next);
+    const successor = after === null ? null : readSettledRecord(after);
+    if (successor?.kind !== "superseded") {
+      return released ? found : own;
+    }
+    owner = successor.byTaxId ?? owner;
+    next = successor.by;
   }
-  const successor = await consultReservation(
-    select,
-    { ...readRecord(json), number: settled.number },
-    options,
-    successorTaxId
-  );
-  return successor.kind === "conflict" ? own : undefined;
 }
 
 /**
@@ -1379,9 +1405,10 @@ function lookupOnce(select: SelectService): SelectService {
       getNextVoucherNumber: (input) => wsfe.getNextVoucherNumber(input),
       issue: (input) => wsfe.issue(input),
       lookupVoucher: (input) => {
+        // Every key of one succession shares the sequence, so the
+        // coordinates name the voucher.
         const key = JSON.stringify([
           options.service ?? "wsfe",
-          options.representedTaxId,
           input.salesPoint,
           input.voucherType,
           input.number,
@@ -1720,9 +1747,9 @@ async function runAuthorization(
  * is a stranger and the answer is a conflict; identity matching is left to a
  * true retry. An empty lookup keeps the provider rejection as the answer, and
  * so does a failed one on a number this key never wrote. A resend whose
- * lookup fails or is aborted answers indeterminate instead: 10016 means the
- * number is taken, and the earlier unanswered request of this key may be what
- * took it.
+ * lookup fails or is aborted answers indeterminate instead: the rejection may
+ * mean the number is taken (10016 on WSFE, any rejection on WSMTXCA), and the
+ * earlier unanswered request of this key may be what took it.
  */
 async function resolveRejection(
   authorization: Extract<ArcaAuthorizationOutcome, { kind: "rejected" }>,

@@ -267,7 +267,7 @@ coincidencia de campos: si la consulta encuentra un comprobante el resultado es
 `conflict`, y si no encuentra nada sigue siendo `rejected`. En una repetición,
 si esa consulta falla o se aborta, el resultado es `indeterminate` y no
 `rejected`: el 10016 dice que el número está ocupado, y puede estarlo por un
-envío anterior de esta misma clave. Dos ventas con
+envío anterior de esta misma clave. En WSMTXCA vale para cualquier rechazo. Dos ventas con
 datos fiscales idénticos, por ejemplo dos ventas a consumidor final por el
 mismo importe el mismo día, coinciden en todos los campos. Por eso, la
 coincidencia probaría

@@ -178,8 +178,11 @@ número una vez y nunca reenvía. Si el número sigue vacío, devuelve
 `indeterminate` con `lookup: { kind: "blocked", by, byTaxId }`: un envío suyo
 que quedó sin respuesta todavía puede llegar ahí, así que repetí más tarde. Si
 el comprobante que hay ahí tiene los datos fiscales de esta clave y no los de
-`by`, es un envío propio que llegó tarde: devuelve `authorized` con ese CAE, y
-`by` termina en `conflict` para conciliar a mano. En cualquier otro caso el
+`by` ni los de las claves que a su vez se lo quitaron, es un envío propio que
+llegó tarde: devuelve `authorized` con ese CAE, y `by` termina en `conflict`
+para conciliar a mano. Si ARCA rechazó todos los envíos de alguna de esas
+claves, el número quedó libre para cualquier otra que pudo mandar los mismos
+datos, así que devuelve `conflict`. En cualquier otro caso el
 comprobante es de `by` o de una clave que a su vez se lo quitó a `by`, también
 cuando los datos de las dos claves son idénticos. Devuelve `indeterminate` con
 `lookup: { kind: "superseded", by, byTaxId }` y emití bajo una clave nueva.

@@ -1767,6 +1767,51 @@ describe("a superseded key's own late write", () => {
     }
     expect(wsfe.issue).toHaveBeenCalledTimes(writes);
   });
+  it("never gives key1 the CAE of a later key with the same data", async () => {
+    const provided = provider();
+    const { wsfe } = provided;
+    const arca = service(createMemoryStore(), wsfe);
+    // key1's request never lands.
+    await queue(arca, provided);
+    // key2 takes 77 and ARCA rejects it, so 77 is free again.
+    wsfe.issue.mockImplementationOnce(() => Promise.resolve(rejectedRule));
+    expect((await arca.issue(other, { idempotencyKey: "key2" })).kind).toBe(
+      "rejected"
+    );
+    // key3 sends the same data as key1 and ARCA authorizes it at 77.
+    expect(await arca.issue(input, { idempotencyKey: "key3" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    const writes = wsfe.issue.mock.calls.length;
+    for (const outcome of [
+      await arca.issue(input, { idempotencyKey: "key1" }),
+      await arca.recover("key1"),
+    ]) {
+      expect(outcome).toMatchObject({
+        kind: "conflict",
+        attempted: { number: 77 },
+        found: { number: 77 },
+      });
+    }
+    expect(wsfe.issue).toHaveBeenCalledTimes(writes);
+  });
+  it("compares the voucher with every key that took the number", async () => {
+    const provided = provider();
+    const { wsfe } = provided;
+    const arca = service(createMemoryStore(), wsfe);
+    await queue(arca, provided);
+    // key2 takes 77 and is stranded; key3 takes it from key2 with key1's data.
+    await supersede(arca, wsfe);
+    expect(await arca.issue(input, { idempotencyKey: "key3" })).toMatchObject({
+      kind: "authorized",
+      voucher: { number: 77 },
+    });
+    expect(await arca.recover("key1")).toMatchObject({
+      kind: "indeterminate",
+      lookup: { kind: "superseded", by: "key2" },
+    });
+  });
   it("leaves the voucher with the successor when its reservation is gone", async () => {
     const provided = provider();
     const { wsfe } = provided;
