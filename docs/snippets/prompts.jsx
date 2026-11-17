@@ -45,7 +45,7 @@ export const PromptText = ({ label, prompt }) => {
           {label}
         </span>
         <button
-          className="cursor-pointer rounded-md bg-primary px-3 py-1 font-medium text-white text-xs hover:opacity-90 dark:bg-primary-light dark:text-gray-900"
+          className="btn-blue cursor-pointer rounded-md px-3 py-1 font-medium text-xs"
           onClick={copy}
           type="button"
         >
@@ -63,7 +63,7 @@ export const PromptText = ({ label, prompt }) => {
   );
 };
 
-export const SetupPromptDialog = () => {
+export const SetupPromptDialog = ({ large }) => {
   const dialog = useRef(null);
   const open = () => dialog.current?.showModal();
   const close = () => dialog.current?.close();
@@ -71,7 +71,11 @@ export const SetupPromptDialog = () => {
   return (
     <>
       <button
-        className="inline-flex cursor-pointer items-center gap-2 rounded-full bg-primary px-5 py-2.5 font-medium text-sm text-white hover:opacity-90 dark:bg-primary-light dark:text-gray-900"
+        className={
+          large
+            ? "btn-blue flex h-16 w-full cursor-pointer items-center rounded-md px-6 font-medium text-lg"
+            : "btn-blue inline-flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 font-medium text-sm"
+        }
         onClick={open}
         type="button"
       >

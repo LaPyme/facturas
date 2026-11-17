@@ -40,7 +40,7 @@
   font-weight: 600;
   line-height: 1;
   color: #fff;
-  background: #1e40af;
+  background: #2563eb;
   border-radius: 3px;
 }
 
@@ -83,4 +83,14 @@
 
 .dark .voucher-legend code {
   color: #fff;
+}
+
+/* The blue of the prompt buttons, the same in light and dark mode. */
+.btn-blue {
+  color: #fff;
+  background: #2563eb;
+}
+
+.btn-blue:hover {
+  background: #1d4ed8;
 }
