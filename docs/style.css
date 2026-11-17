@@ -12,3 +12,75 @@
     line-height: 18px;
   }
 }
+
+/* Landing page: grid paper behind the agent steps. */
+.blueprint {
+  background-image:
+    linear-gradient(to right, rgb(15 23 42 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(15 23 42 / 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: -1px -1px;
+}
+
+.dark .blueprint {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+}
+
+/* Landing page: numbered pins on the voucher and their legend. */
+.voucher-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: #1e40af;
+  color: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.voucher-pin.pinned {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.voucher-pin.pinned-above {
+  top: -22px;
+  right: 0;
+}
+
+.voucher-pin.pinned-left {
+  top: 2px;
+  right: auto;
+  left: -22px;
+}
+
+.voucher-legend > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgb(75 85 99);
+}
+
+.dark .voucher-legend > div {
+  color: rgb(156 163 175);
+}
+
+.voucher-legend code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: rgb(17 24 39);
+}
+
+.dark .voucher-legend code {
+  color: #fff;
+}
