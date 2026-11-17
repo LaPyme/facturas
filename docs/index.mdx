@@ -10,122 +10,99 @@ import { SetupPromptDialog } from "/snippets/prompts.jsx"
 
 <div className="px-4 sm:px-6 pb-24">
 
-<div className="max-w-6xl mx-auto pt-32 lg:pt-20">
-  <h1 className="max-w-5xl text-5xl sm:text-7xl lg:text-8xl font-semibold tracking-tighter leading-none text-gray-900 dark:text-white">
+<div className="max-w-6xl mx-auto pt-32 lg:pt-24 grid lg:grid-cols-2 gap-14 lg:gap-16 items-center">
+
+<div className="min-w-0">
+  <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight text-gray-900 dark:text-white">
     Facturación electrónica para TypeScript
   </h1>
-</div>
-
-<div className="max-w-6xl mx-auto mt-12 grid lg:grid-cols-2 gap-4 items-start">
-
-<div className="grid sm:grid-cols-2 gap-4 lg:col-start-2 lg:row-start-1">
-  <a href="/getting-started/quickstart" className="flex h-16 items-center justify-between rounded-md bg-gray-900 dark:bg-white px-6 text-lg font-medium text-white dark:text-gray-900 hover:opacity-90">
-    Leé la documentación
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
-  </a>
-  <SetupPromptDialog large />
-</div>
-
-<div className="lg:col-start-1 lg:row-start-1 lg:row-span-2 rounded-2xl border border-gray-950/10 dark:border-white/10 p-7 sm:p-10">
-  <h2 className="text-4xl sm:text-5xl font-semibold tracking-tight text-gray-900 dark:text-white">Cómo armo el pedido para ARCA?</h2>
-  <p className="mt-8 text-xl sm:text-2xl text-gray-900 dark:text-white">No lo armás. Pedíselo a tu agente.</p>
-  <p className="mt-5 text-lg text-gray-600 dark:text-gray-400">
-    <code className="font-mono text-[0.9em]">facturas</code> es el SDK para emitir facturas, notas de crédito y notas de débito con CAE. Tu agente elige sus métodos y escribe la integración en tu proyecto. La clase, el tipo de comprobante y el IVA salen de los datos de tu venta.
+  <p className="mt-6 max-w-xl text-lg text-gray-600 dark:text-gray-400">
+    Pasás la venta en centavos. Vuelve un CAE. Sin SOAP, sin XML y sin intermediarios entre tu servidor y ARCA.
   </p>
-  <p className="mt-5 text-lg text-gray-600 dark:text-gray-400">
-    Sin SOAP, sin XML y sin intermediarios entre tu servidor y ARCA.
-  </p>
+  <div className="mt-8 flex max-w-lg flex-col items-start gap-3">
+    <a href="/getting-started/quickstart" className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-gray-900 dark:bg-white px-5 text-sm font-medium text-white dark:text-gray-900 hover:opacity-90">
+      Leé la documentación
+      <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+    </a>
+    <SetupPromptDialog row />
+  </div>
 </div>
 
-<div className="min-w-0 lg:col-start-2 lg:row-start-2 blueprint rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 sm:p-8">
-  <div className="rounded-lg border border-gray-950/10 dark:border-white/10 bg-white text-gray-900 px-3 py-5 sm:px-7 sm:py-6 text-[10px] sm:text-[11px] leading-normal" style={{ boxShadow: "0 1px 2px rgb(0 0 0 / 0.04), 0 16px 40px -12px rgb(0 0 0 / 0.18)" }}>
-    <div className="grid grid-cols-[1fr_auto_1fr] gap-x-2 gap-y-3 sm:gap-x-4 sm:gap-y-1">
-      <div className="min-w-0 self-end sm:row-span-2">
-        <div className="text-xs sm:text-sm font-medium">Tu Negocio</div>
-        <div className="mt-1 text-gray-600">Av. Corrientes 1234</div>
-        <div className="text-gray-600">CABA - CP: 1043</div>
-        <div className="text-gray-600">Responsable Monotributo</div>
-      </div>
-      <div className="relative self-start flex flex-col items-center rounded-md border border-gray-400 px-2 pt-1 pb-0.5">
-        <span className="voucher-pin pinned">1</span>
-        <span className="text-xl sm:text-2xl font-bold leading-none">C</span>
-        <span className="mt-0.5 text-[8px] sm:text-[9px] text-gray-500">Cód. 11</span>
-      </div>
-      <div className="min-w-0 text-right">
-        <div className="text-sm sm:text-base font-bold leading-tight">Factura</div>
-        <div className="text-[9px] sm:text-[10px] text-gray-500">Original</div>
-        <div className="mt-1 whitespace-nowrap text-xs sm:text-lg tabular-nums"><span className="relative rounded-sm bg-emerald-100 px-1">Nº 00003-00000142<span className="voucher-pin pinned pinned-left">2</span></span></div>
-      </div>
-      <div className="col-span-3 sm:col-span-1 sm:col-start-3 text-right text-gray-600">
-        <div><span className="font-semibold text-gray-900">Fecha de Emisión:</span> 26/09/2026</div>
-        <div><span className="font-semibold text-gray-900">CUIT:</span> <span className="whitespace-nowrap">20-12345678-6</span></div>
-        <div><span className="font-semibold text-gray-900">Ingresos Brutos:</span> <span className="whitespace-nowrap">20-12345678-6</span></div>
-        <div><span className="font-semibold text-gray-900">Inicio de Actividades:</span> 01/03/2024</div>
-      </div>
+<div className="min-w-0">
+<div className="voucher-sheet rounded-lg border border-gray-950/10 dark:border-white/10 bg-white text-gray-900 px-3 py-5 sm:px-7 sm:py-6 text-[10px] sm:text-[11px] leading-normal" style={{ boxShadow: "0 1px 2px rgb(0 0 0 / 0.04), 0 16px 40px -12px rgb(0 0 0 / 0.18)" }}>
+  <div className="grid grid-cols-[1fr_auto_1fr] gap-x-2 gap-y-3 sm:gap-x-4 sm:gap-y-1">
+    <div className="min-w-0 self-end sm:row-span-2">
+      <div className="text-xs sm:text-sm font-medium">Tu Negocio</div>
+      <div className="mt-1 text-gray-600">Responsable Monotributo</div>
     </div>
-    <div className="mt-4 sm:mt-5 grid sm:grid-cols-2 gap-x-4 border-t border-gray-200 pt-3">
-      <div><span className="font-semibold">Razón social:</span> Consumidor Final</div>
-      <div><span className="font-semibold">Condición de IVA:</span> Consumidor Final</div>
-      <div className="sm:col-start-2"><span className="font-semibold">Condición de venta:</span> Contado</div>
+    <div className="relative self-start flex flex-col items-center rounded-md border border-gray-400 px-2 pt-1 pb-0.5">
+      <span className="text-xl sm:text-2xl font-bold leading-none">C</span>
+      <span className="mt-0.5 text-[8px] sm:text-[9px] text-gray-500">Cód. 11</span>
     </div>
-    <div className="mt-4 sm:mt-5 tabular-nums">
-      <div className="flex gap-2 border-b border-gray-900 pb-1 font-semibold">
-        <div className="hidden sm:block w-12 shrink-0">Código</div>
-        <div className="flex-1 min-w-0">Descripción</div>
-        <div className="w-8 shrink-0 text-right">Cant.</div>
-        <div className="w-16 shrink-0 text-right">Precio Unit.</div>
-        <div className="w-16 shrink-0 text-right">Subtotal</div>
-      </div>
-      <div className="flex gap-2 pt-1.5">
-        <div className="hidden sm:block w-12 shrink-0">0012</div>
-        <div className="flex-1 min-w-0">Yerba mate 1 kg</div>
-        <div className="w-8 shrink-0 text-right">2</div>
-        <div className="w-16 shrink-0 text-right">9.000,00</div>
-        <div className="w-16 shrink-0 text-right">18.000,00</div>
-      </div>
-      <div className="flex gap-2 pt-1">
-        <div className="hidden sm:block w-12 shrink-0">0450</div>
-        <div className="flex-1 min-w-0">Termo de acero 1 L</div>
-        <div className="w-8 shrink-0 text-right">1</div>
-        <div className="w-16 shrink-0 text-right">34.500,00</div>
-        <div className="w-16 shrink-0 text-right">34.500,00</div>
-      </div>
+    <div className="min-w-0 text-right">
+      <div className="text-sm sm:text-base font-bold leading-tight">Factura</div>
+      <div className="text-[9px] sm:text-[10px] text-gray-500">Original</div>
+      <div className="mt-1 whitespace-nowrap text-xs sm:text-lg tabular-nums"><span className="relative rounded-sm bg-emerald-100 px-1">Nº 00003-00000142<span className="voucher-pin pinned pinned-left">1</span></span></div>
     </div>
-    <div className="mt-4 sm:ml-auto sm:w-1/2 tabular-nums">
-      <div className="flex justify-between border-t border-gray-200 py-1"><span>Subtotal</span><span>{"$52.500,00"}</span></div>
-      <div className="flex justify-between border-t border-gray-200 py-1 font-bold"><span>Total</span><span>{"$52.500,00"}</span></div>
-      <div className="flex justify-between border-t border-gray-200 py-1"><span>Monto abonado</span><span>{"$52.500,00"}</span></div>
-    </div>
-    <div className="mt-8 grid grid-cols-[auto_1fr] sm:grid-cols-[1fr_auto_1fr] items-center gap-4">
-      <div className="hidden sm:block">
-        <div className="font-semibold">Observaciones:</div>
-        <div className="text-gray-600">Venta en mostrador</div>
-      </div>
-      <div className="relative w-fit">
-        <img noZoom src="/images/qr-ejemplo.svg" alt="QR del comprobante" className="w-16 h-16 sm:w-20 sm:h-20 rounded border-2 border-emerald-200 p-0.5" />
-        <span className="voucher-pin pinned">3</span>
-      </div>
-      <div className="relative whitespace-nowrap text-right font-semibold tabular-nums">
-        <span className="voucher-pin pinned pinned-above">4</span>
-        <div><span className="rounded-sm bg-emerald-100 px-1">CAE Nº: 76391234567890</span></div>
-        <div className="mt-0.5"><span className="rounded-sm bg-emerald-100 px-1">Fecha de Vto. de CAE: 06/10/2026</span></div>
-      </div>
+    <div className="col-span-3 sm:col-span-1 sm:col-start-3 text-right text-gray-600">
+      <div><span className="font-semibold text-gray-900">Fecha de Emisión:</span> 26/09/2026</div>
+      <div><span className="font-semibold text-gray-900">CUIT:</span> <span className="whitespace-nowrap">20-12345678-6</span></div>
     </div>
   </div>
-  <div className="voucher-legend mt-5 grid sm:grid-cols-2 gap-x-6 gap-y-2.5">
-    <div><span className="voucher-pin">1</span><span>Clase y tipo, que deriva <code>issue()</code></span></div>
-    <div><span className="voucher-pin">2</span><span><code>voucher.number</code></span></div>
-    <div><span className="voucher-pin">3</span><span><code>voucher.qr</code></span></div>
-    <div><span className="voucher-pin">4</span><span><code>voucher.cae</code> y <code>voucher.caeExpiry</code></span></div>
+  <div className="mt-4 sm:mt-5 grid sm:grid-cols-2 gap-x-4 border-t border-gray-200 pt-3">
+    <div><span className="font-semibold">Razón social:</span> Consumidor Final</div>
+    <div><span className="font-semibold">Condición de IVA:</span> Consumidor Final</div>
+    <div className="sm:col-start-2"><span className="font-semibold">Condición de venta:</span> Contado</div>
   </div>
-  <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">Lo marcado sale de <code className="font-mono text-[0.9em]">resultado.voucher</code>. El resto del PDF lo arma tu sistema con los datos de la venta.</p>
+  <div className="mt-4 sm:mt-5 tabular-nums">
+    <div className="flex gap-2 border-b border-gray-900 pb-1 font-semibold">
+      <div className="hidden sm:block w-12 shrink-0">Código</div>
+      <div className="flex-1 min-w-0">Descripción</div>
+      <div className="w-8 shrink-0 text-right">Cant.</div>
+      <div className="w-16 shrink-0 text-right">Precio Unit.</div>
+      <div className="w-16 shrink-0 text-right">Subtotal</div>
+    </div>
+    <div className="flex gap-2 pt-1.5">
+      <div className="hidden sm:block w-12 shrink-0">0012</div>
+      <div className="flex-1 min-w-0">Yerba mate 1 kg</div>
+      <div className="w-8 shrink-0 text-right">2</div>
+      <div className="w-16 shrink-0 text-right">9.000,00</div>
+      <div className="w-16 shrink-0 text-right">18.000,00</div>
+    </div>
+    <div className="flex gap-2 pt-1">
+      <div className="hidden sm:block w-12 shrink-0">0450</div>
+      <div className="flex-1 min-w-0">Termo de acero 1 L</div>
+      <div className="w-8 shrink-0 text-right">1</div>
+      <div className="w-16 shrink-0 text-right">34.500,00</div>
+      <div className="w-16 shrink-0 text-right">34.500,00</div>
+    </div>
   </div>
-
+  <div className="mt-4 sm:ml-auto sm:w-1/2 tabular-nums">
+    <div className="flex justify-between border-t border-gray-200 py-1"><span>Subtotal</span><span>{"$52.500,00"}</span></div>
+    <div className="flex justify-between border-t border-gray-200 py-1 font-bold"><span>Total</span><span>{"$52.500,00"}</span></div>
+  </div>
+  <div className="mt-6 flex items-center justify-between gap-4">
+    <div className="relative w-fit">
+      <img noZoom src="/images/qr-ejemplo.svg" alt="QR del comprobante" className="w-16 h-16 sm:w-20 sm:h-20 rounded border-2 border-emerald-200 p-0.5" />
+      <span className="voucher-pin pinned">3</span>
+    </div>
+    <div className="relative whitespace-nowrap text-right font-semibold tabular-nums">
+      <span className="voucher-pin pinned pinned-above">2</span>
+      <div><span className="rounded-sm bg-emerald-100 px-1">CAE Nº: 76391234567890</span></div>
+      <div className="mt-0.5"><span className="rounded-sm bg-emerald-100 px-1">Fecha de Vto. de CAE: 06/10/2026</span></div>
+    </div>
+  </div>
+</div>
+<p className="voucher-key mt-6"><span className="voucher-key-muted">resultado.voucher →</span> {"{"} number<span className="voucher-pin">1</span>, cae<span className="voucher-pin">2</span>, caeExpiry<span className="voucher-pin">2</span>, qr<span className="voucher-pin">3</span> {"}"}</p>
+</div>
 
 </div>
 
 <div className="max-w-6xl mx-auto mt-28">
   <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">Del pedido al CAE</h2>
+  <p className="mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-400">
+    Tu agente escribe la integración. La documentación viaja dentro del paquete de npm, así que lee la de la versión que instalaste.
+  </p>
 </div>
 
 <div className="blueprint max-w-6xl mx-auto mt-8 grid gap-12 rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 sm:p-10">

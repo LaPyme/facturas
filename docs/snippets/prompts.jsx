@@ -63,24 +63,51 @@ export const PromptText = ({ label, prompt }) => {
   );
 };
 
-export const SetupPromptDialog = ({ large }) => {
+export const SetupPromptDialog = ({ row }) => {
   const dialog = useRef(null);
+  const [copied, setCopied] = useState(false);
   const open = () => dialog.current?.showModal();
   const close = () => dialog.current?.close();
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(setupPrompt);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Without clipboard access, show the whole prompt to copy by hand.
+      open();
+    }
+  };
 
   return (
     <>
-      <button
-        className={
-          large
-            ? "btn-blue flex h-16 w-full cursor-pointer items-center rounded-md px-6 font-medium text-lg"
-            : "btn-blue inline-flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 font-medium text-sm"
-        }
-        onClick={open}
-        type="button"
-      >
-        Copiar prompt
-      </button>
+      {row ? (
+        <div className="prompt-row flex h-11 w-full min-w-0 items-center gap-2 rounded-md border pr-1.5 pl-3">
+          <button
+            className="min-w-0 flex-1 cursor-pointer truncate text-left font-mono text-xs"
+            onClick={open}
+            title="Ver el prompt completo"
+            type="button"
+          >
+            {setupPrompt.split("\n")[0]}
+          </button>
+          <button
+            className="btn-blue shrink-0 cursor-pointer rounded px-3 py-1.5 font-medium text-xs"
+            onClick={copy}
+            type="button"
+          >
+            {copied ? "Copiado" : "Copiar prompt"}
+          </button>
+        </div>
+      ) : (
+        <button
+          className="btn-blue inline-flex cursor-pointer items-center gap-2 rounded-full px-5 py-2.5 font-medium text-sm"
+          onClick={open}
+          type="button"
+        >
+          Copiar prompt
+        </button>
+      )}
       <dialog
         aria-labelledby="setup-prompt-title"
         className="m-auto w-full max-w-2xl rounded-2xl border border-gray-950/10 bg-white p-6 text-left backdrop:bg-black/50 dark:border-white/10 dark:bg-gray-900"

@@ -40,8 +40,8 @@
   font-weight: 600;
   line-height: 1;
   color: #fff;
-  background: #2563eb;
-  border-radius: 3px;
+  background: #047857;
+  border-radius: 9999px;
 }
 
 .voucher-pin.pinned {
@@ -62,27 +62,46 @@
   left: -22px;
 }
 
-.voucher-legend > div {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 12px;
-  color: rgb(75 85 99);
+/* Landing page: the invoice sheet, its key and the prompt row. */
+.voucher-sheet {
+  transform: rotate(1.2deg);
 }
 
-.dark .voucher-legend > div {
-  color: rgb(156 163 175);
+@media (max-width: 1023px) {
+  .voucher-sheet {
+    transform: none;
+  }
 }
 
-.voucher-legend code {
+.voucher-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-size: 12px;
   color: rgb(17 24 39);
-  letter-spacing: 0.02em;
 }
 
-.dark .voucher-legend code {
+.dark .voucher-key {
   color: #fff;
+}
+
+.voucher-key .voucher-pin {
+  margin-left: 3px;
+  vertical-align: 1px;
+}
+
+.voucher-key-muted {
+  color: rgb(107 114 128);
+}
+
+.prompt-row {
+  color: rgb(55 65 81);
+  background: #fff;
+  border-color: rgb(3 7 18 / 0.15);
+}
+
+.dark .prompt-row {
+  color: rgb(209 213 219);
+  background: rgb(255 255 255 / 0.04);
+  border-color: rgb(255 255 255 / 0.15);
 }
 
 /* The blue of the prompt buttons, the same in light and dark mode. */
