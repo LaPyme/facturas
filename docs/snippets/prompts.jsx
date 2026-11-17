@@ -109,17 +109,14 @@ export const SetupPromptDialog = ({ row }) => {
         </button>
       )}
       <dialog
-        aria-labelledby="setup-prompt-title"
+        aria-label="Copiar prompt"
         className="m-auto w-full max-w-2xl rounded-2xl border border-gray-950/10 bg-white p-6 text-left backdrop:bg-black/50 dark:border-white/10 dark:bg-gray-900"
         ref={dialog}
         style={{ boxShadow: "0 24px 64px -16px rgb(0 0 0 / 0.4)" }}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2
-              className="font-semibold text-gray-900 text-lg dark:text-white"
-              id="setup-prompt-title"
-            >
+            <h2 className="font-semibold text-gray-900 text-lg dark:text-white">
               Copiar prompt
             </h2>
             <p className="mt-1 text-gray-600 text-sm dark:text-gray-400">

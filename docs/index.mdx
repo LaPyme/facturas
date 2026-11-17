@@ -123,9 +123,9 @@ import { SetupPromptDialog } from "/snippets/prompts.jsx"
     <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Tu agente elige qué usar</h3>
   </div>
   <div className="flex flex-wrap gap-2">
-    <a href="/reference/configuration" className="inline-flex items-center gap-2 rounded-full border border-gray-950/10 dark:border-white/15 bg-background-light dark:bg-background-dark px-3.5 py-1.5 text-sm hover:border-gray-950/30 dark:hover:border-white/30"><code className="font-mono text-gray-900 dark:text-white">createArcaClient()</code><span className="text-gray-500 dark:text-gray-400">lee las variables ARCA_*</span></a>
-    <a href="/reference/client#issue" className="inline-flex items-center gap-2 rounded-full border border-gray-950/10 dark:border-white/15 bg-background-light dark:bg-background-dark px-3.5 py-1.5 text-sm hover:border-gray-950/30 dark:hover:border-white/30"><code className="font-mono text-gray-900 dark:text-white">issue()</code><span className="text-gray-500 dark:text-gray-400">deriva la clase, el tipo y el IVA</span></a>
-    <a href="/guides/invoices" className="inline-flex items-center gap-2 rounded-full border border-gray-950/10 dark:border-white/15 bg-background-light dark:bg-background-dark px-3.5 py-1.5 text-sm hover:border-gray-950/30 dark:hover:border-white/30"><code className="font-mono text-gray-900 dark:text-white">resultado.kind</code><span className="text-gray-500 dark:text-gray-400">trata los cuatro resultados</span></a>
+    <a href="/reference/configuration" className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gray-950/10 dark:border-white/15 bg-background-light dark:bg-background-dark px-3.5 py-1.5 text-sm hover:border-gray-950/30 dark:hover:border-white/30"><code className="whitespace-nowrap font-mono text-gray-900 dark:text-white">createArcaClient()</code><span className="text-gray-500 dark:text-gray-400">lee las variables ARCA_*</span></a>
+    <a href="/reference/client#issue" className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gray-950/10 dark:border-white/15 bg-background-light dark:bg-background-dark px-3.5 py-1.5 text-sm hover:border-gray-950/30 dark:hover:border-white/30"><code className="whitespace-nowrap font-mono text-gray-900 dark:text-white">issue()</code><span className="text-gray-500 dark:text-gray-400">deriva la clase, el tipo y el IVA</span></a>
+    <a href="/guides/invoices" className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-gray-950/10 dark:border-white/15 bg-background-light dark:bg-background-dark px-3.5 py-1.5 text-sm hover:border-gray-950/30 dark:hover:border-white/30"><code className="whitespace-nowrap font-mono text-gray-900 dark:text-white">resultado.kind</code><span className="text-gray-500 dark:text-gray-400">trata los cuatro resultados</span></a>
   </div>
 </div>
 
@@ -178,22 +178,31 @@ if (resultado.kind === "authorized") {
   <p className="mt-4 max-w-2xl text-lg text-gray-600 dark:text-gray-400">
     Los resultados fiscales se devuelven, no se lanzan, y tu código trata los cuatro. Los errores de input y de configuración sí se lanzan, antes de escribir en ARCA.
   </p>
-  <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-px overflow-hidden rounded-2xl border border-gray-950/10 dark:border-white/10 bg-gray-950/10 dark:bg-white/10">
-    <div className="border-t-2 border-emerald-500 bg-background-light dark:bg-background-dark p-5">
-      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">authorized</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">ARCA autorizó el comprobante. Guardá el número, el CAE, su vencimiento y el QR.</p>
+  <div className="mt-10 border-t border-gray-950/10 dark:border-white/10">
+    <div className="hidden md:grid md:grid-cols-12 md:gap-6 border-b border-gray-950/10 dark:border-white/10 py-3 text-xs text-gray-500 dark:text-gray-400">
+      <span className="md:col-span-3">Resultado</span>
+      <span className="md:col-span-4">Qué pasó</span>
+      <span className="md:col-span-5">Qué hace tu código</span>
     </div>
-    <div className="border-t-2 border-red-500 bg-background-light dark:bg-background-dark p-5">
-      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">rejected</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">ARCA lo rechazó de forma definitiva. Revisá los motivos. No cambies el input ligado a la clave.</p>
+    <div className="grid gap-1 md:grid-cols-12 md:gap-6 border-b border-gray-950/10 dark:border-white/10 py-4">
+      <span className="md:col-span-3 font-mono text-sm font-medium text-gray-900 dark:text-white">authorized</span>
+      <span className="md:col-span-4 text-sm text-gray-900 dark:text-gray-200">ARCA autorizó el comprobante.</span>
+      <span className="md:col-span-5 text-sm text-gray-600 dark:text-gray-400">Guardá el número, el CAE, su vencimiento y el QR.</span>
     </div>
-    <div className="border-t-2 border-amber-500 bg-background-light dark:bg-background-dark p-5">
-      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">indeterminate</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Todavía no se puede demostrar si ARCA lo autorizó. Conciliá antes de reintentar.</p>
+    <div className="grid gap-1 md:grid-cols-12 md:gap-6 border-b border-gray-950/10 dark:border-white/10 py-4">
+      <span className="md:col-span-3 font-mono text-sm font-medium text-gray-900 dark:text-white">rejected</span>
+      <span className="md:col-span-4 text-sm text-gray-900 dark:text-gray-200">ARCA lo rechazó de forma definitiva.</span>
+      <span className="md:col-span-5 text-sm text-gray-600 dark:text-gray-400">Revisá los motivos. No cambies el input ligado a la clave.</span>
     </div>
-    <div className="border-t-2 border-violet-500 bg-background-light dark:bg-background-dark p-5">
-      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">conflict</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">El número reservado pertenece a otro comprobante. Detené el flujo e investigá.</p>
+    <div className="grid gap-1 md:grid-cols-12 md:gap-6 border-b border-gray-950/10 dark:border-white/10 py-4">
+      <span className="md:col-span-3 font-mono text-sm font-medium text-gray-900 dark:text-white">indeterminate</span>
+      <span className="md:col-span-4 text-sm text-gray-900 dark:text-gray-200">Todavía no se puede demostrar si ARCA lo autorizó.</span>
+      <span className="md:col-span-5 text-sm text-gray-600 dark:text-gray-400">Conciliá antes de reintentar.</span>
+    </div>
+    <div className="grid gap-1 md:grid-cols-12 md:gap-6 border-b border-gray-950/10 dark:border-white/10 py-4">
+      <span className="md:col-span-3 font-mono text-sm font-medium text-gray-900 dark:text-white">conflict</span>
+      <span className="md:col-span-4 text-sm text-gray-900 dark:text-gray-200">El número reservado pertenece a otro comprobante.</span>
+      <span className="md:col-span-5 text-sm text-gray-600 dark:text-gray-400">Detené el flujo e investigá.</span>
     </div>
   </div>
   <p className="max-w-2xl mt-6 text-sm text-gray-600 dark:text-gray-400">
