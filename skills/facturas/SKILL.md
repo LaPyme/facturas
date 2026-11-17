@@ -28,9 +28,12 @@ de ARCA, probablemente no aplique.
 2. Los tipos en `node_modules/facturas/dist/` son la verdad para la versión
    instalada. Empezá por `index.d.ts`, que reexporta el resto, y buscá ahí cada
    campo antes de usarlo.
-3. Cualquier página de la documentación se lee en Markdown agregando `.md` a
-   la URL. El índice está en https://facturas-sdk.dev/llms.txt y el texto
-   completo en https://facturas-sdk.dev/llms-full.txt.
+3. La documentación de la versión instalada viene con el paquete, en
+   `node_modules/facturas/docs/`. Empezá por `llms.txt`, que enlaza cada
+   página. Si el paquete no la trae, la versión es anterior: cualquier página
+   del sitio se lee en Markdown agregando `.md` a la URL, el índice está en
+   https://facturas-sdk.dev/llms.txt y el texto completo en
+   https://facturas-sdk.dev/llms-full.txt. El sitio describe la última versión.
 4. Si no encontrás respaldo en los tipos ni en la documentación, decilo. No
    inventes campos ni códigos de ARCA.
 
@@ -274,6 +277,8 @@ La lista completa está en [Pasar a producción](https://facturas-sdk.dev/guides
 - Probar en producción antes de homologación.
 
 ## Documentación en Markdown
+
+Cada página está también en `node_modules/facturas/docs/`, con la misma ruta.
 
 - [Inicio rápido](https://facturas-sdk.dev/getting-started/quickstart.md)
 - [Habilitación en ARCA](https://facturas-sdk.dev/getting-started/arca-setup.md)

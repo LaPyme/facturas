@@ -6,6 +6,8 @@ keywords: ["ARCA", "AFIP", "facturación electrónica", "factura electrónica", 
 mode: "custom"
 ---
 
+import { SetupPromptDialog } from "/snippets/prompts.jsx"
+
 <div className="px-4 sm:px-6 pb-24">
 
 <div className="max-w-3xl mx-auto pt-40 lg:pt-28 text-center">
@@ -17,30 +19,67 @@ mode: "custom"
   </p>
 </div>
 
-<div className="max-w-sm mx-auto mt-8">
-
-<CodeGroup>
-
-```bash Para humanos
-npm install facturas
-```
-
-```bash Para agentes
-npx skills add LaPyme/facturas
-```
-
-</CodeGroup>
-
-</div>
-
-<div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+<div className="mt-8 flex flex-wrap items-center justify-center gap-3">
   <a href="/getting-started/quickstart" className="inline-flex items-center gap-2 rounded-full bg-gray-900 dark:bg-white px-5 py-2.5 text-sm font-medium text-white dark:text-gray-900 hover:opacity-90">
-    Emití tu primera factura
+    Leé la documentación
     <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
   </a>
+  <SetupPromptDialog />
 </div>
 
-<div className="max-w-5xl mx-auto mt-12 lg:mt-20 grid lg:grid-cols-2 gap-6 items-center">
+<div className="max-w-5xl mx-auto mt-24 lg:mt-32">
+  <div className="max-w-2xl">
+    <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight text-gray-900 dark:text-white">Cómo armo el pedido para ARCA?</h2>
+    <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
+      No lo armás. Pedíselo a tu agente. Elige los métodos del SDK y escribe la integración en tu proyecto.
+    </p>
+  </div>
+</div>
+
+<div className="max-w-5xl mx-auto mt-10 grid gap-12">
+
+<div className="grid gap-4">
+  <div className="flex items-center gap-3">
+    <span className="flex w-7 h-7 shrink-0 items-center justify-center rounded-md bg-gray-900 dark:bg-white font-mono text-xs text-white dark:text-gray-900">1</span>
+    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Le pedís una factura</h3>
+  </div>
+  <div className="max-w-2xl rounded-xl bg-gray-950 dark:bg-white/[0.06] dark:border dark:border-white/10 px-5 py-4 font-mono text-sm text-white">
+    Facturá la venta de dos yerbas y un termo a consumidor final, como monotributista en el punto de venta 3.
+  </div>
+</div>
+
+<div className="grid gap-4">
+  <div className="flex items-center gap-3">
+    <span className="flex w-7 h-7 shrink-0 items-center justify-center rounded-md bg-gray-900 dark:bg-white font-mono text-xs text-white dark:text-gray-900">2</span>
+    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Tu agente elige qué usar</h3>
+  </div>
+  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <a href="/reference/client#preview" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">preview()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Muestra el pedido y los importes, sin llamar a ARCA.</p>
+    </a>
+    <a href="/reference/client#issue" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">issue()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Deriva la clase, el tipo y el IVA, y emite.</p>
+    </a>
+    <a href="/guides/invoices" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">resultado.kind</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Trata los cuatro resultados, no solo el CAE.</p>
+    </a>
+    <a href="/guides/printed-voucher" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">buildVoucherDocument()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Arma lo que tiene que mostrar el comprobante impreso.</p>
+    </a>
+  </div>
+</div>
+
+<div className="grid gap-4">
+  <div className="flex items-center gap-3">
+    <span className="flex w-7 h-7 shrink-0 items-center justify-center rounded-md bg-gray-900 dark:bg-white font-mono text-xs text-white dark:text-gray-900">3</span>
+    <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Recibís la factura emitida</h3>
+  </div>
+
+<div className="grid lg:grid-cols-2 gap-6 items-center">
 
 <div className="min-w-0" id="emitir">
 
@@ -141,6 +180,10 @@ if (resultado.kind === "authorized") {
     <span className="mt-0.5 inline-block w-2.5 h-2.5 shrink-0 rounded-sm bg-emerald-200 dark:bg-emerald-400/40" />
     <span>Lo resaltado sale de <code className="font-mono text-[0.9em]">resultado.voucher</code>. El resto del PDF lo arma tu sistema con los datos de la venta.</span>
   </p>
+</div>
+
+</div>
+
 </div>
 
 </div>

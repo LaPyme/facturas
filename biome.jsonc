@@ -36,6 +36,11 @@
   },
   "overrides": [
     {
+      // Mintlify provides the React hooks to snippets as globals.
+      "includes": ["docs/snippets/**"],
+      "javascript": { "globals": ["useRef", "useState"] }
+    },
+    {
       "includes": ["**/*.test.ts"],
       "linter": {
         "rules": {

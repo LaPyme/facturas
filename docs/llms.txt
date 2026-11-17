@@ -10,6 +10,10 @@ Cada página se puede leer en Markdown agregando `.md` a la URL, por ejemplo htt
 
 ## Agentes de código
 
+El paquete trae esta documentación en `node_modules/facturas/docs/` y la skill en `node_modules/facturas/skills/facturas/SKILL.md`, las dos de la versión instalada. Leelas antes que el sitio, que describe la última versión.
+
+Para configurar facturas en un proyecto, el [inicio rápido](https://facturas-sdk.dev/getting-started/quickstart.md) tiene un prompt para copiar en tu agente.
+
 Instalá la skill de facturas para que tu agente emita con la API actual, trate los cuatro resultados y evite comprobantes duplicados:
 
 ```sh

@@ -41,11 +41,13 @@
   "files": [
     "bin",
     "dist",
+    "docs",
+    "skills",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsup --config tsup.config.ts",
+    "build": "tsup --config tsup.config.ts && node scripts/build-docs.mjs",
     "pack:check": "npm pack --dry-run",
     "prepack": "pnpm build",
     "typecheck": "tsc --project tsconfig.json --noEmit",
