@@ -3,7 +3,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/docs/**",
+        "$TURBO_ROOT$/skills/**"
+      ],
+      "outputs": ["dist/**", "docs/**", "skills/**"]
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]

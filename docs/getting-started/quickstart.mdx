@@ -4,6 +4,21 @@ description: "Configurá facturas, validá el acceso a ARCA y emití tu primer c
 keywords: ["inicio rápido", "primera factura", "ARCA", "Node.js"]
 ---
 
+import { firstInvoicePrompt, PromptText, setupPrompt } from "/snippets/prompts.jsx"
+
+## Con un agente
+
+Copiá este prompt en tu agente de código. Instala el paquete, prepara la clave
+y el CSR, y te espera en el paso que hacés vos en ARCA.
+
+<PromptText label="Configurá facturas en homologación" prompt={setupPrompt} />
+
+Cuando termine, pedile la primera factura:
+
+<PromptText label="Emití la primera factura" prompt={firstInvoicePrompt} />
+
+El resto de esta página es el mismo camino, paso a paso.
+
 ## 1. Habilitá ARCA
 
 Necesitás CUIT, certificado y clave privada, la relación del certificado con
