@@ -1,5 +1,12 @@
 # @facturas/pdf
 
+## 0.28.0
+
+### Patch Changes
+
+- Updated dependencies [ec2277f]
+  - facturas@0.28.0
+
 ## 0.27.0
 
 ### Patch Changes
