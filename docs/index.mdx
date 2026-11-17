@@ -53,22 +53,18 @@ import { SetupPromptDialog } from "/snippets/prompts.jsx"
     <span className="flex w-7 h-7 shrink-0 items-center justify-center rounded-md bg-gray-900 dark:bg-white font-mono text-xs text-white dark:text-gray-900">2</span>
     <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Tu agente elige qué usar</h3>
   </div>
-  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    <a href="/reference/client#preview" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
-      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">preview()</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Muestra el pedido y los importes, sin llamar a ARCA.</p>
+  <div className="grid sm:grid-cols-3 gap-4">
+    <a href="/reference/configuration" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
+      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">createArcaClient()</div>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Lee el CUIT, el certificado y la clave de las variables <code className="font-mono text-[0.9em]">ARCA_*</code>.</p>
     </a>
     <a href="/reference/client#issue" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
       <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">issue()</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Deriva la clase, el tipo y el IVA, y emite.</p>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Deriva la clase, el tipo de comprobante y el IVA, y emite.</p>
     </a>
     <a href="/guides/invoices" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
       <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">resultado.kind</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Trata los cuatro resultados, no solo el CAE.</p>
-    </a>
-    <a href="/guides/printed-voucher" className="block rounded-2xl border border-gray-950/10 dark:border-white/10 p-5 hover:bg-gray-950/[0.02] dark:hover:bg-white/[0.03]">
-      <div className="font-mono text-sm font-medium text-gray-900 dark:text-white">buildVoucherDocument()</div>
-      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Arma lo que tiene que mostrar el comprobante impreso.</p>
+      <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">Trata los cuatro resultados, no solo el autorizado.</p>
     </a>
   </div>
 </div>
