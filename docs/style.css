@@ -18,8 +18,8 @@
   background-image:
     linear-gradient(to right, rgb(15 23 42 / 0.05) 1px, transparent 1px),
     linear-gradient(to bottom, rgb(15 23 42 / 0.05) 1px, transparent 1px);
-  background-size: 24px 24px;
   background-position: -1px -1px;
+  background-size: 24px 24px;
 }
 
 .dark .blueprint {
@@ -35,13 +35,13 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  border-radius: 3px;
-  background: #1e40af;
-  color: #fff;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
+  color: #fff;
+  background: #1e40af;
+  border-radius: 3px;
 }
 
 .voucher-pin.pinned {
@@ -64,8 +64,8 @@
 
 .voucher-legend > div {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   font-size: 12px;
   color: rgb(75 85 99);
 }
@@ -77,8 +77,8 @@
 .voucher-legend code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
-  letter-spacing: 0.02em;
   color: rgb(17 24 39);
+  letter-spacing: 0.02em;
 }
 
 .dark .voucher-legend code {
