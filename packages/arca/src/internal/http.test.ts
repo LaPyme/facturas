@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import https from "node:https";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ArcaTransportError } from "../errors";
-import { postXml, postXmlWithMetadata } from "./http";
+import { LEGACY_TLS_CIPHERS, postXml, postXmlWithMetadata } from "./http";
 import { createArcaLogger } from "./logger";
 
 afterEach(() => {
@@ -93,6 +93,19 @@ describe("postXml", () => {
     expect(capturedOptions[0]?.agent).toBeDefined();
     expect(capturedOptions[1]?.agent).toBeDefined();
     expect(capturedOptions[0]?.agent).not.toBe(capturedOptions[1]?.agent);
+    const legacyAgent = capturedOptions[1]?.agent;
+    assert(legacyAgent instanceof https.Agent);
+    expect(legacyAgent.options.ciphers).toBe(LEGACY_TLS_CIPHERS);
+  });
+
+  it("offers only ECDHE suites in legacy TLS mode", () => {
+    const suites = LEGACY_TLS_CIPHERS.split(":");
+
+    expect(suites.length).toBeGreaterThan(0);
+    for (const suite of suites) {
+      expect(suite).toMatch(/^ECDHE-/);
+    }
+    expect(LEGACY_TLS_CIPHERS).not.toMatch(/SECLEVEL/);
   });
 
   it("resolves XML fault bodies even on HTTP 500", async () => {

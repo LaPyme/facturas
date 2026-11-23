@@ -10,9 +10,17 @@ const defaultAgent = new https.Agent({
   keepAlive: true,
 });
 
+// servicios1.afip.gov.ar prefers DHE suites with a DH key that OpenSSL's
+// default security level rejects ("dh key too small"). Offering only ECDHE
+// makes it pick ECDHE, which works without lowering the security level.
+// "DEFAULT@SECLEVEL=0" also worked on Node, but over the weak DH key, and
+// BoringSSL (Bun) refuses that cipher string.
+export const LEGACY_TLS_CIPHERS =
+  "ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-GCM-SHA256";
+
 const legacyTlsAgent = new https.Agent({
   keepAlive: true,
-  ciphers: "DEFAULT@SECLEVEL=0",
+  ciphers: LEGACY_TLS_CIPHERS,
 });
 
 type PostXmlOptions = {
