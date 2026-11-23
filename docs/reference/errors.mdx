@@ -130,9 +130,10 @@ confirmó que su número está vacío.
   persistente para que un proceso nuevo reuse el TA que obtuvo otro. El `store`
   guarda los tickets cifrados. El caché en memoria no se comparte entre
   procesos.
-- `dh key too small`: los pedidos de producción de WSFE ya usan, donde hace
-  falta, el nivel de seguridad anterior de OpenSSL. Si igual lo ves, confirmá que
-  no estés salteando el transporte del SDK ni terminando TLS en otra capa.
+- `dh key too small`: los pedidos de producción de WSFE y WSFEX ofrecen solo
+  suites ECDHE, porque la clave DH de `servicios1.afip.gov.ar` es más chica de
+  lo que acepta OpenSSL. Si igual lo ves, confirmá que no estés salteando el
+  transporte del SDK ni terminando TLS en otra capa.
 - Certificado vencido: reemplazá el certificado PEM por uno renovado que
   cumpla las mismas expectativas de clave privada, y redesplegá o reiniciá el
   proceso.
